@@ -63,9 +63,7 @@ impl InputProvider for MacInputProvider {
             MouseButton::Center => CGEventType::OtherMouseUp,
         };
 
-        if let Ok(event_up) =
-            CGEvent::new_mouse_event(source, event_type_up, position, cg_button)
-        {
+        if let Ok(event_up) = CGEvent::new_mouse_event(source, event_type_up, position, cg_button) {
             event_up.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
             event_up.post(CGEventTapLocation::HID);
         }
@@ -114,5 +112,15 @@ impl InputProvider for MacInputProvider {
             event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
             event.post(CGEventTapLocation::HID);
         }
+    }
+
+    fn flush_held_inputs(&self) {
+        crate::platform::macos::observer::flush_held_inputs();
+    }
+}
+
+impl Default for MacInputProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,9 +1,9 @@
+use crate::state::{ActionStep, InputEvent, MacroConfig, MouseButton};
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use uuid::Uuid;
-use crate::state::{ActionStep, InputEvent, MacroConfig, MouseButton};
 
 // ── Scheduler Intents ────────────────────────────────────────────
 
@@ -175,17 +175,17 @@ impl Scheduler {
                 self.active_holds.clear();
             }
             SchedulerIntent::UpdateInterval(macro_id, step_index, new_ms) => {
-                let step_id = StepId { macro_id, step_index };
+                let step_id = StepId {
+                    macro_id,
+                    step_index,
+                };
                 if let Some(task) = self.interval_tasks.get_mut(&step_id) {
                     let old_fire = task.next_fire;
                     task.interval = Duration::from_millis(new_ms.max(1));
                     task.next_fire = Instant::now() + task.interval;
                     let new_fire = task.next_fire;
                     self.remove_from_timeline(&step_id, old_fire);
-                    self.timeline
-                        .entry(new_fire)
-                        .or_default()
-                        .push(step_id);
+                    self.timeline.entry(new_fire).or_default().push(step_id);
                 }
             }
         }
@@ -199,15 +199,29 @@ impl Scheduler {
         // Clean up any existing state for this macro.
         self.stop_macro(&macro_id);
 
-        let steps = if config.sequence.steps.is_empty() {
-            // Legacy fallback: single left-click at interval_ms.
-            vec![ActionStep::InterleavedInterval {
-                input: InputEvent::MouseButton(MouseButton::Left),
-                interval_ms: config.interval_ms,
-            }]
+        let mut steps = if config.sequence.steps.is_empty() {
+            // Legacy fallback: single left-click.
+            match config.trigger_mode {
+                crate::state::TriggerMode::Pulse => vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                    interval_ms: config.interval_ms,
+                }],
+                crate::state::TriggerMode::Hold => vec![ActionStep::SustainedHold {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                }],
+            }
         } else {
             config.sequence.steps.clone()
         };
+
+        if config.trigger_mode == crate::state::TriggerMode::Hold {
+            // Force all steps to be SustainedHold when in Hold mode
+            for step in &mut steps {
+                if let ActionStep::InterleavedInterval { input, .. } = step {
+                    *step = ActionStep::SustainedHold { input: *input };
+                }
+            }
+        }
 
         let mut holds = Vec::new();
 
@@ -223,15 +237,15 @@ impl Scheduler {
                     holds.push(*input);
                 }
                 ActionStep::InterleavedInterval { input, interval_ms } => {
-                    let step_id = StepId { macro_id, step_index: index };
+                    let step_id = StepId {
+                        macro_id,
+                        step_index: index,
+                    };
                     let task = IntervalTask::new(step_id, *input, *interval_ms);
                     let fire_time = task.next_fire;
 
                     self.interval_tasks.insert(step_id, task);
-                    self.timeline
-                        .entry(fire_time)
-                        .or_default()
-                        .push(step_id);
+                    self.timeline.entry(fire_time).or_default().push(step_id);
                 }
             }
         }
@@ -244,7 +258,8 @@ impl Scheduler {
     /// Stop a macro: cancel all its interval timers and release all holds.
     fn stop_macro(&mut self, macro_id: &Uuid) {
         // Remove all interval tasks for this macro.
-        let step_ids: Vec<StepId> = self.interval_tasks
+        let step_ids: Vec<StepId> = self
+            .interval_tasks
             .keys()
             .filter(|s| s.macro_id == *macro_id)
             .copied()
@@ -275,11 +290,7 @@ impl Scheduler {
 
     /// Fire all interval actions due at or before `deadline`.
     fn fire_due_actions(&mut self, deadline: Instant) {
-        let due_keys: Vec<Instant> = self
-            .timeline
-            .range(..=deadline)
-            .map(|(k, _)| *k)
-            .collect();
+        let due_keys: Vec<Instant> = self.timeline.range(..=deadline).map(|(k, _)| *k).collect();
 
         for key in due_keys {
             if let Some(step_ids) = self.timeline.remove(&key) {
@@ -296,10 +307,7 @@ impl Scheduler {
                         // Advance and re-insert.
                         task.advance();
                         let next = task.next_fire;
-                        self.timeline
-                            .entry(next)
-                            .or_default()
-                            .push(step_id);
+                        self.timeline.entry(next).or_default().push(step_id);
                     }
                 }
             }
@@ -324,7 +332,7 @@ impl Scheduler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{ActionSequence, ActionStep, InputEvent, MouseButton, MacroConfig};
+    use crate::state::{ActionSequence, ActionStep, InputEvent, MacroConfig, MouseButton};
 
     /// Stress test: simulates a Minecraft AFK farm for 2 seconds.
     /// - Hold Right-Click (sustained)
@@ -348,6 +356,8 @@ mod tests {
             interval_ms: 50, // legacy fallback (unused since sequence is populated)
             enabled: true,
             target_app: None,
+            trigger_key: None,
+            trigger_mode: crate::state::TriggerMode::Pulse,
             sequence: ActionSequence {
                 steps: vec![
                     ActionStep::SustainedHold {
@@ -362,13 +372,19 @@ mod tests {
         };
 
         // Start the macro.
-        intent_tx.send(SchedulerIntent::StartMacro(config)).await.unwrap();
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config))
+            .await
+            .unwrap();
 
         // Let it run for 500ms.
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         // Stop the macro.
-        intent_tx.send(SchedulerIntent::StopMacro(macro_id)).await.unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_id))
+            .await
+            .unwrap();
 
         // Give time for the stop to process.
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -402,8 +418,16 @@ mod tests {
         assert_eq!(hold_starts, 1, "Exactly one HoldStart for right-click");
         assert_eq!(hold_releases, 1, "Exactly one HoldRelease for right-click");
         // 500ms / 50ms = ~10 fires, allow ±5 for timer imprecision.
-        assert!(interval_fires >= 5, "Expected ≥5 interval fires, got {}", interval_fires);
-        assert!(interval_fires <= 20, "Expected ≤20 interval fires, got {}", interval_fires);
+        assert!(
+            interval_fires >= 5,
+            "Expected ≥5 interval fires, got {}",
+            interval_fires
+        );
+        assert!(
+            interval_fires <= 20,
+            "Expected ≤20 interval fires, got {}",
+            interval_fires
+        );
 
         eprintln!(
             "[Stress Test] hold_starts={}, hold_releases={}, interval_fires={}",
@@ -430,20 +454,26 @@ mod tests {
             interval_ms: 10,
             enabled: true,
             target_app: None,
+            trigger_key: None,
+            trigger_mode: crate::state::TriggerMode::Pulse,
             sequence: ActionSequence {
-                steps: vec![
-                    ActionStep::InterleavedInterval {
-                        input: InputEvent::Key(0), // A key
-                        interval_ms: 10,
-                    },
-                ],
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::Key(0), // A key
+                    interval_ms: 10,
+                }],
             },
         };
 
-        intent_tx.send(SchedulerIntent::StartMacro(config)).await.unwrap();
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
 
-        intent_tx.send(SchedulerIntent::StopMacro(macro_id)).await.unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_id))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         drop(intent_tx);
@@ -457,7 +487,11 @@ mod tests {
             }
         }
 
-        assert!(timestamps.len() >= 10, "Expected ≥10 fires, got {}", timestamps.len());
+        assert!(
+            timestamps.len() >= 10,
+            "Expected ≥10 fires, got {}",
+            timestamps.len()
+        );
 
         // Compute inter-fire gaps.
         let gaps: Vec<f64> = timestamps
@@ -471,7 +505,9 @@ mod tests {
 
         eprintln!(
             "[Jitter Audit] samples={}, mean_gap={:.0}µs, stddev={:.0}µs, target=10000µs",
-            gaps.len(), mean, stddev
+            gaps.len(),
+            mean,
+            stddev
         );
 
         // @safety-officer: stddev should be < 2000µs (2ms) for a 10ms interval.

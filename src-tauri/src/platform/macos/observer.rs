@@ -1,19 +1,22 @@
 use crate::platform::PlatformObserver;
-use core_graphics::event::{CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType, CGEventFlags, EventField};
 use core_foundation::runloop::CFRunLoop;
 use core_foundation_sys::runloop::kCFRunLoopCommonModes;
-use std::thread;
-use std::process;
-use std::sync::{Mutex, OnceLock};
-use std::sync::atomic::{AtomicBool, Ordering};
+use core_graphics::event::{
+    CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
+    CGEventType, EventField,
+};
 use std::collections::HashSet;
+use std::process;
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::thread;
 
+use block2::RcBlock;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
 use objc2_foundation::{NSNotification, NSObject};
-use block2::RcBlock;
 use uuid::Uuid;
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
@@ -57,8 +60,60 @@ static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = Onc
 /// ONE thread, even if called concurrently from multiple sites.
 static TAP_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
-fn get_registry() -> &'static Mutex<HashSet<ActiveInput>> {
+pub fn get_registry() -> &'static Mutex<HashSet<ActiveInput>> {
     REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn flush_held_inputs() {
+    let reg = get_registry().lock().unwrap();
+    if let Ok(source) = core_graphics::event_source::CGEventSource::new(
+        core_graphics::event_source::CGEventSourceStateID::HIDSystemState,
+    ) {
+        let pos = core_graphics::geometry::CGPoint::new(0.0, 0.0);
+        for input in reg.iter() {
+            match input {
+                ActiveInput::Key(k) => {
+                    if let Ok(up_event) =
+                        core_graphics::event::CGEvent::new_keyboard_event(source.clone(), *k, false)
+                    {
+                        up_event.set_integer_value_field(
+                            EventField::EVENT_SOURCE_USER_DATA,
+                            crate::platform::macos::input::LLMHF_INJECTED,
+                        );
+                        up_event.post(CGEventTapLocation::HID);
+                    }
+                }
+                ActiveInput::Mouse(m) => {
+                    let (ev_type, btn) = match m {
+                        0 => (
+                            CGEventType::LeftMouseUp,
+                            core_graphics::event::CGMouseButton::Left,
+                        ),
+                        1 => (
+                            CGEventType::RightMouseUp,
+                            core_graphics::event::CGMouseButton::Right,
+                        ),
+                        _ => (
+                            CGEventType::OtherMouseUp,
+                            core_graphics::event::CGMouseButton::Center,
+                        ),
+                    };
+                    if let Ok(up_event) = core_graphics::event::CGEvent::new_mouse_event(
+                        source.clone(),
+                        ev_type,
+                        pos,
+                        btn,
+                    ) {
+                        up_event.set_integer_value_field(
+                            EventField::EVENT_SOURCE_USER_DATA,
+                            crate::platform::macos::input::LLMHF_INJECTED,
+                        );
+                        up_event.post(CGEventTapLocation::HID);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn get_active_app_state() -> &'static Mutex<Option<String>> {
@@ -87,9 +142,21 @@ pub fn add_hotkey_binding(binding: HotkeyBinding) {
 
 /// Remove all hotkey bindings for a given macro.
 pub fn remove_hotkey_bindings_for(macro_id: &Uuid) {
-    get_hotkey_bindings().lock().unwrap().retain(|b| {
-        !matches!(&b.action, HotkeyAction::ToggleMacro(id) if id == macro_id)
-    });
+    get_hotkey_bindings()
+        .lock()
+        .unwrap()
+        .retain(|b| !matches!(&b.action, HotkeyAction::ToggleMacro(id) if id == macro_id));
+}
+
+static MACRO_TRIGGER_KEYS: OnceLock<Mutex<std::collections::HashMap<u16, Uuid>>> = OnceLock::new();
+
+fn get_macro_trigger_keys() -> &'static Mutex<std::collections::HashMap<u16, Uuid>> {
+    MACRO_TRIGGER_KEYS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Replace the entire set of macro trigger keys at runtime.
+pub fn update_macro_trigger_keys(keys: std::collections::HashMap<u16, Uuid>) {
+    *get_macro_trigger_keys().lock().unwrap() = keys;
 }
 
 /// Returns whether the CGEventTap has been initialized.
@@ -142,11 +209,13 @@ pub fn initialize_tap() -> bool {
                     let mut reg = get_registry().lock().unwrap();
                     match event_type {
                         CGEventType::KeyDown => {
-                            let keycode = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
+                            let keycode =
+                                event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
                             reg.insert(ActiveInput::Key(keycode as u16));
                         }
                         CGEventType::KeyUp => {
-                            let keycode = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
+                            let keycode =
+                                event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
                             reg.remove(&ActiveInput::Key(keycode as u16));
                         }
                         CGEventType::LeftMouseDown => {
@@ -202,19 +271,47 @@ pub fn initialize_tap() -> bool {
                             for input in reg.iter() {
                                 match input {
                                     ActiveInput::Key(k) => {
-                                        if let Ok(up_event) = core_graphics::event::CGEvent::new_keyboard_event(source.clone(), *k, false) {
-                                            up_event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, crate::platform::macos::input::LLMHF_INJECTED);
+                                        if let Ok(up_event) =
+                                            core_graphics::event::CGEvent::new_keyboard_event(
+                                                source.clone(),
+                                                *k,
+                                                false,
+                                            )
+                                        {
+                                            up_event.set_integer_value_field(
+                                                EventField::EVENT_SOURCE_USER_DATA,
+                                                crate::platform::macos::input::LLMHF_INJECTED,
+                                            );
                                             up_event.post(CGEventTapLocation::HID);
                                         }
                                     }
                                     ActiveInput::Mouse(m) => {
                                         let (ev_type, btn) = match m {
-                                            0 => (CGEventType::LeftMouseUp, core_graphics::event::CGMouseButton::Left),
-                                            1 => (CGEventType::RightMouseUp, core_graphics::event::CGMouseButton::Right),
-                                            _ => (CGEventType::OtherMouseUp, core_graphics::event::CGMouseButton::Center),
+                                            0 => (
+                                                CGEventType::LeftMouseUp,
+                                                core_graphics::event::CGMouseButton::Left,
+                                            ),
+                                            1 => (
+                                                CGEventType::RightMouseUp,
+                                                core_graphics::event::CGMouseButton::Right,
+                                            ),
+                                            _ => (
+                                                CGEventType::OtherMouseUp,
+                                                core_graphics::event::CGMouseButton::Center,
+                                            ),
                                         };
-                                        if let Ok(up_event) = core_graphics::event::CGEvent::new_mouse_event(source.clone(), ev_type, pos, btn) {
-                                            up_event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, crate::platform::macos::input::LLMHF_INJECTED);
+                                        if let Ok(up_event) =
+                                            core_graphics::event::CGEvent::new_mouse_event(
+                                                source.clone(),
+                                                ev_type,
+                                                pos,
+                                                btn,
+                                            )
+                                        {
+                                            up_event.set_integer_value_field(
+                                                EventField::EVENT_SOURCE_USER_DATA,
+                                                crate::platform::macos::input::LLMHF_INJECTED,
+                                            );
                                             up_event.post(CGEventTapLocation::HID);
                                         }
                                     }
@@ -248,6 +345,16 @@ pub fn initialize_tap() -> bool {
                             }
                         }
                     }
+
+                    // MACRO TRIGGER KEYS (O(1) lookup)
+                    if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
+                        if let Some(&macro_id) = trigger_keys.get(&(keycode as u16)) {
+                            if let Some(tx) = STATE_TX.get() {
+                                let _ =
+                                    tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
+                            }
+                        }
+                    }
                 }
 
                 Some(event.clone())
@@ -264,7 +371,9 @@ pub fn initialize_tap() -> bool {
                 }
             }
             Err(_) => {
-                eprintln!("Failed to create CGEventTap. Make sure the app has Accessibility permissions.");
+                eprintln!(
+                    "Failed to create CGEventTap. Make sure the app has Accessibility permissions."
+                );
                 // Reset flag so initialization can be retried after permissions are granted
                 TAP_INITIALIZED.store(false, Ordering::SeqCst);
             }
@@ -274,9 +383,8 @@ pub fn initialize_tap() -> bool {
     true
 }
 
-
 pub struct MacPlatformObserver {
-    // We store the pointer as a usize to ensure Send/Sync bounds are met, 
+    // We store the pointer as a usize to ensure Send/Sync bounds are met,
     // as Retained<NSObject> is not Send.
     _observer_token: Option<usize>,
 }
@@ -286,6 +394,12 @@ impl MacPlatformObserver {
         Self {
             _observer_token: None,
         }
+    }
+}
+
+impl Default for MacPlatformObserver {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -299,7 +413,7 @@ impl PlatformObserver for MacPlatformObserver {
         let workspace = NSWorkspace::sharedWorkspace();
         let center = workspace.notificationCenter();
         let notif_name = unsafe { NSWorkspaceDidActivateApplicationNotification };
-        
+
         let handler = RcBlock::new(|_notification: NonNull<NSNotification>| {
             let ws = NSWorkspace::sharedWorkspace();
             if let Some(app) = ws.frontmostApplication() {
@@ -312,14 +426,15 @@ impl PlatformObserver for MacPlatformObserver {
                     // Dispatch ActiveAppChanged to the StateActor so
                     // macros re-evaluate their targeting rules.
                     if let Some(tx) = STATE_TX.get() {
-                        let _ = tx.try_send(crate::state::Intent::ActiveAppChanged(Some(id_string)));
+                        let _ =
+                            tx.try_send(crate::state::Intent::ActiveAppChanged(Some(id_string)));
                     }
                 }
             }
         });
 
         let observer: Option<Retained<NSObject>> = unsafe {
-            // Using a normal msg_send! and transmuting back to Retained as per modern objc2 
+            // Using a normal msg_send! and transmuting back to Retained as per modern objc2
             // but we can just use msg_send! that returns a pointer if msg_send_id! is deprecated.
             // Actually msg_send! might return Retained directly in newer objc2 if the selector matches init/new/copy/mutableCopy,
             // but for addObserverForName we should use msg_send! and it returns *mut NSObject.
@@ -344,8 +459,14 @@ impl PlatformObserver for MacPlatformObserver {
         // Initialize current active app
         if let Some(app) = workspace.frontmostApplication() {
             if let Some(bundle_id) = app.bundleIdentifier() {
+                let id_string = bundle_id.to_string();
                 let mut active_app = get_active_app_state().lock().unwrap();
-                *active_app = Some(bundle_id.to_string());
+                *active_app = Some(id_string.clone());
+                drop(active_app);
+
+                if let Some(tx) = STATE_TX.get() {
+                    let _ = tx.try_send(crate::state::Intent::ActiveAppChanged(Some(id_string)));
+                }
             }
         }
 

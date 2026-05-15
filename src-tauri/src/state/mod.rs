@@ -51,16 +51,11 @@ pub enum ActionStep {
     /// - Sends KeyDown/MouseDown when the macro starts.
     /// - Sends KeyUp/MouseUp when the macro stops.
     /// - Zero CPU overhead (no timer needed).
-    SustainedHold {
-        input: InputEvent,
-    },
+    SustainedHold { input: InputEvent },
     /// Repeat an input event at a fixed interval.
     /// - Each step gets its own independent timer in the scheduler.
     /// - Fires the event every `interval_ms` milliseconds.
-    InterleavedInterval {
-        input: InputEvent,
-        interval_ms: u64,
-    },
+    InterleavedInterval { input: InputEvent, interval_ms: u64 },
 }
 
 /// A collection of action steps that execute simultaneously.
@@ -71,6 +66,13 @@ pub struct ActionSequence {
 }
 
 // ── Macro Configuration ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum TriggerMode {
+    #[default]
+    Pulse,
+    Hold,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroConfig {
@@ -86,6 +88,12 @@ pub struct MacroConfig {
     /// a simple left-click at `interval_ms`.
     #[serde(default)]
     pub sequence: ActionSequence,
+    /// The keycode that toggles this macro. If None, it relies on global toggle.
+    #[serde(default)]
+    pub trigger_key: Option<u16>,
+    /// The behavior mode of this macro when triggered.
+    #[serde(default)]
+    pub trigger_mode: TriggerMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,7 +152,7 @@ pub struct StateActor {
 
 impl StateActor {
     pub fn new(
-        receiver: mpsc::Receiver<Intent>, 
+        receiver: mpsc::Receiver<Intent>,
         scheduler_tx: mpsc::Sender<crate::scheduler::SchedulerIntent>,
         action_rx: mpsc::Receiver<crate::scheduler::ActionReady>,
         app_handle: tauri::AppHandle,
@@ -250,9 +258,11 @@ impl StateActor {
                 if is_down {
                     // For sustained holds and the "down" half of intervals,
                     // we post a raw mouse-down event.
-                    self.input_provider.inject_mouse_button_raw(platform_btn, true);
+                    self.input_provider
+                        .inject_mouse_button_raw(platform_btn, true);
                 } else {
-                    self.input_provider.inject_mouse_button_raw(platform_btn, false);
+                    self.input_provider
+                        .inject_mouse_button_raw(platform_btn, false);
                 }
             }
         }
@@ -266,7 +276,10 @@ impl StateActor {
             }
             Intent::RemoveMacro(id) => {
                 self.state.macros.remove(&id);
-                let _ = self.scheduler_tx.send(crate::scheduler::SchedulerIntent::StopMacro(id)).await;
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::StopMacro(id))
+                    .await;
             }
             Intent::SetMacroEnabled(id, enabled) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
@@ -286,7 +299,11 @@ impl StateActor {
                 for mac in self.state.macros.values_mut() {
                     mac.enabled = false;
                 }
-                let _ = self.scheduler_tx.send(crate::scheduler::SchedulerIntent::StopAll).await;
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::StopAll)
+                    .await;
+                self.input_provider.flush_held_inputs();
             }
             Intent::ResetEmergencyStop => {
                 self.state.emergency_stop_active = false;
@@ -306,7 +323,10 @@ impl StateActor {
             Intent::ToggleEngineHotkey => {
                 self.state.engine_active = !self.state.engine_active;
                 if !self.state.engine_active {
-                    let _ = self.scheduler_tx.send(crate::scheduler::SchedulerIntent::StopAll).await;
+                    let _ = self
+                        .scheduler_tx
+                        .send(crate::scheduler::SchedulerIntent::StopAll)
+                        .await;
                 } else {
                     self.reevaluate_all_macros().await;
                 }
@@ -319,16 +339,23 @@ impl StateActor {
             }
             Intent::UpdateStepInterval(id, step_index, interval_ms) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
-                    if let Some(step) = mac.sequence.steps.get_mut(step_index) {
-                        if let ActionStep::InterleavedInterval { interval_ms: ref mut ms, .. } = step {
-                            *ms = interval_ms;
-                        }
+                    if let Some(ActionStep::InterleavedInterval {
+                        interval_ms: ref mut ms,
+                        ..
+                    }) = mac.sequence.steps.get_mut(step_index)
+                    {
+                        *ms = interval_ms;
                     }
                 }
                 // Forward live update to scheduler.
-                let _ = self.scheduler_tx.send(
-                    crate::scheduler::SchedulerIntent::UpdateInterval(id, step_index, interval_ms)
-                ).await;
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::UpdateInterval(
+                        id,
+                        step_index,
+                        interval_ms,
+                    ))
+                    .await;
             }
             Intent::GetState(reply) => {
                 let _ = reply.send(self.state.clone());
@@ -341,6 +368,8 @@ impl StateActor {
             return;
         }
 
+        let mut trigger_keys = std::collections::HashMap::new();
+
         for mac in self.state.macros.values() {
             let matches_target = match &mac.target_app {
                 Some(target) => self.state.active_app.as_deref() == Some(target.as_str()),
@@ -348,11 +377,26 @@ impl StateActor {
             };
 
             if mac.enabled && matches_target {
-                let _ = self.scheduler_tx.send(crate::scheduler::SchedulerIntent::StartMacro(mac.clone())).await;
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::StartMacro(mac.clone()))
+                    .await;
             } else {
-                let _ = self.scheduler_tx.send(crate::scheduler::SchedulerIntent::StopMacro(mac.id)).await;
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::StopMacro(mac.id))
+                    .await;
+            }
+
+            if let Some(key) = mac.trigger_key {
+                trigger_keys.insert(key, mac.id);
             }
         }
+
+        #[cfg(target_os = "macos")]
+        crate::platform::macos::observer::update_macro_trigger_keys(trigger_keys.clone());
+        #[cfg(target_os = "windows")]
+        crate::platform::windows::update_macro_trigger_keys(trigger_keys);
     }
 
     fn broadcast_state(&self) {
