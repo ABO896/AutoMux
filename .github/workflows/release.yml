@@ -37,8 +37,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "AutoMux v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "AutoMux ${{ github.ref_name }}"
           releaseBody: "Automated Release from CI"
           releaseDraft: true
           prerelease: false
