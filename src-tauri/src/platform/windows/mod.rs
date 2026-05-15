@@ -249,7 +249,13 @@ impl PlatformObserver for WindowsPlatformObserver {
             let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
             let mut buf = [0u16; 260];
             let mut len = buf.len() as u32;
-            QueryFullProcessImageNameW(handle, PROCESS_NAME_FORMAT(0), &mut buf, &mut len).ok()?;
+            QueryFullProcessImageNameW(
+                handle,
+                PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(buf.as_mut_ptr()),
+                &mut len,
+            )
+            .ok()?;
 
             Some(String::from_utf16_lossy(&buf[..len as usize]))
         }
