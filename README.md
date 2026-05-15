@@ -76,4 +76,4 @@ We welcome contributions! Whether it's adding new Trigger Modes, optimizing the 
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the GNU GPLv3 license. See `LICENSE` for more information.
