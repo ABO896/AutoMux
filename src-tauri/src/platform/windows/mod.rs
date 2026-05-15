@@ -44,12 +44,7 @@ impl WindowsInputProvider {
         Self
     }
 
-    /// @safety-officer: Emergency Stop entry point.
-    /// Iterates through all held keys/buttons and sends the corresponding
-    /// release events. This guarantees no "stuck keys" after shutdown.
-    pub fn flush_held_inputs(&self) {
-        Self::flush_all_held_inputs();
-    }
+
 
     pub fn flush_all_held_inputs() {
         let held: Vec<HeldInputKey> = {
@@ -168,6 +163,10 @@ impl WindowsInputProvider {
 }
 
 impl InputProvider for WindowsInputProvider {
+    fn flush_held_inputs(&self) {
+        Self::flush_all_held_inputs();
+    }
+
     fn inject_key(&self, keycode: u16, is_down: bool) {
         let key = HeldInputKey::Key(keycode);
         {
@@ -305,7 +304,7 @@ use uuid::Uuid;
 use windows::Win32::Foundation::{HMODULE, LPARAM, LRESULT, WPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Accessibility::{
-    SetWinEventHook, UnhookWinEvent, EVENT_SYSTEM_FOREGROUND, HWINEVENTHOOK, WINEVENT_OUTOFCONTEXT,
+    SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_SHIFT};
@@ -313,6 +312,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, 
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage,
     UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_SYSKEYDOWN,
+    EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT,
 };
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = OnceLock::new();
@@ -362,7 +362,7 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
             }
         }
     }
-    CallNextHookEx(HHOOK::default(), ncode, wparam, lparam)
+    CallNextHookEx(None, ncode, wparam, lparam)
 }
 
 #[cfg(target_os = "windows")]
@@ -396,7 +396,7 @@ pub fn initialize_hook() -> bool {
         let hook = SetWindowsHookExW(
             WH_KEYBOARD_LL,
             Some(hook_callback),
-            windows::Win32::Foundation::HINSTANCE::default(),
+            None,
             0,
         );
 
@@ -409,7 +409,7 @@ pub fn initialize_hook() -> bool {
         let event_hook = SetWinEventHook(
             EVENT_SYSTEM_FOREGROUND,
             EVENT_SYSTEM_FOREGROUND,
-            HMODULE::default(),
+            None,
             Some(win_event_hook_callback),
             0,
             0,
@@ -417,7 +417,7 @@ pub fn initialize_hook() -> bool {
         );
 
         let mut msg = MSG::default();
-        while GetMessageW(&mut msg, HWND::default(), 0, 0).into() {
+        while GetMessageW(&mut msg, None, 0, 0).into() {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
