@@ -1,62 +1,79 @@
-# AutoMux ⚡ v1.1.0
+<div align="center">
+  <h1>⚡ AutoMux</h1>
+  <p><strong>The Zero-Footprint Automation Engine</strong></p>
 
-**AutoMux** is a high-performance, cross-platform desktop automation engine designed for complex macro management and multi-track sequencing. Engineered to run entirely in the background, AutoMux features sub-millisecond precision and an ultra-low resource footprint.
+  <p>
+    <a href="https://github.com/ABO896/AutoMux/releases"><img src="https://img.shields.io/github/v/release/ABO896/AutoMux?style=flat-square&color=blue" alt="Release"></a>
+    <a href="https://github.com/ABO896/AutoMux/actions"><img src="https://img.shields.io/github/actions/workflow/status/ABO896/AutoMux/release.yml?style=flat-square" alt="Build Status"></a>
+    <a href="https://github.com/ABO896/AutoMux/blob/master/LICENSE"><img src="https://img.shields.io/github/license/ABO896/AutoMux?style=flat-square" alt="License"></a>
+  </p>
+  
+  <p>A native, cross-platform macro engine architected for <b>$O(1)$ speed</b> and <b>0% idle CPU</b> overhead. Built for power users, developers, and gamers who demand absolute performance.</p>
+</div>
 
-![AutoMux Dashboard](https://raw.githubusercontent.com/ABO896/AutoMux/main/docs/dashboard.png) *(Placeholder)*
+<br/>
 
-## 🚀 Technical Excellence
+## ✨ Features
 
-- **Zero Polling Architecture**: AutoMux relies purely on system-native push events (`NSWorkspaceDidActivateApplicationNotification` on macOS and `SetWinEventHook` on Windows) for detecting target app changes. This fully eliminates CPU-wasting interval polling loops.
-- **$O(1)$ Trigger Lookups**: Hot path macro triggering is powered by constant-time Hash Maps, completely avoiding mutex locks and guaranteeing zero latency injection when hotkeys are pressed.
-- **Latched Trigger Modes**: Full support for both "Pulse" (one-shot actions) and "Hold" (sustained) trigger modes, enabling advanced hardware emulation seamlessly across the frontend and backend.
-- **Multi-Track Sequences**: Run concurrent sustained holds and interleaved intervals. Perfect for gaming (e.g., Minecraft AFK farms) and productivity.
-- **Ultra-Low Footprint**: Consumes strictly **< 60MB RAM** and **0% Idle CPU**. Frontend bundle size is an incredible **56KB**.
-- **Sub-ms Jitter Control**: Tokio-driven scheduler ensures extreme timing precision (standard deviation ~1.3ms).
+- **🎯 Zero Polling Architecture** — Completely event-driven. The engine sleeps at 0% CPU until the OS pushes an explicit notification. No busy-waiting. No wasted cycles.
+- **⚡ $O(1)$ Hotkey Routing** — Trigger resolutions use constant-time `HashMap` lookups, entirely stripping out lock contention on the hot path for sub-millisecond input injection.
+- **🔄 Latched Triggering** — Deep support for complex input states including interval-based "Pulse" firing and continuous "Hold" latches.
+- **🛡️ Process Detection Parity** — Context-aware macros automatically engage or disengage based on the currently active application window (Native support for both macOS and Windows).
+- **🪶 Ultra-Lightweight** — Consumes `<60MB RAM` thanks to a bare-metal Rust core and optimized Tauri frontend.
+- **🛑 Emergency Failsafes** — A robust Input Tracking Registry ensures that complex "Hold" sequences are flawlessly flushed to prevent stuck keys during emergency stops.
 
-## 📥 Installation
+## 🧠 Technical Excellence
 
-AutoMux natively supports **macOS** and **Windows**. Binary releases are built automatically via GitHub Actions.
+AutoMux isn't just another autoclicker; it is a meticulously engineered desktop automation tool built to respect system resources.
 
-1. Go to the [Releases](https://github.com/ABO896/AutoMux/releases) page.
-2. Download the installer for your OS:
-   - **macOS**: Download the `.dmg` file.
-   - **Windows**: Download the `.exe` (NSIS) installer.
-3. **Important for macOS**: Upon launch, AutoMux will request Accessibility Permissions. This is required for input injection.
+### The Zero-Polling Guarantee
+Traditional macro tools poll the operating system's window manager on an interval (e.g., every 50ms) to determine the active application. This burns CPU cycles and drains battery life. 
 
-## 🛡 Cybersecurity Audit & Safety Architecture
+AutoMux uses **100% push-based OS events**:
+- **macOS:** Utilizes `NSWorkspaceDidActivateApplicationNotification` injected via `objc2`.
+- **Windows:** Leverages `SetWinEventHook` to subscribe to `EVENT_SYSTEM_FOREGROUND`.
 
-AutoMux interacts with low-level OS APIs to inject synthetic inputs seamlessly. We designed this layer with user safety and network compliance in mind:
+### The Two-Phase Dispatcher
+By decoupling the OS-level hook from the actual macro executor (`StateActor`), AutoMux ensures that the main OS event loop is never blocked. Intents are asynchronously routed, enabling reliable macro execution even under heavy system load.
 
-### macOS (`CGEventTap`)
-- AutoMux utilizes Apple's native `CoreGraphics` API to post events.
-- **Dynamic Initialization**: The engine uses a thread-safe atomic guard to ensure the tap is only active if explicitly granted Accessibility permissions.
-- **Memory Safety**: `objc2` pointers are correctly retained and dropped during tap lifecycles, ensuring memory safety across process re-evaluation events.
+## 🚀 Quick Start
 
-### Windows (`SendInput`)
-- Uses the `Win32` API via `windows-rs` to post synthetic key and mouse events.
-- Operates entirely in **User-Mode**. This ensures that AutoMux does not conflict with kernel-level anti-cheat software or strict university/enterprise network endpoint protectors (like CrowdStrike).
+### Installation
+1. Head over to the [Releases](https://github.com/ABO896/AutoMux/releases) page.
+2. Download the appropriate installer for your OS (`.dmg` for macOS, `.exe` for Windows).
+3. Install and run.
 
-### Emergency Stop Safety Guard
-Both platforms implement a robust **Input Tracking Registry** (a thread-safe `HashSet` of currently held keys). If the "Emergency Stop" hotkey is invoked or the process unexpectedly exits, a flush routine ensures all virtual keys are released (`KeyUp`/`MouseUp`), preventing the OS from becoming locked in an input loop.
+*Note for macOS users: AutoMux requires Accessibility permissions to inject keystrokes and monitor active windows.*
 
-## 🛠 Building from Source
+### Building from Source
 
-Ensure you have Node.js and Rust installed.
+Ensure you have [Rust](https://rustup.rs/) and [Node.js](https://nodejs.org/) installed, along with the [Tauri CLI prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites).
 
 ```bash
 # Clone the repository
 git clone https://github.com/ABO896/AutoMux.git
-cd automux
+cd AutoMux
 
 # Install frontend dependencies
 npm install
 
-# Run in development mode
-npm run dev
+# Run the developer instance
+npm run tauri dev
 
 # Build the release binaries
-npm run build
+npm run tauri build
 ```
 
----
-*Built with Tauri v2, Rust, SolidJS, and Tailwind CSS.*
+## 🤝 Contributing
+
+We welcome contributions! Whether it's adding new Trigger Modes, optimizing the frontend UI, or improving OS-native integrations, feel free to open a PR.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
