@@ -12,6 +12,7 @@ use tauri::Manager;
 
 #[cfg(target_os = "macos")]
 use platform::macos::MacPlatformObserver;
+#[cfg(target_os = "macos")]
 use platform::PlatformObserver;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

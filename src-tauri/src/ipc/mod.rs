@@ -61,17 +61,17 @@ pub async fn get_active_app(
 #[command]
 pub async fn bind_hotkey(
     _state: State<'_, StateManager>,
-    macro_id: Uuid,
-    keycode: u16,
-    modifiers: u64,
+    _macro_id: Uuid,
+    _keycode: u16,
+    _modifiers: u64,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use crate::platform::macos::observer::{HotkeyBinding, HotkeyAction, add_hotkey_binding};
         add_hotkey_binding(HotkeyBinding {
-            keycode,
-            modifiers,
-            action: HotkeyAction::ToggleMacro(macro_id),
+            keycode: _keycode,
+            modifiers: _modifiers,
+            action: HotkeyAction::ToggleMacro(_macro_id),
         });
     }
     Ok(())
@@ -81,12 +81,12 @@ pub async fn bind_hotkey(
 #[command]
 pub async fn unbind_hotkey(
     _state: State<'_, StateManager>,
-    macro_id: Uuid,
+    _macro_id: Uuid,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use crate::platform::macos::observer::remove_hotkey_bindings_for;
-        remove_hotkey_bindings_for(&macro_id);
+        remove_hotkey_bindings_for(&_macro_id);
     }
     Ok(())
 }
