@@ -188,6 +188,12 @@ pub fn initialize_tap() -> bool {
                     if keycode == 12 && has_cmd && has_shift {
                         println!("EMERGENCY STOP TRIGGERED");
 
+                        // @safety-officer: Signal the StateActor FIRST to cleanly
+                        // stop the scheduler and set emergency_stop_active.
+                        if let Some(tx) = STATE_TX.get() {
+                            let _ = tx.try_send(crate::state::Intent::TriggerEmergencyStop);
+                        }
+
                         let reg = get_registry().lock().unwrap();
                         let pos = event.location();
                         if let Ok(source) = core_graphics::event_source::CGEventSource::new(
@@ -298,8 +304,16 @@ impl PlatformObserver for MacPlatformObserver {
             let ws = NSWorkspace::sharedWorkspace();
             if let Some(app) = ws.frontmostApplication() {
                 if let Some(bundle_id) = app.bundleIdentifier() {
+                    let id_string = bundle_id.to_string();
                     let mut active_app = get_active_app_state().lock().unwrap();
-                    *active_app = Some(bundle_id.to_string());
+                    *active_app = Some(id_string.clone());
+                    drop(active_app); // Release lock before sending
+
+                    // Dispatch ActiveAppChanged to the StateActor so
+                    // macros re-evaluate their targeting rules.
+                    if let Some(tx) = STATE_TX.get() {
+                        let _ = tx.try_send(crate::state::Intent::ActiveAppChanged(Some(id_string)));
+                    }
                 }
             }
         });

@@ -3,6 +3,20 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use crate::platform::InputProvider;
+
+// ── MouseButton mapping ─────────────────────────────────────────
+// state::MouseButton (serializable) → platform::MouseButton (injection)
+impl From<MouseButton> for crate::platform::MouseButton {
+    fn from(btn: MouseButton) -> crate::platform::MouseButton {
+        match btn {
+            MouseButton::Left => crate::platform::MouseButton::Left,
+            MouseButton::Right => crate::platform::MouseButton::Right,
+            MouseButton::Middle => crate::platform::MouseButton::Center,
+        }
+    }
+}
+
 // ── Input Event Model ────────────────────────────────────────────
 // Serializable input events that can be saved to config files.
 // The InputProvider trait is responsible for translating these into
@@ -121,6 +135,11 @@ pub struct StateActor {
     /// The StateActor validates targeting before performing input injection.
     action_rx: mpsc::Receiver<crate::scheduler::ActionReady>,
     app_handle: tauri::AppHandle,
+    /// Platform-specific input provider for actual event injection.
+    #[cfg(target_os = "macos")]
+    input_provider: crate::platform::macos::MacInputProvider,
+    #[cfg(target_os = "windows")]
+    input_provider: crate::platform::windows::WindowsInputProvider,
 }
 
 impl StateActor {
@@ -136,6 +155,10 @@ impl StateActor {
             scheduler_tx,
             action_rx,
             app_handle,
+            #[cfg(target_os = "macos")]
+            input_provider: crate::platform::macos::MacInputProvider::new(),
+            #[cfg(target_os = "windows")]
+            input_provider: crate::platform::windows::WindowsInputProvider::new(),
         }
     }
 
@@ -188,25 +211,49 @@ impl StateActor {
         }
 
         // ── All gates passed — dispatch input injection ──
-        // TODO: Replace eprintln! with actual InputProvider calls once
-        // the platform injection layer is wired in Phase 4.
+        #[cfg(debug_assertions)]
+        eprintln!("[Action] macro={} {:?}", mac.name, action.action_type);
+
         match &action.action_type {
-            ActionType::Interval(_input) => {
+            ActionType::Interval(input) => {
                 // Click: press then immediately release.
-                #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} interval {:?}", mac.name, _input);
-                // InputProvider::inject_press(input);
-                // InputProvider::inject_release(input);
+                self.inject_input(input, true);
+                self.inject_input(input, false);
             }
-            ActionType::HoldStart(_input) => {
-                #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} HOLD START {:?}", mac.name, _input);
-                // InputProvider::inject_press(input);
+            ActionType::HoldStart(input) => {
+                self.inject_input(input, true);
             }
-            ActionType::HoldRelease(_input) => {
-                #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} HOLD RELEASE {:?}", mac.name, _input);
-                // InputProvider::inject_release(input);
+            ActionType::HoldRelease(input) => {
+                self.inject_input(input, false);
+            }
+        }
+    }
+
+    /// Translate a platform-agnostic InputEvent into a real OS event.
+    fn inject_input(&self, input: &InputEvent, is_down: bool) {
+        match input {
+            InputEvent::Key(keycode) => {
+                self.input_provider.inject_key(*keycode, is_down);
+            }
+            InputEvent::MouseButton(btn) => {
+                // For mouse clicks, we use inject_mouse_click which sends
+                // both down+up. For holds, we use inject_key-style approach.
+                // The InputProvider trait currently bundles down+up in
+                // inject_mouse_click, so for sustained holds we need
+                // raw key/button handling. Use inject_key with a
+                // virtual mouse-button keycode mapped at the platform layer.
+                //
+                // For now, we use a simple approach: inject_mouse_click
+                // at the current cursor position for the full press+release
+                // cycle (intervals), and for holds we track via the platform.
+                let platform_btn: crate::platform::MouseButton = (*btn).into();
+                if is_down {
+                    // For sustained holds and the "down" half of intervals,
+                    // we post a raw mouse-down event.
+                    self.input_provider.inject_mouse_button_raw(platform_btn, true);
+                } else {
+                    self.input_provider.inject_mouse_button_raw(platform_btn, false);
+                }
             }
         }
     }

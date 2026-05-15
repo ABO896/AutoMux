@@ -2,7 +2,7 @@
 
 **AutoMux** is a high-performance, cross-platform desktop automation engine designed for complex macro management and multi-track sequencing. Engineered to run entirely in the background, AutoMux features sub-millisecond precision and an ultra-low resource footprint.
 
-![AutoMux Dashboard](https://raw.githubusercontent.com/alvaro/automux/main/docs/dashboard.png) *(Placeholder)*
+![AutoMux Dashboard](https://raw.githubusercontent.com/ABO896/AutoMux/main/docs/dashboard.png) *(Placeholder)*
 
 ## 🚀 Key Features
 
@@ -14,7 +14,7 @@
 
 ## 📥 Installation
 
-1. Go to the [Releases](https://github.com/alvaro/automux/releases) page.
+1. Go to the [Releases](https://github.com/ABO896/AutoMux/releases) page.
 2. Download the installer for your OS:
    - **macOS**: Download the `.dmg` file.
    - **Windows**: Download the `.exe` (NSIS) installer.
@@ -41,7 +41,7 @@ Ensure you have Node.js and Rust installed.
 
 ```bash
 # Clone the repository
-git clone https://github.com/alvaro/automux.git
+git clone https://github.com/ABO896/AutoMux.git
 cd automux
 
 # Install frontend dependencies
