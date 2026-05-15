@@ -1,0 +1,43 @@
+[package]
+name = "automux"
+version = "0.1.0"
+description = "AutoMux Desktop Automation Utility"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "automux_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24.0"
+core-foundation = "0.10.0"
+core-foundation-sys = "0.8.0"
+objc = "0.2.7"
+cocoa = "0.26.1"
+objc2 = "0.6.4"
+objc2-app-kit = "0.3.2"
+objc2-foundation = "0.3.2"
+block2 = "0.6.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }
