@@ -1,14 +1,14 @@
-pub mod platform;
 pub mod ipc;
 pub mod persistence;
+pub mod platform;
 pub mod scheduler;
 pub mod state;
 
 use persistence::ProfileManager;
 use scheduler::{Scheduler, SchedulerIntent};
 use state::{Intent, StateActor, StateManager};
-use tokio::sync::mpsc;
 use tauri::Manager;
+use tokio::sync::mpsc;
 
 #[cfg(target_os = "macos")]
 use platform::macos::MacPlatformObserver;
@@ -24,7 +24,7 @@ pub fn run() {
             let (sched_tx, sched_rx) = mpsc::channel::<SchedulerIntent>(100);
             // Two-Phase Dispatch channel: Scheduler → StateActor
             let (action_tx, action_rx) = mpsc::channel::<scheduler::ActionReady>(100);
-            
+
             // ── Task 5.1: Initialize ProfileManager ──
             let profile_mgr = ProfileManager::from_app_handle(app.handle())?;
             app.manage(profile_mgr.clone());
@@ -64,16 +64,20 @@ pub fn run() {
             app.manage(state_manager);
 
             // Wire the state sender into the platform observer so
-            // the CGEventTap hotkey callback can dispatch Intents.
+            // the callback can dispatch Intents.
             #[cfg(target_os = "macos")]
             {
                 platform::macos::observer::set_state_tx(state_tx);
                 let mut observer = MacPlatformObserver::new();
                 observer.start_observing();
-                // Observer is long-lived; leak it intentionally so it
-                // outlives the setup closure (its threads + ObjC refs
-                // are all 'static).
-                std::mem::forget(observer);
+                // Observer is long-lived; it does not implement Drop, so the token is kept alive natively.
+            }
+            #[cfg(target_os = "windows")]
+            {
+                platform::windows::set_state_tx(state_tx);
+                let mut observer = platform::windows::WindowsPlatformObserver::new();
+                observer.start_observing();
+                // Observer is long-lived; it does not implement Drop.
             }
 
             Ok(())
@@ -100,4 +104,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

@@ -5,6 +5,8 @@ import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
 
+type TriggerMode = "Pulse" | "Hold";
+
 interface MacroConfig {
   id: string;
   name: string;
@@ -12,6 +14,8 @@ interface MacroConfig {
   enabled: boolean;
   target_app: string | null;
   sequence: { steps: ActionStep[] };
+  trigger_key: number | null;
+  trigger_mode: TriggerMode;
 }
 
 type ActionStep =
@@ -64,7 +68,7 @@ function App() {
   const [state, setState] = createSignal<AppState | null>(null);
   const [accessibility, setAccessibility] = createSignal<boolean | null>(null);
   const [activeApp, setActiveApp] = createSignal<string | null>(null);
-  const [loading, setLoading] = createSignal(true);
+  const [, setLoading] = createSignal(true);
   const [activeTab, setActiveTab] = createSignal<Tab>("dashboard");
 
   // ── Profile State ──
@@ -83,6 +87,8 @@ function App() {
   const [newMacroInterval, setNewMacroInterval] = createSignal("100");
   const [newMacroInput, setNewMacroInput] = createSignal("Left");
   const [newMacroTarget, setNewMacroTarget] = createSignal("");
+  const [newMacroTriggerMode, setNewMacroTriggerMode] = createSignal<TriggerMode>("Pulse");
+  const [newMacroTriggerKey, setNewMacroTriggerKey] = createSignal("");
 
   // ── Initial data fetch ──
   createEffect(async () => {
@@ -158,6 +164,9 @@ function App() {
       ? { MouseButton: inputVal as "Left" | "Right" | "Middle" }
       : { Key: parseInt(inputVal) || 0 };
 
+    const parsedKey = parseInt(newMacroTriggerKey());
+    const triggerKey = isNaN(parsedKey) ? null : parsedKey;
+
     const config: MacroConfig = {
       id: crypto.randomUUID(),
       name,
@@ -167,6 +176,8 @@ function App() {
       sequence: {
         steps: [{ InterleavedInterval: { input, interval_ms: interval } }],
       },
+      trigger_key: triggerKey,
+      trigger_mode: newMacroTriggerMode(),
     };
 
     try {
@@ -176,6 +187,8 @@ function App() {
       setNewMacroInterval("100");
       setNewMacroInput("Left");
       setNewMacroTarget("");
+      setNewMacroTriggerMode("Pulse");
+      setNewMacroTriggerKey("");
     } catch (e) {
       console.error("Failed to create macro:", e);
     }
@@ -472,6 +485,30 @@ function App() {
                   class="bg-background border border-border rounded-lg px-3 py-2 text-sm
                          focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
                 />
+                
+                {/* ── Trigger Mode Selector ── */}
+                <div class="flex gap-2">
+                  <select
+                    id="select-macro-trigger-mode"
+                    value={newMacroTriggerMode()}
+                    onChange={(e) => setNewMacroTriggerMode(e.currentTarget.value as TriggerMode)}
+                    class="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm
+                           focus:outline-none focus:border-accent/50 transition-colors text-text-main cursor-pointer"
+                  >
+                    <option value="Pulse">⏱ Pulse (Interval)</option>
+                    <option value="Hold">🔒 Hold (Latched)</option>
+                  </select>
+                  <input
+                    id="input-macro-trigger-key"
+                    type="number"
+                    placeholder="Key code (e.g., 65)"
+                    value={newMacroTriggerKey()}
+                    onInput={(e) => setNewMacroTriggerKey(e.currentTarget.value)}
+                    class="w-40 bg-background border border-border rounded-lg px-3 py-2 text-sm
+                           focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
+                  />
+                </div>
+
                 <button
                   id="btn-create-macro"
                   onClick={handleCreateMacro}
@@ -531,12 +568,24 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Target */}
-                    <div class="flex items-center gap-2 text-[11px] text-text-dim mb-1">
-                      <span>🎯</span>
-                      <span class="font-mono">
-                        {macro.target_app || "Global"}
-                      </span>
+                    {/* Target & Trigger */}
+                    <div class="flex items-center justify-between text-[11px] text-text-dim mb-1">
+                      <div class="flex items-center gap-2">
+                        <span>🎯</span>
+                        <span class="font-mono">
+                          {macro.target_app || "Global"}
+                        </span>
+                      </div>
+                      <Show when={macro.trigger_key !== null}>
+                        <div class="flex items-center gap-1">
+                          <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono">
+                            Key {macro.trigger_key}
+                          </span>
+                          <span class="text-[10px] text-text-muted">
+                            ({macro.trigger_mode})
+                          </span>
+                        </div>
+                      </Show>
                     </div>
 
                     {/* Steps */}

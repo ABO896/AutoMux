@@ -3,19 +3,19 @@ use tauri::{command, State};
 use uuid::Uuid;
 
 #[command]
-pub async fn add_macro(
-    state: State<'_, StateManager>,
-    config: MacroConfig,
-) -> Result<(), String> {
-    state.send_intent(Intent::AddMacro(config)).await.map_err(|e| e.to_string())
+pub async fn add_macro(state: State<'_, StateManager>, config: MacroConfig) -> Result<(), String> {
+    state
+        .send_intent(Intent::AddMacro(config))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
-pub async fn remove_macro(
-    state: State<'_, StateManager>,
-    id: Uuid,
-) -> Result<(), String> {
-    state.send_intent(Intent::RemoveMacro(id)).await.map_err(|e| e.to_string())
+pub async fn remove_macro(state: State<'_, StateManager>, id: Uuid) -> Result<(), String> {
+    state
+        .send_intent(Intent::RemoveMacro(id))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -24,7 +24,10 @@ pub async fn set_macro_enabled(
     id: Uuid,
     enabled: bool,
 ) -> Result<(), String> {
-    state.send_intent(Intent::SetMacroEnabled(id, enabled)).await.map_err(|e| e.to_string())
+    state
+        .send_intent(Intent::SetMacroEnabled(id, enabled))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
@@ -33,24 +36,29 @@ pub async fn set_macro_target_app(
     id: Uuid,
     target_app: Option<String>,
 ) -> Result<(), String> {
-    state.send_intent(Intent::SetMacroTargetApp(id, target_app)).await.map_err(|e| e.to_string())
+    state
+        .send_intent(Intent::SetMacroTargetApp(id, target_app))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[command]
-pub async fn get_state(
-    state: State<'_, StateManager>,
-) -> Result<AppState, String> {
+pub async fn get_state(state: State<'_, StateManager>) -> Result<AppState, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    state.send_intent(Intent::GetState(tx)).await.map_err(|e| e.to_string())?;
+    state
+        .send_intent(Intent::GetState(tx))
+        .await
+        .map_err(|e| e.to_string())?;
     rx.await.map_err(|e| e.to_string())
 }
 
 #[command]
-pub async fn get_active_app(
-    state: State<'_, StateManager>,
-) -> Result<Option<String>, String> {
+pub async fn get_active_app(state: State<'_, StateManager>) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    state.send_intent(Intent::GetState(tx)).await.map_err(|e| e.to_string())?;
+    state
+        .send_intent(Intent::GetState(tx))
+        .await
+        .map_err(|e| e.to_string())?;
     let app_state = rx.await.map_err(|e| e.to_string())?;
     Ok(app_state.active_app)
 }
@@ -67,7 +75,7 @@ pub async fn bind_hotkey(
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        use crate::platform::macos::observer::{HotkeyBinding, HotkeyAction, add_hotkey_binding};
+        use crate::platform::macos::observer::{add_hotkey_binding, HotkeyAction, HotkeyBinding};
         add_hotkey_binding(HotkeyBinding {
             keycode: _keycode,
             modifiers: _modifiers,
@@ -79,10 +87,7 @@ pub async fn bind_hotkey(
 
 /// Remove all hotkey bindings for a specific macro.
 #[command]
-pub async fn unbind_hotkey(
-    _state: State<'_, StateManager>,
-    _macro_id: Uuid,
-) -> Result<(), String> {
+pub async fn unbind_hotkey(_state: State<'_, StateManager>, _macro_id: Uuid) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use crate::platform::macos::observer::remove_hotkey_bindings_for;
@@ -93,10 +98,11 @@ pub async fn unbind_hotkey(
 
 /// Toggle the global engine on/off.
 #[command]
-pub async fn toggle_engine(
-    state: State<'_, StateManager>,
-) -> Result<(), String> {
-    state.send_intent(Intent::ToggleEngineHotkey).await.map_err(|e| e.to_string())
+pub async fn toggle_engine(state: State<'_, StateManager>) -> Result<(), String> {
+    state
+        .send_intent(Intent::ToggleEngineHotkey)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Request Accessibility permissions from the OS.
@@ -115,7 +121,7 @@ pub async fn request_accessibility() -> Result<bool, String> {
         if granted {
             crate::platform::macos::observer::initialize_tap();
         }
-        return Ok(granted);
+        Ok(granted)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -129,7 +135,9 @@ pub async fn request_accessibility() -> Result<bool, String> {
 pub async fn check_accessibility() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        Ok(crate::platform::macos::check_accessibility_permissions(false))
+        Ok(crate::platform::macos::check_accessibility_permissions(
+            false,
+        ))
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -195,7 +203,10 @@ pub async fn save_profile(
 ) -> Result<(), String> {
     // Snapshot the current state.
     let (tx, rx) = tokio::sync::oneshot::channel();
-    state.send_intent(Intent::GetState(tx)).await.map_err(|e| e.to_string())?;
+    state
+        .send_intent(Intent::GetState(tx))
+        .await
+        .map_err(|e| e.to_string())?;
     let app_state = rx.await.map_err(|e| e.to_string())?;
 
     let profile = crate::persistence::ProfileData {
@@ -219,7 +230,10 @@ pub async fn load_profile(
 
     // First, get current state to know which macros to remove.
     let (tx, rx) = tokio::sync::oneshot::channel();
-    state.send_intent(Intent::GetState(tx)).await.map_err(|e| e.to_string())?;
+    state
+        .send_intent(Intent::GetState(tx))
+        .await
+        .map_err(|e| e.to_string())?;
     let current = rx.await.map_err(|e| e.to_string())?;
 
     // Remove all existing macros.
@@ -228,7 +242,7 @@ pub async fn load_profile(
     }
 
     // Replay the profile macros into the StateActor.
-    for (_, config) in &profile.macros {
+    for config in profile.macros.values() {
         let _ = state.send_intent(Intent::AddMacro(config.clone())).await;
     }
 

@@ -106,7 +106,10 @@ impl ProfileManager {
             .map_err(|e| format!("Failed to write profile '{}': {}", profile.name, e))?;
 
         #[cfg(debug_assertions)]
-        eprintln!("[Persistence] Saved profile '{}' → {:?}", profile.name, path);
+        eprintln!(
+            "[Persistence] Saved profile '{}' → {:?}",
+            profile.name, path
+        );
 
         Ok(())
     }
@@ -126,7 +129,11 @@ impl ProfileManager {
             .map_err(|e| format!("Failed to parse profile '{}': {}", name, e))?;
 
         #[cfg(debug_assertions)]
-        eprintln!("[Persistence] Loaded profile '{}' ({} macros)", profile.name, profile.macros.len());
+        eprintln!(
+            "[Persistence] Loaded profile '{}' ({} macros)",
+            profile.name,
+            profile.macros.len()
+        );
 
         Ok(profile)
     }
@@ -210,22 +217,40 @@ mod tests {
         let mut macros = HashMap::new();
         for i in 0..1000 {
             let id = Uuid::new_v4();
-            macros.insert(id, MacroConfig {
+            macros.insert(
                 id,
-                name: format!("Macro_{}", i),
-                interval_ms: 100,
-                enabled: false,
-                target_app: Some("com.example.app".to_string()),
-                sequence: ActionSequence {
-                    steps: vec![
-                        ActionStep::SustainedHold { input: InputEvent::Key(42) },
-                        ActionStep::InterleavedInterval { input: InputEvent::MouseButton(MouseButton::Left), interval_ms: 500 },
-                        ActionStep::InterleavedInterval { input: InputEvent::MouseButton(MouseButton::Right), interval_ms: 650 },
-                        ActionStep::SustainedHold { input: InputEvent::Key(17) },
-                        ActionStep::InterleavedInterval { input: InputEvent::Key(32), interval_ms: 200 },
-                    ],
+                MacroConfig {
+                    id,
+                    name: format!("Macro_{}", i),
+                    interval_ms: 100,
+                    enabled: false,
+                    target_app: Some("com.example.app".to_string()),
+                    trigger_key: None,
+                    trigger_mode: crate::state::TriggerMode::Pulse,
+                    sequence: ActionSequence {
+                        steps: vec![
+                            ActionStep::SustainedHold {
+                                input: InputEvent::Key(42),
+                            },
+                            ActionStep::InterleavedInterval {
+                                input: InputEvent::MouseButton(MouseButton::Left),
+                                interval_ms: 500,
+                            },
+                            ActionStep::InterleavedInterval {
+                                input: InputEvent::MouseButton(MouseButton::Right),
+                                interval_ms: 650,
+                            },
+                            ActionStep::SustainedHold {
+                                input: InputEvent::Key(17),
+                            },
+                            ActionStep::InterleavedInterval {
+                                input: InputEvent::Key(32),
+                                interval_ms: 200,
+                            },
+                        ],
+                    },
                 },
-            });
+            );
         }
 
         let profile = ProfileData {

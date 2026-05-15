@@ -12,6 +12,10 @@ pub trait InputProvider {
     /// Send an individual mouse button down or up event at the current cursor position.
     /// Required for sustained holds (where down and up are separated in time).
     fn inject_mouse_button_raw(&self, button: MouseButton, is_down: bool);
+
+    /// Flushes all inputs that were sent as "down" but haven't been released yet.
+    /// Used by Emergency Stop to prevent stuck keys.
+    fn flush_held_inputs(&self);
 }
 
 pub trait PlatformObserver {
