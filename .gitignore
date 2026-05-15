@@ -4,13 +4,19 @@ dist/
 
 # Rust / Tauri
 src-tauri/target/
-src-tauri/Cargo.lock
 
 # OS / Environment
 .DS_Store
 .env
 .env.local
 
-# Agent State
+# Agent State (internal development metadata)
 .agents/
 .antigravity/
+.agent/
+AGENTS.md
+RULES.md
+
+# Scratch test files
+src-tauri/test.rs
+src-tauri/test2.rs

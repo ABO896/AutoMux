@@ -115,13 +115,12 @@ impl ProfileManager {
     pub async fn load_profile(&self, name: &str) -> Result<ProfileData, String> {
         let path = self.profile_path(name);
 
-        if !path.exists() {
-            return Err(format!("Profile '{}' not found", name));
-        }
-
         let json = tokio::fs::read_to_string(&path)
             .await
-            .map_err(|e| format!("Failed to read profile '{}': {}", name, e))?;
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => format!("Profile '{}' not found", name),
+                _ => format!("Failed to read profile '{}': {}", name, e),
+            })?;
 
         let profile: ProfileData = serde_json::from_str(&json)
             .map_err(|e| format!("Failed to parse profile '{}': {}", name, e))?;

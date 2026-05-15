@@ -77,6 +77,13 @@ function App() {
     type: "success" | "error";
   } | null>(null);
 
+  // ── New Macro Form State ──
+  const [showNewMacro, setShowNewMacro] = createSignal(false);
+  const [newMacroName, setNewMacroName] = createSignal("");
+  const [newMacroInterval, setNewMacroInterval] = createSignal("100");
+  const [newMacroInput, setNewMacroInput] = createSignal("Left");
+  const [newMacroTarget, setNewMacroTarget] = createSignal("");
+
   // ── Initial data fetch ──
   createEffect(async () => {
     try {
@@ -117,7 +124,7 @@ function App() {
       } catch (_) {
         /* ignore */
       }
-    }, 3000);
+    }, 10000);
     onCleanup(() => clearInterval(interval));
   });
 
@@ -137,6 +144,40 @@ function App() {
       await invoke("toggle_engine");
     } catch (e) {
       console.error("Toggle engine failed:", e);
+    }
+  }
+
+  async function handleCreateMacro() {
+    const name = newMacroName().trim();
+    if (!name) return;
+    const interval = parseInt(newMacroInterval()) || 100;
+    const inputVal = newMacroInput();
+    const target = newMacroTarget().trim() || null;
+
+    const input: InputEvent = inputVal === "Left" || inputVal === "Right" || inputVal === "Middle"
+      ? { MouseButton: inputVal as "Left" | "Right" | "Middle" }
+      : { Key: parseInt(inputVal) || 0 };
+
+    const config: MacroConfig = {
+      id: crypto.randomUUID(),
+      name,
+      interval_ms: interval,
+      enabled: false,
+      target_app: target,
+      sequence: {
+        steps: [{ InterleavedInterval: { input, interval_ms: interval } }],
+      },
+    };
+
+    try {
+      await invoke("add_macro", { config });
+      setShowNewMacro(false);
+      setNewMacroName("");
+      setNewMacroInterval("100");
+      setNewMacroInput("Left");
+      setNewMacroTarget("");
+    } catch (e) {
+      console.error("Failed to create macro:", e);
     }
   }
 
@@ -234,7 +275,7 @@ function App() {
           <div class="w-3 h-3 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" />
           <span class="text-sm font-semibold tracking-tight">AutoMux</span>
         </div>
-        <span class="text-[10px] text-text-dim font-mono">v0.1.0</span>
+        <span class="text-[10px] text-text-dim font-mono">v1.0.0</span>
       </div>
 
       {/* ── Tab Bar ── */}
@@ -360,10 +401,90 @@ function App() {
             <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
               Macros
             </span>
-            <span class="text-[10px] text-text-dim">
-              {macroList().length} configured
-            </span>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-text-dim">
+                {macroList().length} configured
+              </span>
+              <button
+                id="btn-open-new-macro"
+                onClick={() => setShowNewMacro(true)}
+                class="w-6 h-6 rounded-md bg-accent/10 border border-accent/30 text-accent text-sm font-medium
+                       hover:bg-accent/20 hover:border-accent/50 transition-all cursor-pointer
+                       flex items-center justify-center leading-none"
+              >
+                +
+              </button>
+            </div>
           </div>
+
+          {/* ── New Macro Form ── */}
+          <Show when={showNewMacro()}>
+            <div class="glass-card p-4 border-accent/30">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-accent uppercase tracking-wider">
+                  New Macro
+                </span>
+                <button
+                  onClick={() => setShowNewMacro(false)}
+                  class="text-text-dim hover:text-text-main text-sm cursor-pointer transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div class="flex flex-col gap-2">
+                <input
+                  id="input-macro-name"
+                  type="text"
+                  placeholder="Macro name (e.g. AFK Farm)"
+                  value={newMacroName()}
+                  onInput={(e) => setNewMacroName(e.currentTarget.value)}
+                  class="bg-background border border-border rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
+                />
+                <div class="flex gap-2">
+                  <select
+                    id="select-macro-input"
+                    value={newMacroInput()}
+                    onChange={(e) => setNewMacroInput(e.currentTarget.value)}
+                    class="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm
+                           focus:outline-none focus:border-accent/50 transition-colors text-text-main"
+                  >
+                    <option value="Left">🖱 Left Click</option>
+                    <option value="Right">🖱 Right Click</option>
+                    <option value="Middle">🖱 Middle Click</option>
+                  </select>
+                  <input
+                    id="input-macro-interval"
+                    type="number"
+                    placeholder="ms"
+                    value={newMacroInterval()}
+                    onInput={(e) => setNewMacroInterval(e.currentTarget.value)}
+                    class="w-24 bg-background border border-border rounded-lg px-3 py-2 text-sm
+                           focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
+                  />
+                </div>
+                <input
+                  id="input-macro-target"
+                  type="text"
+                  placeholder="Target app (optional, e.g. com.mojang.minecraft)"
+                  value={newMacroTarget()}
+                  onInput={(e) => setNewMacroTarget(e.currentTarget.value)}
+                  class="bg-background border border-border rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
+                />
+                <button
+                  id="btn-create-macro"
+                  onClick={handleCreateMacro}
+                  disabled={!newMacroName().trim()}
+                  class="w-full py-2 rounded-lg bg-accent text-white text-xs font-medium
+                         hover:bg-accent/80 transition-colors disabled:opacity-30 cursor-pointer
+                         shadow-[0_0_12px_var(--color-accent-glow)]"
+                >
+                  Create Macro
+                </button>
+              </div>
+            </div>
+          </Show>
 
           <Show
             when={macroList().length > 0}
@@ -371,9 +492,15 @@ function App() {
               <div class="glass-card p-6 flex flex-col items-center justify-center text-center">
                 <div class="text-2xl mb-2 opacity-30">⚡</div>
                 <p class="text-xs text-text-dim">No macros configured yet.</p>
-                <p class="text-[10px] text-text-dim mt-1">
-                  Use the API to create your first macro.
-                </p>
+                <button
+                  id="btn-open-new-macro-empty"
+                  onClick={() => setShowNewMacro(true)}
+                  class="mt-3 px-4 py-2 rounded-lg bg-accent text-white text-xs font-medium
+                         hover:bg-accent/80 transition-colors cursor-pointer
+                         shadow-[0_0_12px_var(--color-accent-glow)]"
+                >
+                  + Create Your First Macro
+                </button>
               </div>
             }
           >

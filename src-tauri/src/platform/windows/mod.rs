@@ -26,13 +26,6 @@ use super::{InputProvider, MouseButton, PlatformObserver};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
-/// Tracks all currently-held inputs for Emergency Stop flush.
-/// @safety-officer: This mirrors the macOS InputTrackingRegistry exactly.
-#[derive(Debug)]
-enum HeldInput {
-    Key(u16),
-    Mouse(MouseButton),
-}
 
 pub struct WindowsInputProvider {
     /// Thread-safe registry of all currently held inputs.
@@ -207,6 +200,19 @@ impl InputProvider for WindowsInputProvider {
 
     fn inject_mouse_move(&self, x: f64, y: f64) {
         self.send_mouse_move(x, y);
+    }
+
+    fn inject_mouse_button_raw(&self, button: MouseButton, is_down: bool) {
+        let key = HeldInputKey::Mouse(button);
+        {
+            let mut guard = self.held_inputs.lock().unwrap();
+            if is_down {
+                guard.insert(key);
+            } else {
+                guard.remove(&key);
+            }
+        }
+        self.send_mouse_button(button, is_down);
     }
 }
 
