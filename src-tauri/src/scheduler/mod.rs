@@ -54,6 +54,7 @@ struct StepId {
 // ── Per-Step Timer State ─────────────────────────────────────────
 
 struct IntervalTask {
+    #[allow(dead_code)]
     step_id: StepId,
     input: InputEvent,
     interval: Duration,

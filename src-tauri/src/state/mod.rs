@@ -191,21 +191,21 @@ impl StateActor {
         // TODO: Replace eprintln! with actual InputProvider calls once
         // the platform injection layer is wired in Phase 4.
         match &action.action_type {
-            ActionType::Interval(input) => {
+            ActionType::Interval(_input) => {
                 // Click: press then immediately release.
                 #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} interval {:?}", mac.name, input);
+                eprintln!("[Action] macro={} interval {:?}", mac.name, _input);
                 // InputProvider::inject_press(input);
                 // InputProvider::inject_release(input);
             }
-            ActionType::HoldStart(input) => {
+            ActionType::HoldStart(_input) => {
                 #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} HOLD START {:?}", mac.name, input);
+                eprintln!("[Action] macro={} HOLD START {:?}", mac.name, _input);
                 // InputProvider::inject_press(input);
             }
-            ActionType::HoldRelease(input) => {
+            ActionType::HoldRelease(_input) => {
                 #[cfg(debug_assertions)]
-                eprintln!("[Action] macro={} HOLD RELEASE {:?}", mac.name, input);
+                eprintln!("[Action] macro={} HOLD RELEASE {:?}", mac.name, _input);
                 // InputProvider::inject_release(input);
             }
         }
