@@ -1,4 +1,5 @@
 use crate::state::{ActionSequence, AppState, Intent, MacroConfig, StateManager};
+use std::sync::Arc;
 use tauri::{command, State};
 use uuid::Uuid;
 
@@ -198,7 +199,7 @@ pub async fn update_step_interval(
 #[command]
 pub async fn save_profile(
     state: State<'_, StateManager>,
-    profile_mgr: State<'_, crate::persistence::ProfileManager>,
+    profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
     name: String,
 ) -> Result<(), String> {
     // Snapshot the current state.
@@ -223,28 +224,18 @@ pub async fn save_profile(
 #[command]
 pub async fn load_profile(
     state: State<'_, StateManager>,
-    profile_mgr: State<'_, crate::persistence::ProfileManager>,
+    profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
     name: String,
 ) -> Result<crate::persistence::ProfileData, String> {
+    // Load the profile data first (provides the return value the frontend expects).
     let profile = profile_mgr.load_profile(&name).await?;
 
-    // First, get current state to know which macros to remove.
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    // Delegate batch load to StateActor via LoadProfile intent.
+    // The StateActor handler brackets the multi-macro batch into a single disk write.
     state
-        .send_intent(Intent::GetState(tx))
+        .send_intent(Intent::LoadProfile(name.clone()))
         .await
         .map_err(|e| e.to_string())?;
-    let current = rx.await.map_err(|e| e.to_string())?;
-
-    // Remove all existing macros.
-    for id in current.macros.keys() {
-        let _ = state.send_intent(Intent::RemoveMacro(*id)).await;
-    }
-
-    // Replay the profile macros into the StateActor.
-    for config in profile.macros.values() {
-        let _ = state.send_intent(Intent::AddMacro(config.clone())).await;
-    }
 
     Ok(profile)
 }
@@ -252,7 +243,7 @@ pub async fn load_profile(
 /// Delete a saved profile by name.
 #[command]
 pub async fn delete_profile(
-    profile_mgr: State<'_, crate::persistence::ProfileManager>,
+    profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
     name: String,
 ) -> Result<(), String> {
     profile_mgr.delete_profile(&name).await
@@ -261,7 +252,7 @@ pub async fn delete_profile(
 /// List all saved profiles (name + macro count).
 #[command]
 pub async fn list_profiles(
-    profile_mgr: State<'_, crate::persistence::ProfileManager>,
+    profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
 ) -> Result<Vec<crate::persistence::ProfileSummary>, String> {
     profile_mgr.list_profiles().await
 }

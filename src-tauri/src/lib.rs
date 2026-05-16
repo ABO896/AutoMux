@@ -29,21 +29,16 @@ pub fn run() {
             let profile_mgr = Arc::new(ProfileManager::from_app_handle(app.handle())?);
             app.manage(profile_mgr.clone());
 
-            // ── Task 5.3: Startup Restoration ──
-            // Load the default profile and replay macros into the StateActor.
+            // ── Startup Restoration (RELY-04) ──
+            // Send a single LoadProfile intent — the StateActor handles the bracketed
+            // batch load, suppressing per-macro auto-saves (Pitfall 2: no N-write storm).
             let startup_tx = state_tx.clone();
-            let startup_mgr = profile_mgr.clone();
             tauri::async_runtime::spawn(async move {
-                let profile = startup_mgr.load_or_create_default().await;
                 #[cfg(debug_assertions)]
-                eprintln!(
-                    "[Startup] Restored profile '{}' with {} macros",
-                    profile.name,
-                    profile.macros.len()
-                );
-                for (_, config) in profile.macros {
-                    let _ = startup_tx.send(Intent::AddMacro(config)).await;
-                }
+                eprintln!("[Startup] Dispatching LoadProfile(\"default\") intent");
+                let _ = startup_tx
+                    .send(Intent::LoadProfile("default".to_string()))
+                    .await;
             });
 
             // Spawn Scheduler (single async task — no per-macro spawns)
