@@ -170,7 +170,12 @@ impl InputProvider for WindowsInputProvider {
     fn inject_key(&self, keycode: u16, is_down: bool) {
         let key = HeldInputKey::Key(keycode);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             if is_down {
                 guard.insert(key);
             } else {
@@ -185,7 +190,12 @@ impl InputProvider for WindowsInputProvider {
         // position. The x/y are available for future "click at coordinates" features.
         let key = HeldInputKey::Mouse(button);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             // Click = press + release, so we don't track in registry.
             // For sustained holds, the caller uses inject_key-style calls.
             guard.insert(key);
@@ -193,7 +203,12 @@ impl InputProvider for WindowsInputProvider {
         self.send_mouse_button(button, true);
         self.send_mouse_button(button, false);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             guard.remove(&key);
         }
     }
@@ -205,7 +220,12 @@ impl InputProvider for WindowsInputProvider {
     fn inject_mouse_button_raw(&self, button: MouseButton, is_down: bool) {
         let key = HeldInputKey::Mouse(button);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             if is_down {
                 guard.insert(key);
             } else {
