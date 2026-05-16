@@ -286,6 +286,7 @@ impl StateActor {
             Intent::AddMacro(config) => {
                 self.state.macros.insert(config.id, config);
                 self.reevaluate_all_macros().await;
+                self.auto_save_default().await;
             }
             Intent::RemoveMacro(id) => {
                 self.state.macros.remove(&id);
@@ -293,18 +294,21 @@ impl StateActor {
                     .scheduler_tx
                     .send(crate::scheduler::SchedulerIntent::StopMacro(id))
                     .await;
+                self.auto_save_default().await;
             }
             Intent::SetMacroEnabled(id, enabled) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
                     mac.enabled = enabled;
                 }
                 self.reevaluate_all_macros().await;
+                self.auto_save_default().await;
             }
             Intent::SetMacroTargetApp(id, target) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
                     mac.target_app = target;
                 }
                 self.reevaluate_all_macros().await;
+                self.auto_save_default().await;
             }
             Intent::TriggerEmergencyStop => {
                 self.state.emergency_stop_active = true;
@@ -349,6 +353,7 @@ impl StateActor {
                     mac.sequence = sequence;
                 }
                 self.reevaluate_all_macros().await;
+                self.auto_save_default().await;
             }
             Intent::UpdateStepInterval(id, step_index, interval_ms) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
@@ -369,13 +374,41 @@ impl StateActor {
                         interval_ms,
                     ))
                     .await;
+                self.auto_save_default().await;
             }
             Intent::GetState(reply) => {
                 let _ = reply.send(self.state.clone());
             }
-            // Placeholder: full handler body added in Task 1b.
             Intent::LoadProfile(name) => {
-                let _ = name;
+                // 1. Clear existing macros and stop all scheduler tasks
+                self.state.macros.clear();
+                let _ = self
+                    .scheduler_tx
+                    .send(crate::scheduler::SchedulerIntent::StopAll)
+                    .await;
+                // 2. Set suppression flag (D-06)
+                self.state.loading_profile = true;
+                // 3. Load profile and populate macros directly (no per-macro auto-save)
+                match self.profile_mgr.load_profile(&name).await {
+                    Ok(profile) => {
+                        for (_, config) in profile.macros {
+                            self.state.macros.insert(config.id, config);
+                        }
+                        // Unconditional assignment — fully restore saved engine state.
+                        // Do NOT use `if profile.engine_active { ... = true; }` —
+                        // that is a one-way ratchet (can enable, never disable). See Pitfall 6.
+                        self.state.engine_active = profile.engine_active;
+                        self.reevaluate_all_macros().await;
+                    }
+                    Err(e) => {
+                        use tauri::Emitter;
+                        let _ = self.app_handle.emit("auto-save-error", e.to_string());
+                    }
+                }
+                // 4. Clear flag, then write once (D-06)
+                self.state.loading_profile = false;
+                self.auto_save_default().await;
+                self.broadcast_state();
             }
         }
     }
