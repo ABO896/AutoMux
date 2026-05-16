@@ -31,7 +31,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User triggers the Windows emergency stop (Ctrl+Shift+Q); after exit, no keyboard keys remain physically stuck on the system
   4. User creates and edits macros, closes AutoMux without manually saving, reopens — all changes are present
   5. Setting a macro step interval below 5ms is rejected or clamped to 5ms; the app cannot be used to saturate the OS input queue
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 01-01-PLAN.md — Frontend permissions poll fix (3s) + scheduler 5ms interval floor (RELY-01, SAFE-03)
+- [ ] 01-02-PLAN.md — macOS panic elimination + CGEventTap timeout re-enable (SAFE-01 macOS, RELY-02)
+- [ ] 01-03-PLAN.md — Windows lock-unwrap panic elimination + emergency-stop synchronous flush (SAFE-01 Windows, RELY-03)
+- [ ] 01-04-PLAN.md — StateActor auto-save end-to-end with LoadProfile bracketing (RELY-04)
 
 ### Phase 2: Cleanup & Credibility
 **Goal**: The repository presents accurate legal information, contains no dead code or stale artifacts, and the MacPlatformObserver resource leak is closed
