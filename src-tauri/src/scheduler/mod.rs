@@ -63,7 +63,7 @@ struct IntervalTask {
 
 impl IntervalTask {
     fn new(step_id: StepId, input: InputEvent, interval_ms: u64) -> Self {
-        let interval = Duration::from_millis(interval_ms.max(1));
+        let interval = Duration::from_millis(interval_ms.max(5));
         Self {
             step_id,
             input,
@@ -181,7 +181,7 @@ impl Scheduler {
                 };
                 if let Some(task) = self.interval_tasks.get_mut(&step_id) {
                     let old_fire = task.next_fire;
-                    task.interval = Duration::from_millis(new_ms.max(1));
+                    task.interval = Duration::from_millis(new_ms.max(5));
                     task.next_fire = Instant::now() + task.interval;
                     let new_fire = task.next_fire;
                     self.remove_from_timeline(&step_id, old_fire);
