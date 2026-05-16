@@ -130,7 +130,7 @@ function App() {
       } catch (_) {
         /* ignore */
       }
-    }, 10000);
+    }, 3000);
     onCleanup(() => clearInterval(interval));
   });
 
