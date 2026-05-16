@@ -1,10 +1,18 @@
 use crate::platform::PlatformObserver;
 use core_foundation::runloop::CFRunLoop;
+use core_foundation_sys::mach_port::CFMachPortRef;
 use core_foundation_sys::runloop::kCFRunLoopCommonModes;
 use core_graphics::event::{
     CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventType, EventField,
 };
+
+// RELY-02: CGEventTapEnable is not re-exported by the core-graphics crate; declare directly.
+// The CGEventTapProxy passed to the callback IS the same CFMachPortRef that the tap was
+// created with, per Apple's CGEventTapCreate documentation.
+extern "C" {
+    fn CGEventTapEnable(tap: CFMachPortRef, enable: bool);
+}
 use std::collections::HashSet;
 use std::process;
 use std::ptr::NonNull;
@@ -203,7 +211,26 @@ pub fn initialize_tap() -> bool {
                 CGEventType::OtherMouseDragged,
                 CGEventType::ScrollWheel,
             ],
-            |_proxy, event_type, event| {
+            |tap_proxy, event_type, event| {
+                // RELY-02: Re-enable tap inline if OS disabled it due to callback timeout.
+                // VERIFIED: core-graphics 0.24.0/src/event.rs:140-142 defines TapDisabledByTimeout
+                // (0xFFFFFFFE) and TapDisabledByUserInput (0xFFFFFFFF). CGEventType::Null (value 0)
+                // is NOT the timeout signal — match the named variants only.
+                //
+                // The CGEventTapProxy is the same CFMachPortRef the tap was created with
+                // (per Apple's CGEventTapCreate docs). Cast and re-enable via CGEventTapEnable.
+                if matches!(
+                    event_type,
+                    CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput
+                ) {
+                    #[cfg(debug_assertions)]
+                    eprintln!("[Observer] CGEventTap re-enabled after timeout");
+                    // SAFETY: CGEventTapProxy == CFMachPortRef in Apple's API — the proxy IS
+                    // the mach port reference, as documented by CGEventTapCreate.
+                    unsafe { CGEventTapEnable(tap_proxy as CFMachPortRef, true) };
+                    return None;
+                }
+
                 let user_data = event.get_integer_value_field(EventField::EVENT_SOURCE_USER_DATA);
                 if user_data == crate::platform::macos::input::LLMHF_INJECTED {
                     let mut reg = get_registry().lock().unwrap();
