@@ -7,6 +7,7 @@ pub mod state;
 use persistence::ProfileManager;
 use scheduler::{Scheduler, SchedulerIntent};
 use state::{Intent, StateActor, StateManager};
+use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::mpsc;
 
@@ -25,7 +26,7 @@ pub fn run() {
             let (action_tx, action_rx) = mpsc::channel::<scheduler::ActionReady>(100);
 
             // ── Task 5.1: Initialize ProfileManager ──
-            let profile_mgr = ProfileManager::from_app_handle(app.handle())?;
+            let profile_mgr = Arc::new(ProfileManager::from_app_handle(app.handle())?);
             app.manage(profile_mgr.clone());
 
             // ── Task 5.3: Startup Restoration ──
@@ -53,7 +54,7 @@ pub fn run() {
 
             // Spawn the State Actor
             let app_handle = app.handle().clone();
-            let actor = StateActor::new(state_rx, sched_tx, action_rx, app_handle);
+            let actor = StateActor::new(state_rx, sched_tx, action_rx, app_handle, profile_mgr.clone());
             tauri::async_runtime::spawn(async move {
                 actor.run().await;
             });

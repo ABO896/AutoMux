@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use crate::persistence::{ProfileData, ProfileManager};
 use crate::platform::InputProvider;
 
 // ── MouseButton mapping ─────────────────────────────────────────
@@ -102,6 +104,10 @@ pub struct AppState {
     pub emergency_stop_active: bool,
     pub active_app: Option<String>,
     pub engine_active: bool,
+    /// Suppresses auto-save during profile load batch (RELY-04, D-06).
+    /// Not serialized to frontend — internal StateActor flag only.
+    #[serde(skip)]
+    pub loading_profile: bool,
 }
 
 impl Default for AppState {
@@ -111,6 +117,7 @@ impl Default for AppState {
             emergency_stop_active: false,
             active_app: None,
             engine_active: true,
+            loading_profile: false,
         }
     }
 }
@@ -133,6 +140,8 @@ pub enum Intent {
     UpdateStepInterval(Uuid, usize, u64),
     // Provide a way to reply with the current state if needed
     GetState(tokio::sync::oneshot::Sender<AppState>),
+    /// Load a named profile, suppressing per-mutation auto-save during the batch and writing once at the end.
+    LoadProfile(String),
 }
 
 pub struct StateActor {
@@ -143,6 +152,8 @@ pub struct StateActor {
     /// The StateActor validates targeting before performing input injection.
     action_rx: mpsc::Receiver<crate::scheduler::ActionReady>,
     app_handle: tauri::AppHandle,
+    /// RELY-04: injected for auto-save to the default profile.
+    profile_mgr: Arc<ProfileManager>,
     /// Platform-specific input provider for actual event injection.
     #[cfg(target_os = "macos")]
     input_provider: crate::platform::macos::MacInputProvider,
@@ -156,6 +167,7 @@ impl StateActor {
         scheduler_tx: mpsc::Sender<crate::scheduler::SchedulerIntent>,
         action_rx: mpsc::Receiver<crate::scheduler::ActionReady>,
         app_handle: tauri::AppHandle,
+        profile_mgr: Arc<ProfileManager>,
     ) -> Self {
         Self {
             state: AppState::default(),
@@ -163,6 +175,7 @@ impl StateActor {
             scheduler_tx,
             action_rx,
             app_handle,
+            profile_mgr,
             #[cfg(target_os = "macos")]
             input_provider: crate::platform::macos::MacInputProvider::new(),
             #[cfg(target_os = "windows")]
@@ -360,6 +373,10 @@ impl StateActor {
             Intent::GetState(reply) => {
                 let _ = reply.send(self.state.clone());
             }
+            // Placeholder: full handler body added in Task 1b.
+            Intent::LoadProfile(name) => {
+                let _ = name;
+            }
         }
     }
 
@@ -402,6 +419,27 @@ impl StateActor {
     fn broadcast_state(&self) {
         use tauri::Emitter;
         let _ = self.app_handle.emit("state-changed", &self.state);
+    }
+
+    /// Persist the current macro set as the `default` profile.
+    /// Suppressed during profile-load batches (D-06).
+    /// On failure, emits an `auto-save-error` event to the frontend (D-07).
+    async fn auto_save_default(&self) {
+        if self.state.loading_profile {
+            return;
+        }
+        let profile = ProfileData {
+            name: "default".to_string(),
+            macros: self.state.macros.clone(),
+            engine_active: self.state.engine_active, // D-PITFALL-4: never hardcode
+        };
+        if let Err(e) = self.profile_mgr.save_profile(&profile).await {
+            #[cfg(debug_assertions)]
+            eprintln!("[Persistence] auto-save default failed: {}", e);
+            // D-07: emit transient error event — same mechanism as broadcast_state
+            use tauri::Emitter;
+            let _ = self.app_handle.emit("auto-save-error", e.to_string());
+        }
     }
 }
 
