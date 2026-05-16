@@ -369,6 +369,9 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
                 if let Some(tx) = STATE_TX.get() {
                     let _ = tx.try_send(crate::state::Intent::TriggerEmergencyStop);
                 }
+                // RELY-03: Synchronous flush before exit — matches macOS inline-flush approach.
+                // Best-effort: exit regardless of individual event send failures (D-10).
+                WindowsInputProvider::flush_all_held_inputs();
                 std::process::exit(1);
             }
 
