@@ -135,13 +135,26 @@ impl WindowsInputProvider {
 
     #[cfg(target_os = "windows")]
     fn send_mouse_move(&self, x: f64, y: f64) {
-        // Convert to absolute coordinates (0-65535 range for SendInput ABSOLUTE)
+        // CR-05: MOUSEEVENTF_ABSOLUTE requires coordinates normalized to 0–65535
+        // (mapping to the full virtual desktop), NOT raw pixel values.
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+        };
+        let (screen_w, screen_h) = unsafe {
+            (
+                GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64,
+                GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64,
+            )
+        };
+        let norm_x = ((x / screen_w) * 65535.0).clamp(0.0, 65535.0) as i32;
+        let norm_y = ((y / screen_h) * 65535.0).clamp(0.0, 65535.0) as i32;
+
         let input = INPUT {
             r#type: INPUT_TYPE(0), // INPUT_MOUSE
             Anonymous: INPUT_0 {
                 mi: MOUSEINPUT {
-                    dx: x as i32,
-                    dy: y as i32,
+                    dx: norm_x,
+                    dy: norm_y,
                     mouseData: 0,
                     dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE,
                     time: 0,
@@ -439,6 +452,11 @@ pub fn initialize_hook() -> bool {
             WINEVENT_OUTOFCONTEXT,
         );
 
+        // WR-03: Check handle validity — SetWinEventHook returns a null handle on failure.
+        if event_hook.is_invalid() {
+            eprintln!("[WindowsObserver] SetWinEventHook failed — no active app tracking");
+        }
+
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).into() {
             TranslateMessage(&msg);
@@ -446,7 +464,10 @@ pub fn initialize_hook() -> bool {
         }
 
         let _ = UnhookWindowsHookEx(hook.unwrap());
-        let _ = UnhookWinEvent(event_hook);
+        // WR-03: Only unhook if the handle is valid.
+        if !event_hook.is_invalid() {
+            let _ = UnhookWinEvent(event_hook);
+        }
     });
 
     true

@@ -36,8 +36,10 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 #[cfg(debug_assertions)]
                 eprintln!("[Startup] Dispatching LoadProfile(\"default\") intent");
+                // CR-06: Use oneshot channel — result is silently dropped on startup.
+                let (tx, _rx) = tokio::sync::oneshot::channel();
                 let _ = startup_tx
-                    .send(Intent::LoadProfile("default".to_string()))
+                    .send(Intent::LoadProfile("default".to_string(), tx))
                     .await;
             });
 

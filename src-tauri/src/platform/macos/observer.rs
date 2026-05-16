@@ -73,12 +73,20 @@ pub fn get_registry() -> &'static Mutex<HashSet<ActiveInput>> {
 }
 
 pub fn flush_held_inputs() {
-    let reg = get_registry().lock().unwrap();
+    // @safety-officer: CR-01 — drain registry into a local Vec BEFORE releasing
+    // the lock, then post CGEvents outside the lock.  Posting a CGEvent while
+    // holding the REGISTRY mutex causes a re-entrant deadlock: the CGEventTap
+    // callback fires synchronously and immediately tries to acquire the same mutex.
+    let inputs_to_flush: Vec<ActiveInput> = {
+        let mut reg = get_registry().lock().unwrap();
+        reg.drain().collect()
+    };
+    // Lock released here — safe to post CGEvents.
     if let Ok(source) = core_graphics::event_source::CGEventSource::new(
         core_graphics::event_source::CGEventSourceStateID::HIDSystemState,
     ) {
         let pos = core_graphics::geometry::CGPoint::new(0.0, 0.0);
-        for input in reg.iter() {
+        for input in inputs_to_flush.iter() {
             match input {
                 ActiveInput::Key(k) => {
                     if let Ok(up_event) =
@@ -290,12 +298,19 @@ pub fn initialize_tap() -> bool {
                             let _ = tx.try_send(crate::state::Intent::TriggerEmergencyStop);
                         }
 
-                        let reg = get_registry().lock().unwrap();
+                        // @safety-officer: CR-01 — drain registry into a local Vec BEFORE
+                        // releasing the lock.  Posting CGEvents while holding the REGISTRY mutex
+                        // causes a re-entrant deadlock (the tap callback re-acquires the mutex).
+                        let inputs_to_release: Vec<ActiveInput> = {
+                            let mut reg = get_registry().lock().unwrap();
+                            reg.drain().collect()
+                        };
+                        // Lock released — safe to post CGEvents.
                         let pos = event.location();
                         if let Ok(source) = core_graphics::event_source::CGEventSource::new(
                             core_graphics::event_source::CGEventSourceStateID::HIDSystemState,
                         ) {
-                            for input in reg.iter() {
+                            for input in inputs_to_release.iter() {
                                 match input {
                                     ActiveInput::Key(k) => {
                                         if let Ok(up_event) =
@@ -388,20 +403,32 @@ pub fn initialize_tap() -> bool {
             },
         );
 
+        // @safety-officer: CR-03 — TAP_INITIALIZED must be reset to false in ALL
+        // non-success branches so callers can retry after permissions are granted.
         match tap_result {
             Ok(tap) => {
                 let current_loop = CFRunLoop::get_current();
-                if let Ok(source) = tap.mach_port.create_runloop_source(0) {
-                    current_loop.add_source(&source, unsafe { kCFRunLoopCommonModes });
-                    tap.enable();
-                    CFRunLoop::run_current();
+                match tap.mach_port.create_runloop_source(0) {
+                    Ok(source) => {
+                        current_loop.add_source(&source, unsafe { kCFRunLoopCommonModes });
+                        tap.enable();
+                        CFRunLoop::run_current();
+                        // run_current() only returns when the run loop is stopped (tap died).
+                        // Reset so the tap can be re-initialized on next accessibility grant.
+                        TAP_INITIALIZED.store(false, Ordering::SeqCst);
+                    }
+                    Err(e) => {
+                        eprintln!("[Observer] Failed to create runloop source: {:?}", e);
+                        // Reset so initialization can be retried.
+                        TAP_INITIALIZED.store(false, Ordering::SeqCst);
+                    }
                 }
             }
             Err(_) => {
                 eprintln!(
                     "Failed to create CGEventTap. Make sure the app has Accessibility permissions."
                 );
-                // Reset flag so initialization can be retried after permissions are granted
+                // Reset flag so initialization can be retried after permissions are granted.
                 TAP_INITIALIZED.store(false, Ordering::SeqCst);
             }
         }
@@ -498,8 +525,12 @@ impl PlatformObserver for MacPlatformObserver {
         }
 
         // 2. CGEventTap — only if Accessibility is already granted
+        // WR-04: Log when initialize_tap returns false so tap failures surface.
         if super::check_accessibility_permissions(false) {
-            initialize_tap();
+            let ok = initialize_tap();
+            if !ok {
+                eprintln!("[Observer] CGEventTap initialization returned false — tap may be inactive");
+            }
         }
     }
 
