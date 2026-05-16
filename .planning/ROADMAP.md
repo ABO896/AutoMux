@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reliability & Safety | 4/4 | Complete   | 2026-05-16 |
+| 1. Reliability & Safety | 4/4 | Complete    | 2026-05-16 |
 | 2. Cleanup & Credibility | 0/? | Not started | - |
 | 3. Macro Setup UX | 0/? | Not started | - |
 | 4. CI Hardening | 0/? | Not started | - |

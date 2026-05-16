@@ -7,16 +7,16 @@
 
 ### Reliability
 
-- [ ] **RELY-01**: macOS permissions check correctly starts the event tap when accessibility permission transitions from denied to granted — no false "security denied" prompt after grant
-- [ ] **RELY-02**: macOS CGEventTap re-enables itself when the OS disables it via timeout (kCGEventTapDisabledByTimeout) — hotkeys do not silently stop working during long sessions
-- [ ] **RELY-03**: Windows emergency stop (Ctrl+Shift+Q) flushes held inputs before exiting — no keys left stuck after macro stop
-- [ ] **RELY-04**: Macro changes are auto-saved after every mutation — no user work lost on app restart
+- [x] **RELY-01**: macOS permissions check correctly starts the event tap when accessibility permission transitions from denied to granted — no false "security denied" prompt after grant
+- [x] **RELY-02**: macOS CGEventTap re-enables itself when the OS disables it via timeout (kCGEventTapDisabledByTimeout) — hotkeys do not silently stop working during long sessions
+- [x] **RELY-03**: Windows emergency stop (Ctrl+Shift+Q) flushes held inputs before exiting — no keys left stuck after macro stop
+- [x] **RELY-04**: Macro changes are auto-saved after every mutation — no user work lost on app restart
 
 ### Safety
 
-- [ ] **SAFE-01**: All 5 production `unwrap()` / `expect()` calls on the input injection hot path replaced with recoverable error handling — app cannot panic during macro execution
+- [x] **SAFE-01**: All 5 production `unwrap()` / `expect()` calls on the input injection hot path replaced with recoverable error handling — app cannot panic during macro execution
 - [ ] **SAFE-02**: MacPlatformObserver resource leak fixed — observer token is correctly reclaimed; `stop_observing` is no longer dead code
-- [ ] **SAFE-03**: Minimum macro interval floor enforced at 5ms — intervals below this threshold are rejected or clamped to prevent system instability
+- [x] **SAFE-03**: Minimum macro interval floor enforced at 5ms — intervals below this threshold are rejected or clamped to prevent system instability
 
 ### README & License
 
@@ -70,13 +70,13 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELY-01 | Phase 1 | Pending |
-| RELY-02 | Phase 1 | Pending |
-| RELY-03 | Phase 1 | Pending |
-| RELY-04 | Phase 1 | Pending |
-| SAFE-01 | Phase 1 | Pending |
+| RELY-01 | Phase 1 | Complete |
+| RELY-02 | Phase 1 | Complete |
+| RELY-03 | Phase 1 | Complete |
+| RELY-04 | Phase 1 | Complete |
+| SAFE-01 | Phase 1 | Complete |
 | SAFE-02 | Phase 2 | Pending |
-| SAFE-03 | Phase 1 | Pending |
+| SAFE-03 | Phase 1 | Complete |
 | README-01 | Phase 2 | Pending |
 | README-02 | Phase 2 | Pending |
 | README-03 | Phase 2 | Pending |
