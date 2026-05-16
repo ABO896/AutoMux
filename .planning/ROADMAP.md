@@ -12,7 +12,7 @@ This milestone hardens AutoMux from a working prototype into a reliable, user-fr
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Reliability & Safety** - Fix the permissions loop, CGEventTap timeout, Windows flush gap, auto-save loss, interval floor, and panic paths
+- [x] **Phase 1: Reliability & Safety** - Fix the permissions loop, CGEventTap timeout, Windows flush gap, auto-save loss, interval floor, and panic paths (completed 2026-05-16)
 - [ ] **Phase 2: Cleanup & Credibility** - Correct the README license, fix the MacPlatformObserver leak, and scrub the repository of dead code and stale artifacts
 - [ ] **Phase 3: Macro Setup UX** - Replace the raw key-code field and manual process-name entry with a key capture widget and a running-process picker
 - [ ] **Phase 4: CI Hardening** - Verify the universal binary build and pin third-party GitHub Actions to specific SHAs
@@ -32,10 +32,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User creates and edits macros, closes AutoMux without manually saving, reopens — all changes are present
   5. Setting a macro step interval below 5ms is rejected or clamped to 5ms; the app cannot be used to saturate the OS input queue
 **Plans**: 4 plans
-- [ ] 01-01-PLAN.md — Frontend permissions poll fix (3s) + scheduler 5ms interval floor (RELY-01, SAFE-03)
-- [ ] 01-02-PLAN.md — macOS panic elimination + CGEventTap timeout re-enable (SAFE-01 macOS, RELY-02)
-- [ ] 01-03-PLAN.md — Windows lock-unwrap panic elimination + emergency-stop synchronous flush (SAFE-01 Windows, RELY-03)
-- [ ] 01-04-PLAN.md — StateActor auto-save end-to-end with LoadProfile bracketing (RELY-04)
+- [x] 01-01-PLAN.md — Frontend permissions poll fix (3s) + scheduler 5ms interval floor (RELY-01, SAFE-03)
+- [x] 01-02-PLAN.md — macOS panic elimination + CGEventTap timeout re-enable (SAFE-01 macOS, RELY-02)
+- [x] 01-03-PLAN.md — Windows lock-unwrap panic elimination + emergency-stop synchronous flush (SAFE-01 Windows, RELY-03)
+- [x] 01-04-PLAN.md — StateActor auto-save end-to-end with LoadProfile bracketing (RELY-04)
 
 ### Phase 2: Cleanup & Credibility
 **Goal**: The repository presents accurate legal information, contains no dead code or stale artifacts, and the MacPlatformObserver resource leak is closed
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reliability & Safety | 0/? | Not started | - |
+| 1. Reliability & Safety | 4/4 | Complete   | 2026-05-16 |
 | 2. Cleanup & Credibility | 0/? | Not started | - |
 | 3. Macro Setup UX | 0/? | Not started | - |
 | 4. CI Hardening | 0/? | Not started | - |
