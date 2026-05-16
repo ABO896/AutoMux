@@ -49,7 +49,7 @@ None — discussion stayed within phase scope.
 | ID | Description | Research Support |
 |----|-------------|------------------|
 | RELY-01 | macOS permissions check correctly starts the event tap when accessibility permission transitions from denied to granted — no false "security denied" prompt after grant | D-01: single-line fix in App.tsx:132 (10000→3000ms); no Rust changes needed |
-| RELY-02 | macOS CGEventTap re-enables itself when OS disables it via timeout (kCGEventTapDisabledByTimeout) — hotkeys do not silently stop working during long sessions | CGEventTap callback closure receives event_type; check for Null/tapDisabled type and call tap.enable() inline; confirmed tap reference is in scope |
+| RELY-02 | macOS CGEventTap re-enables itself when OS disables it via timeout (kCGEventTapDisabledByTimeout) — hotkeys do not silently stop working during long sessions | CGEventTap callback closure receives event_type; check for `CGEventType::TapDisabledByTimeout` and call tap.enable() inline; confirmed tap reference is in scope |
 | RELY-03 | Windows emergency stop (Ctrl+Shift+Q) flushes held inputs before exiting — no keys left stuck after macro stop | `flush_all_held_inputs()` already exists in WindowsInputProvider; hook_callback must call it before `process::exit(1)`; currently it only sends an Intent that races the exit |
 | RELY-04 | Macro changes are auto-saved after every mutation — no user work lost on app restart | `ProfileManager::save_profile()` exists and is async; must inject `ProfileManager` into `StateActor` via `Arc<ProfileManager>`; requires load-suppression flag to avoid N saves on startup restoration |
 | SAFE-01 | All 5 production `unwrap()` / `expect()` calls on the input injection hot path replaced with recoverable error handling | Exact sites identified: 1 in `macos/input.rs:24`, 4 in `windows/mod.rs` (lines 173, 188, 196, 208); fix by converting to `if let Ok(guard) = ...` and returning early |
@@ -123,7 +123,7 @@ All dependencies are already present. This phase introduces no new crates.
       |  save_profile(&ProfileData { name: "default", macros })
       ▼ (separately, platform layer)
 [macOS observer.rs: CGEventTap callback]
-      |  event_type == Null → tap.enable()  ← RELY-02
+      |  event_type == TapDisabledByTimeout → tap.enable()  ← RELY-02
       ▼
 [windows/mod.rs: hook_callback]
       |  Ctrl+Shift+Q → flush_all_held_inputs() → process::exit(1)  ← RELY-03
@@ -157,20 +157,23 @@ src-tauri/src/
 │                                        # RELY-03: call flush_all_held_inputs() before exit(1)
 ```
 
-### Pattern 1: CGEventTap Timeout Re-enable (RELY-02)
+### Pattern 1: CGEventTap Timeout Re-enable (RELY-02) (RESOLVED)
 
 **What:** The CGEventTap callback closure receives an `event_type` parameter. When the OS disables the tap due to timeout (the callback took too long), it delivers a special event type. The fix is to detect it and immediately re-enable the tap.
 
 **When to use:** Inside the `CGEventTap::new` closure in `observer.rs:206`
 
-**Implementation note:** The `core_graphics` crate's `CGEventTap` callback signature exposes `event_type` as the first parameter. When the OS disables the tap, it calls the callback with `CGEventType::Null` (value 0) or a tap-disabled variant. The tap reference itself (`_proxy` in the current closure signature) provides `enable()`. The current closure signature is `|_proxy, event_type, event|` — the `_proxy` (currently unused) provides `CGEventTapEnable`.
+**Implementation note:** The `core_graphics` crate's `CGEventTap` callback signature exposes `event_type` as the first parameter. The crate maps `kCGEventTapDisabledByTimeout` to a NAMED enum variant `CGEventType::TapDisabledByTimeout` (value `0xFFFFFFFE`). There is also a sibling `CGEventType::TapDisabledByUserInput` (`0xFFFFFFFF`) for user-input-triggered disables. Both must be handled by the re-enable branch. The tap reference itself (`_proxy` in the current closure signature) provides `enable()`. The current closure signature is `|_proxy, event_type, event|` — the `_proxy` (currently unused) provides `CGEventTapEnable`.
 
 **Example:**
 ```rust
-// Source: [VERIFIED: live source, observer.rs:206]
+// Source: [VERIFIED: core-graphics 0.24.0/src/event.rs:140-142 — exact variant names confirmed]
 // Inside CGEventTap::new closure — add BEFORE the existing LLMHF_INJECTED check:
-if matches!(event_type, CGEventType::Null) {
-    // OS disabled the tap due to timeout — re-enable immediately.
+if matches!(
+    event_type,
+    CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput
+) {
+    // OS disabled the tap — re-enable immediately.
     // _proxy renamed to tap_proxy to enable calling enable().
     tap_proxy.enable();
     return None;
@@ -179,7 +182,7 @@ if matches!(event_type, CGEventType::Null) {
 
 **Important:** The current closure names the proxy `_proxy` (unused). For RELY-02, the parameter must be renamed to `tap_proxy` (removing the leading underscore) so `tap_proxy.enable()` can be called.
 
-**Confidence:** MEDIUM — the `CGEventTap` proxy type in the `core_graphics` Rust crate exposes an `enable()` method; confirmed by the existing `tap.enable()` call at line 369 of observer.rs. The exact event type for tap-disabled is `CGEventType::Null` (the `core_graphics` crate maps `kCGEventTapDisabledByTimeout` to the Null event type). `[ASSUMED: exact Null mapping — verify against core_graphics CGEventType enum if unexpected behavior occurs]`
+**Confidence:** HIGH — verified by direct read of `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/core-graphics-0.24.0/src/event.rs` lines 114–143. The `CGEventType` enum has explicit named variants `TapDisabledByTimeout = 0xFFFFFFFE` and `TapDisabledByUserInput = 0xFFFFFFFF`. `CGEventType::Null` (value 0) is a separate variant used for "no event" — it is NOT the timeout signal. Earlier research assumption A1 (that `Null` was the mapping) was incorrect and is now superseded.
 
 ### Pattern 2: ProfileManager Injection into StateActor (RELY-04)
 
@@ -226,6 +229,7 @@ Intent::LoadProfile(name) => {
             for (_, config) in profile.macros {
                 self.state.macros.insert(config.id, config);
             }
+            self.state.engine_active = profile.engine_active;  // unconditional copy
             self.reevaluate_all_macros().await;
         }
         Err(e) => { /* surface error */ }
@@ -305,6 +309,7 @@ let Ok(mut guard) = get_held_inputs().lock() else { return; };
 - **Calling `save_profile` synchronously (blocking):** `ProfileManager::save_profile` is `async`. Calling it from `StateActor::handle_intent` via `.await` is correct since `handle_intent` is already `async`. Do NOT use `tokio::task::block_in_place` or `std::thread::spawn` for this.
 - **Skipping `loading_profile` guard during startup restoration:** The startup restoration in `lib.rs` sends individual `Intent::AddMacro` messages, not `Intent::LoadProfile`. If auto-save is added without the suppression mechanism, startup will trigger N file writes for N macros. The fix requires either converting startup restoration to use `Intent::LoadProfile` or setting the flag via a dedicated intent before/after the batch.
 - **Removing `CGEventTapOptions::ListenOnly`:** The existing tap is `ListenOnly` — it observes but does not filter events. The RELY-02 fix adds event type detection to an existing callback; it does not change the tap mode. Do not change `CGEventTapOptions`.
+- **One-way ratchet on engine_active during LoadProfile:** Do NOT write `if profile.engine_active { self.state.engine_active = true; }` — that can only enable, never disable. Always assign unconditionally: `self.state.engine_active = profile.engine_active;`.
 
 ---
 
@@ -377,6 +382,16 @@ let profile = ProfileData {
 **How to avoid:** Call `WindowsInputProvider::flush_all_held_inputs()` synchronously in `hook_callback` before `process::exit(1)`. The function already exists at `windows/mod.rs:49`. This matches the macOS approach exactly.
 
 **Warning signs:** Keys remain physically stuck (held down) after Ctrl+Shift+Q on Windows.
+
+### Pitfall 6: One-way ratchet on engine_active during profile load (RELY-04)
+
+**What goes wrong:** Writing `if profile.engine_active { self.state.engine_active = true; }` in the `Intent::LoadProfile` handler is a one-way ratchet: it can only enable the engine, never disable it. A user who toggles the engine off, saves, and reloads will see the engine come back on incorrectly only when the saved value is `true`, but the live state stays whatever it was on `false`. The intent of profile load is to fully restore the saved engine state.
+
+**Why it happens:** Defensive habit — only mutate on the truthy branch.
+
+**How to avoid:** Assign unconditionally: `self.state.engine_active = profile.engine_active;`. The same field is also written unconditionally inside `auto_save_default` (Pitfall 4) — symmetry is correct.
+
+**Warning signs:** Engine state after profile load does not match the engine state at the time the profile was saved.
 
 ---
 
@@ -452,26 +467,33 @@ pub fn flush_all_held_inputs() {
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | CGEventTap timeout delivers `CGEventType::Null` (value 0) to the callback | Pattern 1 (RELY-02) | Wrong event type constant means the re-enable condition never triggers; tap remains disabled |
+| ~~A1~~ | ~~CGEventTap timeout delivers `CGEventType::Null` (value 0) to the callback~~ | ~~Pattern 1 (RELY-02)~~ | RESOLVED — verified against installed `core-graphics 0.24.0/src/event.rs` lines 140–142. The actual variants are `CGEventType::TapDisabledByTimeout = 0xFFFFFFFE` and `CGEventType::TapDisabledByUserInput = 0xFFFFFFFF`. `CGEventType::Null` (value 0) is unrelated. Pattern 1 and the relevant plan/PATTERNS doc have been updated. |
 | A2 | `tap_proxy.enable()` is callable from within the CGEventTap callback closure (no re-entrancy restriction) | Pattern 1 (RELY-02) | If re-entrancy is disallowed, the call would need to be deferred to a separate thread or signal |
 | A3 | Changing `ProfileManager::from_app_handle` result to be wrapped in `Arc` at the `lib.rs` call site does not break the `app.manage(profile_mgr.clone())` Tauri managed state pattern | Pattern 2 (RELY-04) | If Tauri's managed state requires a non-Arc type, the managed state access in IPC handlers would need updating |
 | A4 | `MacInputProvider::source()` returning `Option<CGEventSource>` (or Result) is viable without changing the `InputProvider` trait signature | Pattern 5 (SAFE-01) | If the trait forces a specific return type for internal helpers, a different refactor approach is needed |
 
-**If this table were empty:** All claims were verified. Four low-risk assumptions remain, all resolvable during implementation.
+**If this table were empty:** All claims were verified. Three low-risk assumptions remain (A2–A4), all resolvable during implementation.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **CGEventType for tap timeout on current core_graphics crate version**
-   - What we know: macOS documents `kCGEventTapDisabledByTimeout` as a constant. The Rust `core_graphics` crate maps it to a `CGEventType` variant.
-   - What's unclear: Whether the variant is `CGEventType::Null` (most common mapping) or a named variant like `CGEventType::TapDisabledByTimeout`.
-   - Recommendation: Before implementing RELY-02, run `grep -r "TapDisabled\|Null" $(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "core-graphics") | .manifest_path' | xargs dirname)` to find the enum definition in the installed crate source. Alternatively, check `core_graphics` docs on docs.rs.
+1. **CGEventType for tap timeout on current core_graphics crate version** — RESOLVED
+   - Findings: The installed `core-graphics 0.24.0` crate (verified at `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/core-graphics-0.24.0/src/event.rs:140-142`) defines two named variants for tap-disable signals:
+     - `CGEventType::TapDisabledByTimeout = 0xFFFFFFFE`
+     - `CGEventType::TapDisabledByUserInput = 0xFFFFFFFF`
+   - `CGEventType::Null = 0` is unrelated to tap timeouts and must NOT be used as the re-enable trigger. The earlier assumption (A1) was incorrect.
+   - Implementation impact: The `matches!` arm in `observer.rs` must match `CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput`, not `CGEventType::Null`. Plan 02 and PATTERNS.md have been corrected to use the named variants.
 
-2. **IPC load_profile vs new LoadProfile intent for RELY-04 suppression**
-   - What we know: The current `ipc::load_profile` command calls `profile_mgr.load_profile()` and sends individual `Intent::AddMacro` intents (via startup pattern in lib.rs — the IPC version goes through the ProfileManager but then replays via AddMacro).
-   - What's unclear: Whether the IPC `load_profile` handler currently sends AddMacro intents or whether it has its own batch path.
-   - Recommendation: Read `ipc/mod.rs` load_profile handler before planning to determine whether to add a `LoadProfile` intent or bracket the AddMacro loop in-place.
+2. **IPC load_profile vs new LoadProfile intent for RELY-04 suppression** — RESOLVED
+   - Findings: Reading `src-tauri/src/ipc/mod.rs:223–250` shows the current `pub async fn load_profile` command body:
+     1. Calls `profile_mgr.load_profile(&name).await?` to obtain `ProfileData`
+     2. Calls `Intent::GetState` to snapshot current macros
+     3. Sends `Intent::RemoveMacro` for each existing macro ID (a loop)
+     4. Sends `Intent::AddMacro` for each macro in the loaded profile (a loop)
+     5. Returns the `ProfileData`
+   - There is no batch path in IPC — the IPC handler is the one assembling the batch from individual intents. This is the path that must be replaced with a single `Intent::LoadProfile(name)` send (handled inside the StateActor with the suppression flag). The IPC handler still calls `profile_mgr.load_profile` first to obtain the return value, then dispatches the new intent.
+   - Implementation impact: Plan 04 Task 2 already specifies this: keep the leading `profile_mgr.load_profile(&name).await?` for the return value, replace the remove+add loops with a single `state.send_intent(Intent::LoadProfile(name.clone())).await` call. No additional plan changes needed.
 
 ---
 
@@ -506,6 +528,7 @@ Phase 1 does not introduce new attack surface. All changes are hardening / corre
 
 ### Primary (HIGH confidence)
 - Live source code read (all files listed above) — exact line numbers verified in current working tree
+- Installed crate source: `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/core-graphics-0.24.0/src/event.rs:114–143` — confirmed `CGEventType` variant names
 - `.planning/codebase/CONCERNS.md` — prior codebase audit with precise line numbers
 - `.planning/codebase/ARCHITECTURE.md` — actor topology, threading model
 
@@ -514,7 +537,7 @@ Phase 1 does not introduce new attack surface. All changes are hardening / corre
 - `.planning/REQUIREMENTS.md` — requirement definitions
 
 ### Tertiary (LOW confidence / ASSUMED)
-- A1-A4 assumptions above — flagged explicitly
+- A2-A4 assumptions above — flagged explicitly (A1 superseded by direct source verification)
 
 ---
 
@@ -524,8 +547,9 @@ Phase 1 does not introduce new attack surface. All changes are hardening / corre
 - Standard stack: HIGH — no new dependencies; all existing code verified against live source
 - Architecture: HIGH — actor model fully traced; ownership paths confirmed
 - Fix locations: HIGH — exact file paths and line numbers confirmed via source read
-- RELY-02 event type constant: MEDIUM — based on common core_graphics mapping; flagged as A1
+- RELY-02 event type constant: HIGH — verified against installed `core-graphics 0.24.0` crate source (variants `TapDisabledByTimeout`/`TapDisabledByUserInput`); supersedes prior MEDIUM-confidence assumption A1
 - Pitfalls: HIGH — derived from CONCERNS.md audit + direct source inspection
 
 **Research date:** 2026-05-16
+**Open questions resolved:** 2026-05-16 (revision pass)
 **Valid until:** 2026-06-16 (stable codebase; only invalidated by upstream dependency updates to core_graphics or Tauri 2)
