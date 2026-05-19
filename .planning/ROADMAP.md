@@ -47,7 +47,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `implementation_plan.md` is absent from the repository root; `src-tauri/gen/` and debug temp files are covered by `.gitignore`
   3. No unused source files remain in the Rust or SolidJS layers — dead code removed or documented as intentional
   4. MacPlatformObserver token is stored for its full application lifetime; `stop_observing` is no longer dead code
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 02-01-PLAN.md — License correctness + README appeal pass (README-01, README-02, README-03)
+- [ ] 02-02-PLAN.md — Repo hygiene: delete implementation_plan.md, extend .gitignore, verify AUDIT-02 (AUDIT-01, AUDIT-02, AUDIT-03)
+- [ ] 02-03-PLAN.md — MacPlatformObserver lifetime fix via app.manage (SAFE-02)
+- [ ] 02-04-PLAN.md — Frontend version string fix + comment alignment (README-03 credibility)
 **UI hint**: yes
 
 ### Phase 3: Macro Setup UX
@@ -89,7 +93,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Reliability & Safety | 4/4 | Complete    | 2026-05-16 |
-| 2. Cleanup & Credibility | 0/? | Not started | - |
+| 2. Cleanup & Credibility | 0/4 | Not started | - |
 | 3. Macro Setup UX | 0/? | Not started | - |
 | 4. CI Hardening | 0/? | Not started | - |
 | 5. Auto-Updater (Reserved) | - | Reserved (v2) | - |
