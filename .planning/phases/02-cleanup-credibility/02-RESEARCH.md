@@ -482,22 +482,22 @@ No new attack surface introduced. SAFE-02 closes a resource leak (not a security
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should the Cargo.toml gain a `license` field?**
    - What we know: `package.json` has `"license": "MIT"` (needs updating). `Cargo.toml` has no `license` field.
    - What's unclear: Is adding `license = "GPL-3.0-only"` to `Cargo.toml` in scope for this phase?
-   - Recommendation: Yes — add it. It's a one-line change that keeps all three package manifests consistent.
+   - RESOLVED: Yes — add `license = "GPL-3.0-only"` to `Cargo.toml`. Implemented in plan 02-01 Task 1.
 
 2. **Move or delete `implementation_plan.md`?**
    - What we know: D-07 leaves this to Claude's discretion.
    - What's unclear: Whether preserving history matters.
-   - Recommendation: Delete outright. The `.planning/` directory now serves this purpose. The document describes work that is already completed and its "Open Questions" are resolved.
+   - RESOLVED: Delete outright. Implemented in plan 02-02 Task 1.
 
 3. **Polling comment mismatch (line 132, not in scope but trivial)**
    - What we know: Comment says "Poll every 3s" but `setInterval` uses 10000ms.
    - What's unclear: Whether fixing the comment falls under "README clarity pass" or scope creep.
-   - Recommendation: Fix the comment (it's a one-word change) while working on App.tsx for D-10. It's a source comment, not a feature.
+   - RESOLVED: Fix the comment while working on App.tsx for D-10. Implemented in plan 02-04 Task 1.
 
 ---
 
