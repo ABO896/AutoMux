@@ -67,7 +67,8 @@ pub fn run() {
                 platform::macos::observer::set_state_tx(state_tx);
                 let mut observer = MacPlatformObserver::new();
                 observer.start_observing();
-                // Observer is long-lived; it does not implement Drop, so the token is kept alive natively.
+                // Observer is owned by Tauri managed state for full app lifetime (SAFE-02).
+                app.manage(observer);
             }
             #[cfg(target_os = "windows")]
             {
