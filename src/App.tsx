@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, For } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getVersion } from "@tauri-apps/api/app";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
@@ -81,6 +82,8 @@ function App() {
     type: "success" | "error";
   } | null>(null);
 
+  const [appVersion, setAppVersion] = createSignal<string>("…");
+
   // ── New Macro Form State ──
   const [showNewMacro, setShowNewMacro] = createSignal(false);
   const [newMacroName, setNewMacroName] = createSignal("");
@@ -98,17 +101,19 @@ function App() {
 
     (async () => {
       try {
-        const [stateData, accessOk, app, profileList] = await Promise.all([
+        const [stateData, accessOk, app, profileList, version] = await Promise.all([
           invoke<AppState>("get_state"),
           invoke<boolean>("check_accessibility"),
           invoke<string | null>("get_active_app"),
           invoke<ProfileSummary[]>("list_profiles"),
+          getVersion(),
         ]);
         if (cancelled) return;
         setState(stateData);
         setAccessibility(accessOk);
         setActiveApp(app);
         setProfiles(profileList);
+        setAppVersion(version);
       } catch (e) {
         if (cancelled) return;
         console.error("Failed to fetch initial state:", e);
@@ -297,7 +302,7 @@ function App() {
           <div class="w-3 h-3 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent-glow)]" />
           <span class="text-sm font-semibold tracking-tight">AutoMux</span>
         </div>
-        <span class="text-[10px] text-text-dim font-mono">v1.0.0</span>
+        <span class="text-[10px] text-text-dim font-mono">v{appVersion()}</span>
       </div>
 
       {/* ── Tab Bar ── */}
