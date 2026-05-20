@@ -552,3 +552,11 @@ impl PlatformObserver for MacPlatformObserver {
         }
     }
 }
+
+impl Drop for MacPlatformObserver {
+    fn drop(&mut self) {
+        // Called by Tauri's managed state drop at app shutdown (SAFE-02).
+        // Ensures the NSWorkspace notification observer is unregistered cleanly.
+        self.stop_observing();
+    }
+}
