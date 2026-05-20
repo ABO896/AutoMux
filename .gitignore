@@ -20,3 +20,9 @@ RULES.md
 # Scratch test files
 src-tauri/test.rs
 src-tauri/test2.rs
+
+# Windows OS artifacts
+Thumbs.db
+
+# Debug / temp log files
+*.log
