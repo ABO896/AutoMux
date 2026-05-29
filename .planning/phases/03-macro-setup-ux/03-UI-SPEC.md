@@ -1,7 +1,8 @@
 ---
 phase: 3
 slug: macro-setup-ux
-status: draft
+status: approved
+reviewed_at: 2026-05-30
 shadcn_initialized: false
 preset: none
 created: 2026-05-30
@@ -216,11 +217,11 @@ No component registries used. All components are hand-rolled SolidJS + Tailwind,
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: FLAG (non-blocking — error copy has no solution path)
+- [x] Dimension 2 Visuals: FLAG (non-blocking — no explicit focal point; ✕ aria-label missing)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: FLAG (non-blocking — 10/11/12px cluster; existing codebase values)
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-05-30
