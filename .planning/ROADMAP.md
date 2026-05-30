@@ -63,7 +63,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User sets a trigger key by clicking the key-binding field and pressing the desired key — raw CGKeyCode or VK integers are never shown in the UI
   2. On macOS, user opens the target-app picker and sees a list of running applications by display name; selecting one sets the correct bundle ID without any manual text entry
   3. On Windows, user opens the target-app picker and sees running processes by name and path; selecting one sets the correct exe path without any manual text entry
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 03-01-PLAN.md — keymap.ts lookup tables + Rust list_running_apps + set_macro_trigger_key IPC (UX-01, UX-02, UX-03)
+- [ ] 03-02-PLAN.md — Key capture widget in creation form + card key badge click-to-edit (UX-01)
+- [ ] 03-03-PLAN.md — Process picker <select> in creation form + card target badge click-to-edit (UX-02, UX-03)
 **UI hint**: yes
 
 ### Phase 4: CI Hardening
@@ -94,6 +97,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Reliability & Safety | 4/4 | Complete    | 2026-05-16 |
 | 2. Cleanup & Credibility | 0/4 | Not started | - |
-| 3. Macro Setup UX | 0/? | Not started | - |
+| 3. Macro Setup UX | 0/3 | Not started | - |
 | 4. CI Hardening | 0/? | Not started | - |
 | 5. Auto-Updater (Reserved) | - | Reserved (v2) | - |
