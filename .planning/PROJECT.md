@@ -75,4 +75,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-20 — Phase 02 (cleanup-credibility) complete: GPL-3.0 license aligned, README polished, stale artifacts removed, MacPlatformObserver lifetime fixed, dynamic version display wired.
+*Last updated: 2026-05-30 — Phase 03 (macro-setup-ux) complete: key capture widget added with null-safe domKeycodeToNative, macOS card-edit now persists trigger_key via set_macro_trigger_key, key-less macro cards show clickable "Set key…" placeholder, app-targeting dropdown populated via list_running_apps IPC. Requirements UX-01, UX-02, UX-03 delivered.
