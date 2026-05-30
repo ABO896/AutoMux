@@ -46,6 +46,11 @@ interface ProfileData {
   engine_active: boolean;
 }
 
+interface RunningApp {
+  display_name: string;
+  identifier: string;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 function formatInputEvent(ev: InputEvent): string {
@@ -97,6 +102,11 @@ function App() {
   const [newMacroTriggerMode, setNewMacroTriggerMode] = createSignal<TriggerMode>("Pulse");
   const [newMacroTriggerKeyCode, setNewMacroTriggerKeyCode] = createSignal<number | null>(null);
   const [triggerKeyRecording, setTriggerKeyRecording] = createSignal(false);
+
+  // ── Process Picker State ──
+  const [apps, setApps] = createSignal<RunningApp[]>([]);
+  const [appsLoading, setAppsLoading] = createSignal(false);
+  const [appsError, setAppsError] = createSignal(false);
 
   // ── Card Inline Edit State ──
   const [editingCardId, setEditingCardId] = createSignal<string | null>(null);
@@ -279,6 +289,32 @@ function App() {
       setEditingField(null);
     } catch (e) {
       console.error("Card trigger key update failed:", e);
+    }
+  }
+
+  // @architect: Guard prevents duplicate in-flight request (T-03-12); re-fetches on every open (D-06)
+  async function handlePickerFocus() {
+    if (appsLoading()) return;
+    setAppsLoading(true);
+    setAppsError(false);
+    try {
+      const result = await invoke<RunningApp[]>("list_running_apps");
+      setApps(result);
+    } catch (_) {
+      setAppsError(true);
+    } finally {
+      setAppsLoading(false);
+    }
+  }
+
+  // @architect: Empty string converts to null for Global targeting (T-03-13)
+  async function handleCardSetTargetApp(id: string, targetApp: string | null) {
+    try {
+      await invoke("set_macro_target_app", { id, target_app: targetApp || null });
+      setEditingCardId(null);
+      setEditingField(null);
+    } catch (e) {
+      console.error("Card target update failed:", e);
     }
   }
 
@@ -556,15 +592,28 @@ function App() {
                            focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
                   />
                 </div>
-                <input
-                  id="input-macro-target"
-                  type="text"
-                  placeholder="Target app (optional, e.g. com.mojang.minecraft)"
+                <select
+                  id="select-macro-target"
                   value={newMacroTarget()}
-                  onInput={(e) => setNewMacroTarget(e.currentTarget.value)}
-                  class="bg-background border border-border rounded-lg px-3 py-2 text-sm
-                         focus:outline-none focus:border-accent/50 transition-colors placeholder:text-text-dim"
-                />
+                  onChange={(e) => setNewMacroTarget(e.currentTarget.value)}
+                  onFocus={handlePickerFocus}
+                  class="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/50 transition-colors text-text-main cursor-pointer"
+                >
+                  <option value="">🌐 Global (no target)</option>
+                  <Show when={appsLoading()}>
+                    <option disabled>Loading…</option>
+                  </Show>
+                  <Show when={appsError()}>
+                    <option disabled>Failed to load apps</option>
+                  </Show>
+                  <For each={apps()}>
+                    {(app) => (
+                      <option value={app.identifier}>
+                        {app.display_name} ({app.identifier})
+                      </option>
+                    )}
+                  </For>
+                </select>
                 
                 {/* ── Trigger Mode Selector ── */}
                 <div class="flex gap-2">
@@ -684,9 +733,48 @@ function App() {
                     <div class="flex items-center justify-between text-[11px] text-text-dim mb-1">
                       <div class="flex items-center gap-2">
                         <span>🎯</span>
-                        <span class="font-mono">
-                          {macro.target_app || "Global"}
-                        </span>
+                        <Show
+                          when={editingCardId() === macro.id && editingField() === "target"}
+                          fallback={
+                            <span
+                              class="font-mono cursor-pointer border border-transparent hover:border-accent/40 rounded px-1"
+                              onClick={() => {
+                                setEditingCardId(macro.id);
+                                setEditingField("target");
+                                handlePickerFocus();
+                              }}
+                            >
+                              {macro.target_app || "Global"}
+                            </span>
+                          }
+                        >
+                          <select
+                            class="flex-1 min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/50 transition-colors text-text-main cursor-pointer"
+                            onFocus={handlePickerFocus}
+                            onChange={(e) => handleCardSetTargetApp(macro.id, e.currentTarget.value || null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                setEditingCardId(null);
+                                setEditingField(null);
+                              }
+                            }}
+                          >
+                            <option value="">🌐 Global (no target)</option>
+                            <Show when={appsLoading()}>
+                              <option disabled>Loading…</option>
+                            </Show>
+                            <Show when={appsError()}>
+                              <option disabled>Failed to load apps</option>
+                            </Show>
+                            <For each={apps()}>
+                              {(app) => (
+                                <option value={app.identifier}>
+                                  {app.display_name} ({app.identifier})
+                                </option>
+                              )}
+                            </For>
+                          </select>
+                        </Show>
                       </div>
                       <Show when={macro.trigger_key !== null}>
                         <div class="flex items-center gap-1">
