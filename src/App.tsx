@@ -283,6 +283,7 @@ function App() {
       if (IS_MACOS) {
         await invoke("unbind_hotkey", { macro_id: id });
         await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers: 0 });
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode });
       } else {
         await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode });
       }
@@ -777,7 +778,19 @@ function App() {
                           </select>
                         </Show>
                       </div>
-                      <Show when={macro.trigger_key !== null}>
+                      <Show when={macro.trigger_key !== null} fallback={
+                        <div class="flex items-center gap-1">
+                          <span
+                            class="px-1.5 py-0.5 rounded border border-dashed border-border text-[10px] font-mono text-text-dim cursor-pointer hover:border-accent/40 hover:text-text-main"
+                            onClick={() => {
+                              setEditingCardId(macro.id);
+                              setEditingField("key");
+                              startCapture((nativeCode) => handleCardSetTriggerKey(macro.id, nativeCode));
+                            }}
+                          >Set key…</span>
+                          <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
+                        </div>
+                      }>
                         <div class="flex items-center gap-1">
                           <Show
                             when={editingCardId() === macro.id && editingField() === "key"}
