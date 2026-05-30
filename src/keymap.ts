@@ -174,12 +174,12 @@ const VK_TO_NAME: Record<number, string> = {
  * macOS: returns CGKeyCode (e.g. "KeyA" → 0, "Space" → 49)
  * Windows: returns VK code (e.g. "KeyA" → 0x41, "Space" → 0x20)
  *
- * Returns 0 if the code string has no entry in the lookup table.
+ * Returns null if the code string has no entry in the lookup table.
  * Call sites must pass e.code, not e.keyCode.
  */
-export function domKeycodeToNative(code: string): number {
+export function domKeycodeToNative(code: string): number | null {
   const map = IS_MACOS ? DOM_KEYCODE_TO_CGKEYCODE : DOM_KEYCODE_TO_VK;
-  return map[code] ?? 0;
+  return map[code] ?? null;
 }
 
 /**

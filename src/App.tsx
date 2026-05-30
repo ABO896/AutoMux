@@ -267,6 +267,7 @@ function App() {
       if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
       // Use e.code as lookup key to avoid F12/ArrowLeft collision — see keymap.ts
       const nativeCode = domKeycodeToNative(e.code);
+      if (nativeCode === null || nativeCode === 0) return;
       onCommit(nativeCode);
       setTriggerKeyRecording(false);
       document.removeEventListener("keydown", onKeyDown, true);
