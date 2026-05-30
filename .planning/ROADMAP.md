@@ -67,7 +67,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] 03-01-PLAN.md — keymap.ts lookup tables + Rust list_running_apps + set_macro_trigger_key IPC (UX-01, UX-02, UX-03)
 - [x] 03-02-PLAN.md — Key capture widget in creation form + card key badge click-to-edit (UX-01)
 - [x] 03-03-PLAN.md — Process picker <select> in creation form + card target badge click-to-edit (UX-02, UX-03)
-- [ ] 03-04-PLAN.md — Gap closure: CR-02 macOS trigger_key persistence, CR-03 null keymap guard, WR-02 Set-key placeholder (UX-01)
+- [x] 03-04-PLAN.md — Gap closure: CR-02 macOS trigger_key persistence, CR-03 null keymap guard, WR-02 Set-key placeholder (UX-01)
 **UI hint**: yes
 
 ### Phase 4: CI Hardening
