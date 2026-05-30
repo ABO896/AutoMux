@@ -43,3 +43,16 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+
+      - name: Verify universal binary
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -e
+          BINARY=$(find src-tauri/target/universal-apple-darwin/release/bundle -name "AutoMux" -type f | head -1)
+          if [ -z "$BINARY" ]; then
+            echo "Error: universal binary not found under src-tauri/target/universal-apple-darwin/release/bundle"
+            exit 1
+          fi
+          echo "Checking binary: $BINARY"
+          lipo -archs "$BINARY"
+          lipo -archs "$BINARY" | grep -q "x86_64" && lipo -archs "$BINARY" | grep -q "arm64"
