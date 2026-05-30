@@ -98,6 +98,8 @@ pub fn run() {
             ipc::load_profile,
             ipc::delete_profile,
             ipc::list_profiles,
+            ipc::list_running_apps,
+            ipc::set_macro_trigger_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

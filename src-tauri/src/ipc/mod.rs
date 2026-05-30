@@ -1,4 +1,5 @@
 use crate::state::{ActionSequence, AppState, Intent, MacroConfig, StateManager};
+use serde::Serialize;
 use std::sync::Arc;
 use tauri::{command, State};
 use uuid::Uuid;
@@ -102,6 +103,51 @@ pub async fn unbind_hotkey(_state: State<'_, StateManager>, _macro_id: Uuid) -> 
         remove_hotkey_bindings_for(&_macro_id);
     }
     Ok(())
+}
+
+// ── Process Picker: RunningApp type and list_running_apps command ─
+
+/// A user-facing running application returned by `list_running_apps`.
+/// macOS: `identifier` is the bundle ID (e.g. "com.mojang.minecraft").
+/// Windows: `identifier` is the full exe path (e.g. "C:\...\Minecraft.exe").
+#[derive(Debug, Clone, Serialize)]
+pub struct RunningApp {
+    pub display_name: String,
+    pub identifier: String,
+}
+
+/// List all user-facing running applications for the process picker.
+/// Returns name + bundle ID on macOS; name + exe path on Windows.
+/// Fetched on picker focus — no server-side caching (D-06).
+#[command]
+pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        return crate::platform::macos::observer::list_running_apps_impl();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return crate::platform::windows::list_running_apps_impl();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Ok(vec![])
+    }
+}
+
+/// Update the trigger key for an existing macro.
+/// macOS: the CGEventTap observes keycode via HOTKEY_BINDINGS (managed separately by bind_hotkey).
+/// Windows: trigger key is propagated to MACRO_TRIGGER_KEYS via reevaluate_all_macros in StateActor.
+#[command]
+pub async fn set_macro_trigger_key(
+    state: State<'_, StateManager>,
+    id: Uuid,
+    trigger_key: Option<u16>,
+) -> Result<(), String> {
+    state
+        .send_intent(Intent::SetMacroTriggerKey(id, trigger_key))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Toggle the global engine on/off.

@@ -290,6 +290,57 @@ unsafe fn get_app_name_from_hwnd(hwnd: HWND) -> Option<String> {
     Some(String::from_utf16_lossy(&buf[..len as usize]))
 }
 
+/// List all user-facing running applications using EnumWindows.
+/// Returns visible windows with titles, deduplicated by exe path.
+/// Reuses the existing get_app_name_from_hwnd helper (no new Win32 imports needed).
+#[cfg(target_os = "windows")]
+pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
+    use std::collections::HashMap;
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
+
+    let mut apps: Vec<crate::ipc::RunningApp> = Vec::new();
+    let apps_ptr = &mut apps as *mut Vec<crate::ipc::RunningApp> as isize;
+
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextW, IsWindowVisible};
+        if IsWindowVisible(hwnd).as_bool() {
+            let mut title = [0u16; 512];
+            let len = GetWindowTextW(hwnd, &mut title);
+            if len > 0 {
+                if let Some(path) = get_app_name_from_hwnd(hwnd) {
+                    let basename = std::path::Path::new(&path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&path)
+                        .to_string();
+                    let acc = &mut *(lparam.0 as *mut Vec<crate::ipc::RunningApp>);
+                    acc.push(crate::ipc::RunningApp {
+                        display_name: basename,
+                        identifier: path,
+                    });
+                }
+            }
+        }
+        BOOL(1) // continue enumeration
+    }
+
+    unsafe {
+        EnumWindows(Some(enum_callback), LPARAM(apps_ptr))
+            .map_err(|e| e.to_string())?;
+    }
+
+    let mut seen = HashMap::new();
+    apps.retain(|app| seen.insert(app.identifier.clone(), ()).is_none());
+    apps.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    Ok(apps)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
+    Ok(vec![])
+}
+
 impl PlatformObserver for WindowsPlatformObserver {
     #[cfg(target_os = "windows")]
     fn get_active_app(&self) -> Option<String> {

@@ -129,6 +129,7 @@ pub enum Intent {
     RemoveMacro(Uuid),
     SetMacroEnabled(Uuid, bool),
     SetMacroTargetApp(Uuid, Option<String>),
+    SetMacroTriggerKey(Uuid, Option<u16>),
     TriggerEmergencyStop,
     ResetEmergencyStop,
     ActiveAppChanged(Option<String>),
@@ -315,6 +316,13 @@ impl StateActor {
             Intent::SetMacroTargetApp(id, target) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
                     mac.target_app = target;
+                }
+                self.reevaluate_all_macros().await;
+                self.auto_save_default().await;
+            }
+            Intent::SetMacroTriggerKey(id, trigger_key) => {
+                if let Some(mac) = self.state.macros.get_mut(&id) {
+                    mac.trigger_key = trigger_key;
                 }
                 self.reevaluate_all_macros().await;
                 self.auto_save_default().await;

@@ -23,7 +23,7 @@ use std::thread;
 use block2::RcBlock;
 use objc2::msg_send;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
+use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
 use objc2_foundation::{NSNotification, NSObject};
 use uuid::Uuid;
 
@@ -162,6 +162,31 @@ pub fn remove_hotkey_bindings_for(macro_id: &Uuid) {
         .lock()
         .unwrap()
         .retain(|b| !matches!(&b.action, HotkeyAction::ToggleMacro(id) if id == macro_id));
+}
+
+/// List all user-facing running applications using NSWorkspace.
+/// Filters to Regular activation policy (excludes daemons and agents).
+/// Thread-safe: NSWorkspace.runningApplications is documented as thread-safe.
+pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
+    let workspace = NSWorkspace::sharedWorkspace();
+    let apps = workspace.runningApplications();
+    let mut result: Vec<crate::ipc::RunningApp> = apps
+        .iter()
+        .filter(|app| app.activationPolicy() == NSApplicationActivationPolicy::Regular)
+        .filter_map(|app| {
+            let bundle_id = app.bundleIdentifier()?.to_string();
+            let name = app
+                .localizedName()
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| bundle_id.clone());
+            Some(crate::ipc::RunningApp {
+                display_name: name,
+                identifier: bundle_id,
+            })
+        })
+        .collect();
+    result.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    Ok(result)
 }
 
 static MACRO_TRIGGER_KEYS: OnceLock<Mutex<std::collections::HashMap<u16, Uuid>>> = OnceLock::new();
