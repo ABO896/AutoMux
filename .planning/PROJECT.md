@@ -75,4 +75,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-30 — Phase 03 (macro-setup-ux) complete: key capture widget added with null-safe domKeycodeToNative, macOS card-edit now persists trigger_key via set_macro_trigger_key, key-less macro cards show clickable "Set key…" placeholder, app-targeting dropdown populated via list_running_apps IPC. Requirements UX-01, UX-02, UX-03 delivered.
+*Last updated: 2026-05-30 — Phase 04 (ci-hardening) complete: dtolnay/rust-toolchain and tauri-apps/tauri-action pinned to full 40-char commit SHAs with tag annotations (CI-02 closed); tauri-action receives `--target universal-apple-darwin` on macOS leg; blocking `Verify universal binary` lipo step added (CI-01 mechanically enforced — live confirmation pending next release tag push).
