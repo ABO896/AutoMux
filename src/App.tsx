@@ -588,7 +588,14 @@ function App() {
                       }`}
                     role="button"
                     tabIndex={0}
-                    onClick={() => startCapture((nativeCode) => setNewMacroTriggerKeyCode(nativeCode))}
+                    onClick={() => {
+                      // Cancel any in-progress card edit before starting form capture
+                      if (editingCardId() !== null) {
+                        setEditingCardId(null);
+                        setEditingField(null);
+                      }
+                      startCapture((nativeCode) => setNewMacroTriggerKeyCode(nativeCode));
+                    }}
                   >
                     <span>
                       {triggerKeyRecording()
@@ -683,9 +690,37 @@ function App() {
                       </div>
                       <Show when={macro.trigger_key !== null}>
                         <div class="flex items-center gap-1">
-                          <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono">
-                            Key {macro.trigger_key}
-                          </span>
+                          <Show
+                            when={editingCardId() === macro.id && editingField() === "key"}
+                            fallback={
+                              <span
+                                class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono cursor-pointer hover:border-accent/40"
+                                onClick={() => {
+                                  setEditingCardId(macro.id);
+                                  setEditingField("key");
+                                  startCapture((nativeCode) => handleCardSetTriggerKey(macro.id, nativeCode));
+                                }}
+                              >
+                                {resolveKeyName(macro.trigger_key!)}
+                              </span>
+                            }
+                          >
+                            <span class="px-1.5 py-0.5 rounded border border-accent text-[10px] font-mono text-accent shadow-[0_0_4px_var(--color-accent-glow)] flex items-center gap-1">
+                              Press…
+                              <span
+                                class="text-text-dim hover:text-text-main leading-none cursor-pointer"
+                                onClick={() => {
+                                  setEditingCardId(null);
+                                  setEditingField(null);
+                                  if (_keyCaptureListener) {
+                                    document.removeEventListener("keydown", _keyCaptureListener, true);
+                                    _keyCaptureListener = null;
+                                  }
+                                  setTriggerKeyRecording(false);
+                                }}
+                              >✕</span>
+                            </span>
+                          </Show>
                           <span class="text-[10px] text-text-muted">
                             ({macro.trigger_mode})
                           </span>
