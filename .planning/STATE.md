@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 context gathered
-last_updated: "2026-05-30T15:46:33.044Z"
-last_activity: 2026-05-30 -- Phase 04 planning complete
+last_updated: "2026-05-30T16:01:09.281Z"
+last_activity: 2026-05-30 -- Phase 04 execution started
 progress:
   total_phases: 5
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 03 — macro-setup-ux
+**Current focus:** Phase 04 — ci-hardening
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-05-30 -- Phase 04 planning complete
+Phase: 04 (ci-hardening) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 04
+Last activity: 2026-05-30 -- Phase 04 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
