@@ -774,22 +774,25 @@ class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] fon
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Windows card edit — how to update `trigger_key` on an existing macro**
    - What we know: `bind_hotkey` is macOS-only. On Windows, trigger keys are registered via `update_macro_trigger_keys` which is called from `reevaluate_all_macros` inside the StateActor.
    - What's unclear: There is no existing IPC command for "change the trigger_key of an existing macro". The Intent enum has no `SetMacroTriggerKey` variant.
    - Recommendation: Add a `set_macro_trigger_key(id: Uuid, trigger_key: Option<u16>)` IPC command and corresponding `Intent::SetMacroTriggerKey(Uuid, Option<u16>)` variant. This is a small, clean addition. Alternative: repurpose `set_macro_sequence` to carry trigger key changes, but this is semantically wrong.
+   - **RESOLVED:** Added `set_macro_trigger_key` IPC command + `Intent::SetMacroTriggerKey` variant in plan 03-01 Task 2.
 
 2. **Key capture: `e.code` vs `e.keyCode` as lookup key**
    - What we know: `e.code` (DOM `KeyboardEvent.code`, e.g. `"KeyA"`, `"Space"`, `"F5"`) is layout-independent and unambiguous. `e.keyCode` is a numeric code but collides for some keys (F12 and Left Arrow both fire in some contexts with keyCode 123).
    - What's unclear: Whether `e.keyCode` is reliable in Tauri's WebView for all target keys (especially F-keys), or whether `e.code` is more robust.
    - Recommendation: Use `e.code` as the primary lookup key (a `Record<string, number>` mapping e.g. `{ "KeyA": 0, "Space": 49, ... }` for macOS). This is cleaner and avoids all numeric collision issues.
+   - **RESOLVED:** Using `e.code` string keys in `domKeycodeToNative` (`Record<string, number>`) per plan 03-01 Task 1.
 
 3. **`list_running_apps` — should it be a platform-gated command or a universal command?**
    - What we know: Both macOS and Windows need implementations. The function signature is identical.
    - What's unclear: Whether to use a single `#[command]` with `#[cfg]` blocks inside (current codebase pattern for `bind_hotkey`) or two separate commands.
    - Recommendation: Single `#[command]` with `#[cfg]` blocks inside the function body — consistent with `bind_hotkey` pattern in `ipc/mod.rs`. [CITED: ipc/mod.rs lines 77–94]
+   - **RESOLVED:** Single `#[command]` with `#[cfg(target_os)]` blocks per plan 03-01 Task 2; platform detection in `keymap.ts` uses `import { platform } from '@tauri-apps/plugin-os'` as recommended by RESEARCH.md.
 
 ---
 
