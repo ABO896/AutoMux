@@ -1,47 +1,39 @@
 ---
 phase: 03-macro-setup-ux
-verified: 2026-05-30T00:00:00Z
-status: gaps_found
-score: 8/11 must-haves verified
+verified: 2026-05-30T15:00:00Z
+status: human_needed
+score: 11/11 must-haves verified
 overrides_applied: 0
-gaps:
-  - truth: "Macro card key badge is clickable; clicking it enters capture mode for that macro on macOS — card edit auto-commits via unbind_hotkey then bind_hotkey on macOS AND set_macro_trigger_key on Windows"
-    status: failed
-    reason: "CR-02: handleCardSetTriggerKey on macOS calls unbind_hotkey + bind_hotkey but never calls set_macro_trigger_key. MacroConfig.trigger_key remains stale in StateActor. Consequence: (1) state broadcast emits the old keycode, so the card badge shows the old key after editing; (2) reevaluate_all_macros rebuilds MACRO_TRIGGER_KEYS from the stale trigger_key, leaving the old key as a live ghost hotkey. The fix requires a third invoke('set_macro_trigger_key', ...) call in the IS_MACOS branch."
-    artifacts:
-      - path: "src/App.tsx"
-        issue: "handleCardSetTriggerKey (lines 280-289) IS_MACOS branch omits invoke('set_macro_trigger_key'). PLAN 02 must_have explicitly states: 'Card key edit auto-commits via unbind_hotkey then bind_hotkey on macOS; set_macro_trigger_key on Windows' — the 'on Windows' constraint is met, the macOS trigger_key persistence is missing."
-    missing:
-      - "Add invoke('set_macro_trigger_key', { id, trigger_key: nativeCode }) after invoke('bind_hotkey') in the IS_MACOS branch of handleCardSetTriggerKey"
-
-  - truth: "domKeycodeToNative returns 0 for unmapped keys — callers commit nativeCode=0 as trigger key (silently maps to CGKeyCode A on macOS)"
-    status: failed
-    reason: "CR-03: domKeycodeToNative returns 0 on a cache miss (keymap.ts line 182). In startCapture, the returned nativeCode is passed directly to onCommit with no null/zero guard. Any key not in the lookup table (numpad, PrintScreen, international keys) silently assigns CGKeyCode 0 (letter A) or VK 0 (undefined) as the trigger key. The user sees resolveKeyName(0) = 'A' with no indication capture failed."
-    artifacts:
-      - path: "src/keymap.ts"
-        issue: "domKeycodeToNative returns 0 for unrecognised codes (line 182: map[code] ?? 0). Zero is a valid CGKeyCode (A) on macOS, making failure indistinguishable from success."
-      - path: "src/App.tsx"
-        issue: "startCapture (lines 258-277): const nativeCode = domKeycodeToNative(e.code); onCommit(nativeCode); — no guard for nativeCode === 0."
-    missing:
-      - "Change domKeycodeToNative return type to number | null, returning null on miss"
-      - "Add guard in startCapture: if (nativeCode === null || nativeCode === 0) return; before onCommit(nativeCode)"
-
-  - truth: "No UI path to add a trigger key to an existing key-less macro via the card (WR-02)"
-    status: failed
-    reason: "The card key badge section is wrapped in <Show when={macro.trigger_key !== null}> (App.tsx line 779). A macro created without a trigger key has no interactive element in the card to assign one. The only path is to delete and recreate the macro. PLAN 02 must_have states the badge is clickable — but only when trigger_key is already set. This is a functional gap against the UX-01 requirement that users can configure key bindings via the UI."
-    artifacts:
-      - path: "src/App.tsx"
-        issue: "Line 779: <Show when={macro.trigger_key !== null}> gates the entire key editing area. No fallback renders a clickable placeholder when trigger_key is null."
-    missing:
-      - "Add a fallback to the Show that renders a clickable 'Set key…' placeholder when trigger_key is null, allowing users to assign a key to an existing macro without recreating it"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 8/11
+  gaps_closed:
+    - "CR-02: handleCardSetTriggerKey IS_MACOS branch now calls invoke('set_macro_trigger_key') after bind_hotkey — MacroConfig.trigger_key is persisted to StateActor"
+    - "CR-03: domKeycodeToNative returns number | null (not 0 on miss); startCapture guards nativeCode === null before onCommit — unmapped keys no longer silently assign CGKeyCode 0"
+    - "WR-02: outer <Show when={macro.trigger_key !== null}> now has a fallback= prop rendering a clickable 'Set key...' placeholder for key-less macro cards"
+  gaps_remaining: []
+  regressions: []
+human_verification:
+  - test: "On macOS, create a new macro, click the key capture widget, press F5, verify badge shows 'F5' (not 'Key 96'), submit the form, reopen the app, verify trigger key persisted"
+    expected: "Badge shows 'F5'; trigger fires correctly after restart"
+    why_human: "Requires running the Tauri app on macOS hardware"
+  - test: "Click the key badge on an existing macro card on macOS, press a key, verify: (a) badge immediately updates to new key name; (b) old key no longer triggers the macro; (c) after app restart the new key is still bound"
+    expected: "Badge updates, old ghost trigger gone, binding persists across restart"
+    why_human: "Requires macOS runtime; verifies both HOTKEY_BINDINGS and MacroConfig.trigger_key are in sync"
+  - test: "Create a macro without setting a trigger key. Verify that a dashed 'Set key...' placeholder appears on the macro card. Click it, press a key, verify the badge updates to show the new key name."
+    expected: "Dashed placeholder visible; capture works; badge shows key name after commit"
+    why_human: "Requires running Tauri app to verify reactive Show/fallback re-evaluation after trigger_key changes"
+  - test: "Open the creation form, click into the target-app dropdown. Verify it shows running apps by display name; no bundle IDs or exe paths appear as placeholder text."
+    expected: "Dropdown shows app names (e.g., 'Safari', 'Finder'); each option's identifier is in parentheses"
+    why_human: "Requires running app with live NSWorkspace / EnumWindows data"
 ---
 
-# Phase 3: Macro Setup UX — Verification Report
+# Phase 3: Macro Setup UX — Re-Verification Report (after gap-closure plan 03-04)
 
-**Phase Goal:** Users can configure key bindings and target applications without knowing raw system codes or exact process name strings
+**Phase Goal:** Deliver a polished key-binding and app-targeting UX so users can configure macros without touching the terminal.
 **Verified:** 2026-05-30
-**Status:** gaps_found (3 blockers)
-**Re-verification:** No — initial verification
+**Status:** human_needed — all automated checks pass; runtime verification on macOS hardware required
+**Re-verification:** Yes — after gap-closure plan 03-04 closed CR-02, CR-03, WR-02
 
 ## Goal Achievement
 
@@ -58,45 +50,47 @@ gaps:
 | 7 | Creation form target app field is a select dropdown populated from list_running_apps | VERIFIED | App.tsx lines 595-616: select#select-macro-target with onFocus={handlePickerFocus}, For loop over apps(), loading/error Show blocks, Global sentinel option |
 | 8 | Process picker shows Global sentinel + display name + identifier format; fetches on open with in-progress guard | VERIFIED | handlePickerFocus (lines 296-308): guard if (appsLoading()) return; re-fetches every open; option format "{display_name} ({identifier})" in For loop |
 | 9 | Macro card target display is clickable; inline picker auto-commits; Escape collapses | VERIFIED | App.tsx lines 736-776: clickable span sets editingCardId/editingField + calls handlePickerFocus; inline select onChange calls handleCardSetTargetApp; onKeyDown Escape handler |
-| 10 | Macro card key badge is clickable; card edit auto-commits — macOS: trigger_key persisted | FAILED | handleCardSetTriggerKey (lines 280-289): IS_MACOS branch calls unbind_hotkey + bind_hotkey but NOT set_macro_trigger_key. trigger_key in MacroConfig is never updated; state broadcast carries old key; MACRO_TRIGGER_KEYS retains ghost trigger (CR-02) |
-| 11 | domKeycodeToNative does not silently assign a valid key for unrecognised e.code strings | FAILED | keymap.ts line 182 returns 0 on miss; startCapture has no guard; CGKeyCode 0 = letter A on macOS; unmapped key silently becomes trigger A (CR-03) |
+| 10 | Pressing an unmapped key during capture does not commit any key — capture stays active | VERIFIED | keymap.ts line 180: signature `number \| null`; line 182: `map[code] ?? null`; App.tsx line 270: `if (nativeCode === null) return;` — guard returns without calling onCommit or removing listener, so capture stays alive |
+| 11 | macOS card-edit key badge commits trigger_key to StateActor AND updates hotkey binding; key-less macro cards show clickable 'Set key...' placeholder | VERIFIED | handleCardSetTriggerKey IS_MACOS branch (App.tsx lines 283-286): three sequential awaited invokes — unbind_hotkey, bind_hotkey, set_macro_trigger_key; card Show fallback (lines 781-793): fallback= prop with dashed-border span containing onClick that calls startCapture |
 
-**Score:** 9/11 truths verified (truths 10 and 11 FAILED)
+**Score:** 11/11 truths verified
 
-Note: A third gap is present beyond these two truths — WR-02 (no UI path to assign a trigger key to an existing key-less macro card) — which constitutes a functional gap against UX-01 requirement coverage even though it is not expressed as a separate truth in the PLAN frontmatter.
+### Deviation from Plan Acceptance Criteria — Acceptable
+
+The PLAN for 03-04 specified the guard `if (nativeCode === null || nativeCode === 0) return;`. The implementation uses only `if (nativeCode === null) return;`. This is not a defect: the original fear was that `0` came from a miss, but after changing `domKeycodeToNative` to return `null` on miss, `0` is only returned for `"KeyA"` (a valid CGKeyCode). Blocking `0` would prevent the user from assigning the letter A as a trigger key. The implementation is strictly correct; the plan's acceptance criterion was overconstrained. TypeScript compiles cleanly (`npx tsc --noEmit` → exit 0).
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/keymap.ts` | DOM keycode → native int mapping + display name resolution | VERIFIED | File exists, 197 lines, four lookup tables, two exported functions, platform detection |
+| `src/keymap.ts` | domKeycodeToNative returns `number \| null`; null on miss | VERIFIED | Line 180: `export function domKeycodeToNative(code: string): number \| null`; line 182: `return map[code] ?? null;` |
+| `src/App.tsx` | null guard in startCapture; three-invoke IS_MACOS branch; Show fallback with 'Set key...' | VERIFIED | Line 270: null guard; lines 283-286: three invokes; line 790: 'Set key...' fallback span |
 | `src-tauri/src/ipc/mod.rs` | RunningApp struct, list_running_apps, set_macro_trigger_key | VERIFIED | All three present (lines 113, 123, 142); #[command] decorated |
 | `src-tauri/src/state/mod.rs` | SetMacroTriggerKey Intent variant and handler | VERIFIED | Variant at line 132; handler at lines 323-329 |
 | `src-tauri/src/lib.rs` | Updated invoke_handler | VERIFIED | Lines 101-102 register both new commands |
-| `src/App.tsx` | Key capture widget, card badge click-to-edit, process picker | PARTIAL | Widget and picker fully implemented; card key edit has CR-02 (missing set_macro_trigger_key on macOS) and WR-02 (no path to add key to key-less macro) |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
+| App.tsx startCapture | domKeycodeToNative | null guard before onCommit | WIRED | Line 269: `const nativeCode = domKeycodeToNative(e.code);` → line 270: `if (nativeCode === null) return;` → line 271: `onCommit(nativeCode)` |
+| App.tsx handleCardSetTriggerKey IS_MACOS branch | invoke set_macro_trigger_key | third invoke after bind_hotkey | WIRED | Line 286: `await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode })` inside `if (IS_MACOS)` block |
+| App.tsx card Show fallback | startCapture + handleCardSetTriggerKey | onClick on 'Set key...' span | WIRED | Line 785-789: onClick calls setEditingCardId, setEditingField("key"), startCapture with handleCardSetTriggerKey callback |
 | ipc/mod.rs list_running_apps | platform/macos/observer.rs list_running_apps_impl | cfg block | WIRED | ipc/mod.rs line 126: crate::platform::macos::observer::list_running_apps_impl() |
 | ipc/mod.rs set_macro_trigger_key | state/mod.rs Intent::SetMacroTriggerKey | send_intent | WIRED | ipc/mod.rs line 148; state/mod.rs handler lines 323-329 |
-| state/mod.rs SetMacroTriggerKey handler | platform/windows/update_macro_trigger_keys | reevaluate_all_macros | WIRED | reevaluate_all_macros lines 466-474 builds trigger_keys HashMap and calls update_macro_trigger_keys on both platforms |
-| App.tsx key capture widget onClick | startCapture function | closure | WIRED | App.tsx line 646: startCapture((nativeCode) => setNewMacroTriggerKeyCode(nativeCode)) |
-| App.tsx card key badge onClick | unbind_hotkey + bind_hotkey (macOS only) | handleCardSetTriggerKey | PARTIAL | macOS branch wired to bind_hotkey but NOT to set_macro_trigger_key — ghost trigger bug (CR-02) |
-| App.tsx startCapture | domKeycodeToNative from keymap.ts | import | WIRED | Line 5 imports domKeycodeToNative; used at line 269 in startCapture |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| App.tsx key capture widget | newMacroTriggerKeyCode | domKeycodeToNative(e.code) in startCapture | Partially — returns 0 for unmapped keys, which is a valid CGKeyCode | STATIC for unmapped keys (CR-03) |
+| App.tsx key capture widget | nativeCode | domKeycodeToNative(e.code) in startCapture | Yes — null on miss; valid keycode or null only; null-gated before onCommit | FLOWING |
 | App.tsx process picker | apps | invoke("list_running_apps") in handlePickerFocus | Real — NSWorkspace.runningApplications() / EnumWindows backed | FLOWING |
-| App.tsx card key badge display | macro.trigger_key | StateActor broadcast via state-changed event | Stale on macOS card-edit (never updated by handleCardSetTriggerKey on macOS) | HOLLOW for macOS card-edit (CR-02) |
+| App.tsx card key badge display | macro.trigger_key | StateActor broadcast via state-changed event; set_macro_trigger_key now called on macOS card-edit | Now flows correctly — set_macro_trigger_key in IS_MACOS branch ensures StateActor emits new keycode | FLOWING |
+| App.tsx card Show fallback | macro.trigger_key === null | Reactive derivation from state-changed event data | Reactive — Show re-evaluates when trigger_key changes post-commit | FLOWING |
 
 ### Behavioral Spot-Checks
 
-Step 7b: SKIPPED — no runnable Tauri app without the full build environment. TypeScript and Rust compilation checks serve as the available automated gate.
+Step 7b: SKIPPED — no runnable Tauri app without the full build environment. TypeScript type-check (`npx tsc --noEmit` → exit 0) is the available automated gate and passes.
 
 ### Probe Execution
 
@@ -106,7 +100,7 @@ Step 7c: No probe scripts found in scripts/*/tests/probe-*.sh. SKIPPED.
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|---------|
-| UX-01 | 03-01, 03-02 | Key Code field replaced with key capture widget — raw CGKeyCode/VK integers never shown | PARTIAL | Widget present; resolveKeyName used for display. BLOCKED by CR-02 (macOS card edit leaves stale trigger_key) and WR-02 (no path to assign key to key-less macro). BLOCKED by CR-03 (unmapped key silently assigns CGKeyCode 0 = A). |
+| UX-01 | 03-01, 03-02, 03-04 | Key Code field replaced with key capture widget — raw CGKeyCode/VK integers never shown to user | VERIFIED (code) | Widget present; resolveKeyName used for display; null guard prevents unmapped-key commits; macOS card-edit persists trigger_key via three-invoke path; key-less cards have 'Set key...' fallback. Human verification required for runtime confirmation. |
 | UX-02 | 03-01, 03-03 | macOS target app field replaced with running-process picker showing app name + bundle ID | VERIFIED | select#select-macro-target populated by list_running_apps; NSWorkspace impl returns display_name + bundleIdentifier |
 | UX-03 | 03-01, 03-03 | Windows target app field replaced with running-process picker showing process name and path | VERIFIED | Same picker; EnumWindows impl returns basename as display_name + exe path as identifier |
 
@@ -114,11 +108,8 @@ Step 7c: No probe scripts found in scripts/*/tests/probe-*.sh. SKIPPED.
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| src/App.tsx | 280-289 | IS_MACOS branch calls bind_hotkey but not set_macro_trigger_key | BLOCKER | Ghost trigger hotkey on macOS; stale UI badge after card-edit (CR-02) |
-| src/keymap.ts | 182 | Returns 0 for unrecognised e.code — valid CGKeyCode on macOS | BLOCKER | Unmapped keys silently assigned as trigger A; user receives no feedback (CR-03) |
-| src/App.tsx | 779 | `<Show when={macro.trigger_key !== null}>` gates entire key edit area with no fallback | WARNING | No UI path to assign a trigger key to an existing key-less macro (WR-02) |
-| src-tauri/src/platform/windows/mod.rs | 279 | OpenProcess HANDLE never closed via CloseHandle | WARNING | Continuous resource leak on every foreground-window change and every list_running_apps call (CR-01 — Windows only, does not block macOS builds or the primary UX flow) |
-| src-tauri/src/platform/windows/mod.rs | 511-515 | GetMessageW infinite loop on Win32 error (BOOL(-1) treated as continue) | WARNING | CPU spin on message pump error; Windows only (CR-04) |
+| src-tauri/src/platform/windows/mod.rs | 279 | OpenProcess HANDLE never closed via CloseHandle | WARNING | Continuous resource leak on every foreground-window change and every list_running_apps call (CR-01 — Windows only, does not block macOS builds or the primary UX flow). Pre-existing; not introduced by 03-04. |
+| src-tauri/src/platform/windows/mod.rs | 511-515 | GetMessageW infinite loop on Win32 error (BOOL(-1) treated as continue) | WARNING | CPU spin on message pump error; Windows only (CR-04). Pre-existing; not introduced by 03-04. |
 
 No TBD / FIXME / XXX debt markers found in phase-modified files.
 
@@ -130,29 +121,35 @@ No TBD / FIXME / XXX debt markers found in phase-modified files.
 **Expected:** Badge shows "F5"; trigger fires correctly after restart.
 **Why human:** Requires running the Tauri app on macOS hardware.
 
-#### 2. macOS Card-Edit Trigger Key (After CR-02 Fix)
+#### 2. macOS Card-Edit Trigger Key (CR-02 Fix Confirmation)
 
-**Test:** Once CR-02 is fixed, click the key badge on an existing macro card on macOS, press a key, verify: (a) badge immediately updates to the new key name; (b) the old key no longer triggers the macro; (c) after app restart the new key is still bound.
+**Test:** Click the key badge on an existing macro card on macOS, press a key, verify: (a) badge immediately updates to the new key name; (b) the old key no longer triggers the macro; (c) after app restart the new key is still bound.
 **Expected:** Badge updates, old ghost trigger gone, binding persists.
 **Why human:** Requires macOS runtime; verifies both HOTKEY_BINDINGS and MacroConfig.trigger_key are in sync.
 
-#### 3. Process Picker Populates on Focus
+#### 3. 'Set key...' Fallback on Key-less Macro Card (WR-02 Fix Confirmation)
 
-**Test:** Open the creation form, click into the target-app dropdown. Verify it shows running apps by display name and no bundle IDs or exe paths appear as placeholder text.
-**Expected:** Dropdown shows app names (e.g., "Safari", "Finder"); each option's identifier is in parentheses.
+**Test:** Create a macro without setting a trigger key. Verify that a dashed-border "Set key..." placeholder appears on the macro card. Click it, press a key, verify the badge updates to the new key name.
+**Expected:** Dashed placeholder visible; capture commits; badge shows the assigned key name.
+**Why human:** Requires running Tauri app to observe reactive Show/fallback re-evaluation after trigger_key changes from null to a value.
+
+#### 4. Process Picker Populates on Focus
+
+**Test:** Open the creation form, click into the target-app dropdown. Verify it shows running apps by display name; no raw bundle IDs or exe paths appear as placeholder text.
+**Expected:** Dropdown shows app names (e.g., "Safari", "Finder"); each option's identifier appears in parentheses.
 **Why human:** Requires running app with live NSWorkspace / EnumWindows data.
 
 ### Gaps Summary
 
-Three gaps block the phase goal:
+No automated gaps remain. All three blockers from the initial verification (CR-02, CR-03, WR-02) are confirmed closed in the codebase:
 
-**BLOCKER 1 — CR-02 (macOS card-edit trigger key not persisted):** `handleCardSetTriggerKey` on macOS registers the hotkey in `HOTKEY_BINDINGS` but never calls `set_macro_trigger_key`. `MacroConfig.trigger_key` remains stale in the StateActor, so: (a) the state broadcast carries the old keycode, meaning the card badge shows the wrong key after editing; (b) `reevaluate_all_macros` re-registers the old key as the active trigger, leaving a ghost hotkey the user cannot see or remove. Fix: add a third `invoke("set_macro_trigger_key", ...)` call in the IS_MACOS branch of `handleCardSetTriggerKey`.
+- **CR-02 closed:** `handleCardSetTriggerKey` IS_MACOS branch now executes three sequential invokes — `unbind_hotkey`, `bind_hotkey`, `set_macro_trigger_key` — ensuring MacroConfig.trigger_key in StateActor is updated and the subsequent state broadcast carries the new keycode.
+- **CR-03 closed:** `domKeycodeToNative` returns `number | null` with `map[code] ?? null`; `startCapture` guards `if (nativeCode === null) return;` before `onCommit`. Note: the guard omits `|| nativeCode === 0` relative to the plan's acceptance criteria — this is intentionally correct because `0` now exclusively maps to `"KeyA"` (CGKeyCode A is valid); blocking it would prevent A from being set as a trigger.
+- **WR-02 closed:** The outer `<Show when={macro.trigger_key !== null}>` has a `fallback=` prop (lines 781-793) rendering a dashed-border "Set key..." span wired to `startCapture` + `handleCardSetTriggerKey`.
 
-**BLOCKER 2 — CR-03 (domKeycodeToNative returns 0 for unrecognised keys):** Any key not in the lookup table returns `0`. On macOS `CGKeyCode 0 = A`, so the user pressing an international key, numpad key, or PrintScreen silently sets the trigger to the letter A. There is no feedback. Fix: return `null` from `domKeycodeToNative` on a miss and add a guard in `startCapture` to skip `onCommit` when `nativeCode` is null or 0.
+The two pre-existing Windows-specific warnings (CR-01 HANDLE leak, CR-04 GetMessageW loop) remain open but are out of scope for Phase 3 UX verification and do not block the phase goal on macOS.
 
-**BLOCKER 3 — WR-02 (no UI path to assign a trigger key to an existing key-less macro):** The card key area is entirely hidden when `macro.trigger_key === null`. A macro created without a trigger key can only have one assigned by deleting and recreating it. The UX-01 requirement states users can configure key bindings; this gap makes it impossible for most existing macros (created before Phase 3). Fix: render a clickable placeholder in the `<Show>` fallback.
-
-The two Windows-specific issues (CR-01 HANDLE leak, CR-04 GetMessageW loop) are pre-existing bugs in the observer infrastructure that affect macOS builds only superficially (they are cfg-gated). They are WARNING severity for this verification and do not block the macOS-primary UX goal from being verified, but they must be fixed before a Windows release.
+Status is `human_needed` because runtime confirmation on macOS hardware is required to close the loop on the three behavioral checks above.
 
 ---
 
