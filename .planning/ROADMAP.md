@@ -80,7 +80,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Every `uses:` reference in `release.yml` that previously pointed to a floating tag (e.g., `@v0`) is replaced with a pinned full-length commit SHA
 **Plans**: 2 plans
 - [x] 04-01-PLAN.md — Pin dtolnay/rust-toolchain and tauri-apps/tauri-action to full commit SHAs with tag-comment annotations (CI-02)
-- [ ] 04-02-PLAN.md — Add `--target universal-apple-darwin` arg to tauri-action on macOS leg + blocking lipo verification step (CI-01)
+- [x] 04-02-PLAN.md — Add `--target universal-apple-darwin` arg to tauri-action on macOS leg + blocking lipo verification step (CI-01)
 
 ### Phase 5: Auto-Updater (Reserved)
 **Goal**: Reserved for v2 — in-app update mechanism with signing and notarization prerequisites
