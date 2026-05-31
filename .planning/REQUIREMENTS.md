@@ -67,22 +67,22 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PERM-01 | TBD | Pending |
-| RELY-06 | TBD | Pending |
-| BUILD-01 | TBD | Pending |
-| BUILD-02 | TBD | Pending |
-| CI-03 | TBD | Pending |
-| CI-04 | TBD | Pending |
-| CI-05 | TBD | Pending |
-| SAFE-04 | TBD | Pending |
-| ERR-01 | TBD | Pending |
-| MEM-01 | TBD | Pending |
+| PERM-01 | Phase 5 | Pending |
+| RELY-06 | Phase 5 | Pending |
+| BUILD-02 | Phase 5 | Pending |
+| BUILD-01 | Phase 6 | Pending |
+| MEM-01 | Phase 6 | Pending |
+| CI-03 | Phase 7 | Pending |
+| CI-04 | Phase 7 | Pending |
+| CI-05 | Phase 7 | Pending |
+| SAFE-04 | Phase 8 | Pending |
+| ERR-01 | Phase 8 | Pending |
 
 **Coverage:**
 - v1.2.0 requirements: 10 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 10 ⚠️
+- Mapped to phases: 10 (Phases 5–8)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-05-31 — initial definition*
+*Last updated: 2026-05-31 — roadmap created, all requirements mapped*
