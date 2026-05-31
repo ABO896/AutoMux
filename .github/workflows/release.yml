@@ -48,9 +48,11 @@ jobs:
         if: matrix.platform == 'macos-latest'
         run: |
           set -e
-          BINARY=$(find src-tauri/target/universal-apple-darwin/release/bundle -name "AutoMux" -type f | head -1)
-          if [ -z "$BINARY" ]; then
-            echo "Error: universal binary not found under src-tauri/target/universal-apple-darwin/release/bundle"
+          # tauri-action cleans the .app bundle after DMG packaging, so verify
+          # the raw universal binary produced by `cargo build --target universal-apple-darwin`
+          BINARY="src-tauri/target/universal-apple-darwin/release/automux"
+          if [ ! -f "$BINARY" ]; then
+            echo "Error: universal binary not found at $BINARY"
             exit 1
           fi
           echo "Checking binary: $BINARY"

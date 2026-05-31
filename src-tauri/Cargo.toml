@@ -1,6 +1,6 @@
 [package]
 name = "automux"
-version = "1.1.0"
+version = "1.2.0"
 description = "AutoMux Desktop Automation Utility"
 authors = ["you"]
 license = "GPL-3.0-only"
