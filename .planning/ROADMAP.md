@@ -41,7 +41,10 @@ Full phase details: `.planning/milestones/v1.0-ROADMAP.md`
   1. After clicking Request Access and approving the OS prompt, the app immediately reflects "granted" — the false "not granted" state never persists
   2. A user who grants accessibility directly in System Settings (without ever clicking Request Access) sees macros activate without restarting the app
   3. The Rust build produces no deprecation warnings related to block v0.1.6 on macOS — build output is clean
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — Arm CGEventTap in check_accessibility + remove cocoa dep (RELY-06, BUILD-02)
+- [ ] 05-02-PLAN.md — Add accessibilityPending state machine and 3-branch permission UI (PERM-01)
 
 ### Phase 6: Windows Platform Cleanup
 **Goal**: The Windows build is warning-free and the process-list path has no handle leak
@@ -79,7 +82,7 @@ Full phase details: `.planning/milestones/v1.0-ROADMAP.md`
 | 2. Cleanup & Credibility | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
-| 5. macOS Permissions & Reliability | v1.2.0 | 0/TBD | Not started | — |
+| 5. macOS Permissions & Reliability | v1.2.0 | 0/2 | Not started | — |
 | 6. Windows Platform Cleanup | v1.2.0 | 0/TBD | Not started | — |
 | 7. CI Pipeline Hardening | v1.2.0 | 0/TBD | Not started | — |
 | 8. Safety & Error Surface | v1.2.0 | 0/TBD | Not started | — |
