@@ -3,10 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.2.0
 milestone_name: Reliability & Polish
 status: planning
-last_updated: "2026-05-31"
-last_activity: 2026-05-31 -- Roadmap created (Phases 5-8)
+stopped_at: Phase 5 context gathered
+last_updated: "2026-05-31T21:57:22.648Z"
+last_activity: 2026-05-31 — Roadmap created for v1.2.0 (Phases 5–8)
 progress:
-  total_phases: 4
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -45,12 +46,14 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 ## Accumulated Context
 
 ### Key Decisions
+
 - Phases 5 and 6 are independent of each other — they touch different platform layers (macOS vs Windows) and can be planned/executed in any order
 - Phase 7 (CI) is also independent — pure workflow file changes with no Rust/frontend coupling
 - Phase 8 (Safety + Error Surface) is independent — SAFE-04 is macOS Rust, ERR-01 is SolidJS frontend; no cross-phase dependency
 - BUILD-02 grouped with PERM-01/RELY-06 in Phase 5 because all three are macOS layer concerns; fixing the deprecated block crate may touch the same macOS platform code touched by the permission fixes
 
 ### Known Constraints
+
 - PERM-01: Must work within what Tauri and CGEvent allow — OS permission API is fixed
 - RELY-06: The 3s frontend poll approach from v1.0 is the documented revisit point (see PROJECT.md Key Decisions)
 - SAFE-04: Fix requires careful lock ordering — release REGISTRY before any CGEvent dispatch
@@ -67,6 +70,6 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 
 ## Session Continuity
 
-Last session: 2026-05-31
-Stopped at: v1.2.0 roadmap created — all 10 requirements mapped to Phases 5–8
+Last session: 2026-05-31T21:57:22.644Z
+Stopped at: Phase 5 context gathered
 Next: /gsd-plan-phase 5
