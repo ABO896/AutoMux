@@ -135,13 +135,26 @@ impl WindowsInputProvider {
 
     #[cfg(target_os = "windows")]
     fn send_mouse_move(&self, x: f64, y: f64) {
-        // Convert to absolute coordinates (0-65535 range for SendInput ABSOLUTE)
+        // CR-05: MOUSEEVENTF_ABSOLUTE requires coordinates normalized to 0–65535
+        // (mapping to the full virtual desktop), NOT raw pixel values.
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
+        };
+        let (screen_w, screen_h) = unsafe {
+            (
+                GetSystemMetrics(SM_CXVIRTUALSCREEN) as f64,
+                GetSystemMetrics(SM_CYVIRTUALSCREEN) as f64,
+            )
+        };
+        let norm_x = ((x / screen_w) * 65535.0).clamp(0.0, 65535.0) as i32;
+        let norm_y = ((y / screen_h) * 65535.0).clamp(0.0, 65535.0) as i32;
+
         let input = INPUT {
             r#type: INPUT_TYPE(0), // INPUT_MOUSE
             Anonymous: INPUT_0 {
                 mi: MOUSEINPUT {
-                    dx: x as i32,
-                    dy: y as i32,
+                    dx: norm_x,
+                    dy: norm_y,
                     mouseData: 0,
                     dwFlags: MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE,
                     time: 0,
@@ -170,7 +183,12 @@ impl InputProvider for WindowsInputProvider {
     fn inject_key(&self, keycode: u16, is_down: bool) {
         let key = HeldInputKey::Key(keycode);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             if is_down {
                 guard.insert(key);
             } else {
@@ -185,7 +203,12 @@ impl InputProvider for WindowsInputProvider {
         // position. The x/y are available for future "click at coordinates" features.
         let key = HeldInputKey::Mouse(button);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             // Click = press + release, so we don't track in registry.
             // For sustained holds, the caller uses inject_key-style calls.
             guard.insert(key);
@@ -193,7 +216,12 @@ impl InputProvider for WindowsInputProvider {
         self.send_mouse_button(button, true);
         self.send_mouse_button(button, false);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             guard.remove(&key);
         }
     }
@@ -205,7 +233,12 @@ impl InputProvider for WindowsInputProvider {
     fn inject_mouse_button_raw(&self, button: MouseButton, is_down: bool) {
         let key = HeldInputKey::Mouse(button);
         {
-            let mut guard = get_held_inputs().lock().unwrap();
+            // @safety-officer: SAFE-01 — silent skip on mutex failure instead of panic (D-08).
+            let Ok(mut guard) = get_held_inputs().lock() else {
+                #[cfg(debug_assertions)]
+                eprintln!("[WinInput] held_inputs lock failed — skipping injection");
+                return;
+            };
             if is_down {
                 guard.insert(key);
             } else {
@@ -255,6 +288,58 @@ unsafe fn get_app_name_from_hwnd(hwnd: HWND) -> Option<String> {
     .ok()?;
 
     Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
+/// List all user-facing running applications using EnumWindows.
+/// Returns visible windows with titles, deduplicated by exe path.
+/// Reuses the existing get_app_name_from_hwnd helper (no new Win32 imports needed).
+#[cfg(target_os = "windows")]
+pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
+    use std::collections::HashMap;
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::core::BOOL; // BOOL moved to windows::core in windows-rs 0.60+
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
+
+    let mut apps: Vec<crate::ipc::RunningApp> = Vec::new();
+    let apps_ptr = &mut apps as *mut Vec<crate::ipc::RunningApp> as isize;
+
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextW, IsWindowVisible};
+        if IsWindowVisible(hwnd).as_bool() {
+            let mut title = [0u16; 512];
+            let len = GetWindowTextW(hwnd, &mut title);
+            if len > 0 {
+                if let Some(path) = get_app_name_from_hwnd(hwnd) {
+                    let basename = std::path::Path::new(&path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&path)
+                        .to_string();
+                    let acc = &mut *(lparam.0 as *mut Vec<crate::ipc::RunningApp>);
+                    acc.push(crate::ipc::RunningApp {
+                        display_name: basename,
+                        identifier: path,
+                    });
+                }
+            }
+        }
+        BOOL(1) // continue enumeration
+    }
+
+    unsafe {
+        EnumWindows(Some(enum_callback), LPARAM(apps_ptr))
+            .map_err(|e| e.to_string())?;
+    }
+
+    let mut seen = HashMap::new();
+    apps.retain(|app| seen.insert(app.identifier.clone(), ()).is_none());
+    apps.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+    Ok(apps)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
+    Ok(vec![])
 }
 
 impl PlatformObserver for WindowsPlatformObserver {
@@ -349,6 +434,9 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
                 if let Some(tx) = STATE_TX.get() {
                     let _ = tx.try_send(crate::state::Intent::TriggerEmergencyStop);
                 }
+                // RELY-03: Synchronous flush before exit — matches macOS inline-flush approach.
+                // Best-effort: exit regardless of individual event send failures (D-10).
+                WindowsInputProvider::flush_all_held_inputs();
                 std::process::exit(1);
             }
 
@@ -416,6 +504,11 @@ pub fn initialize_hook() -> bool {
             WINEVENT_OUTOFCONTEXT,
         );
 
+        // WR-03: Check handle validity — SetWinEventHook returns a null handle on failure.
+        if event_hook.is_invalid() {
+            eprintln!("[WindowsObserver] SetWinEventHook failed — no active app tracking");
+        }
+
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).into() {
             TranslateMessage(&msg);
@@ -423,7 +516,10 @@ pub fn initialize_hook() -> bool {
         }
 
         let _ = UnhookWindowsHookEx(hook.unwrap());
-        let _ = UnhookWinEvent(event_hook);
+        // WR-03: Only unhook if the handle is valid.
+        if !event_hook.is_invalid() {
+            let _ = UnhookWinEvent(event_hook);
+        }
     });
 
     true

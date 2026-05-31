@@ -28,12 +28,12 @@ jobs:
         run: npm install
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Build and Release Tauri App
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5  # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -42,3 +42,17 @@ jobs:
           releaseBody: "Automated Release from CI"
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+
+      - name: Verify universal binary
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -e
+          BINARY=$(find src-tauri/target/universal-apple-darwin/release/bundle -name "AutoMux" -type f | head -1)
+          if [ -z "$BINARY" ]; then
+            echo "Error: universal binary not found under src-tauri/target/universal-apple-darwin/release/bundle"
+            exit 1
+          fi
+          echo "Checking binary: $BINARY"
+          lipo -archs "$BINARY"
+          lipo -archs "$BINARY" | grep -q "x86_64" && lipo -archs "$BINARY" | grep -q "arm64"

@@ -63,7 +63,7 @@ struct IntervalTask {
 
 impl IntervalTask {
     fn new(step_id: StepId, input: InputEvent, interval_ms: u64) -> Self {
-        let interval = Duration::from_millis(interval_ms.max(1));
+        let interval = Duration::from_millis(interval_ms.max(5));
         Self {
             step_id,
             input,
@@ -73,13 +73,21 @@ impl IntervalTask {
     }
 
     /// Advance to the next fire time, skipping missed ticks (no burst on resume).
+    ///
+    /// WR-06: The formula computes the next tick strictly after `now` to avoid
+    /// the off-by-one where elapsed == exact multiple of interval skips an extra tick.
+    /// Uses saturating_mul via u64 arithmetic to avoid u32 overflow on long suspensions.
     fn advance(&mut self) {
         let now = Instant::now();
-        if self.next_fire + self.interval <= now {
-            // Jump ahead — do not "catch up"
+        if self.next_fire <= now {
             let elapsed = now.duration_since(self.next_fire);
+            // `missed` = number of full intervals already elapsed from next_fire.
+            // The next tick strictly after `now` is at next_fire + (missed + 1) * interval.
             let missed = elapsed.as_nanos() / self.interval.as_nanos();
-            self.next_fire += self.interval * (missed as u32 + 1);
+            // Use saturating cast: on extremely long suspensions missed may exceed u32::MAX,
+            // clamping to u32::MAX is safe — the resulting next_fire will simply be very far ahead.
+            let steps = (missed + 1).min(u32::MAX as u128) as u32;
+            self.next_fire += self.interval * steps;
         } else {
             self.next_fire += self.interval;
         }
@@ -95,6 +103,27 @@ impl IntervalTask {
 // Memory: O(s) where s = total active interval steps across all
 // macros. At 32 macros × 4 steps each = 128 entries ≈ 8KB.
 
+/// Key fields of a MacroConfig that determine scheduler behavior.
+/// CR-04: Used to detect whether a running macro needs to be restarted.
+#[derive(Debug, Clone, PartialEq)]
+struct RunningConfig {
+    interval_ms: u64,
+    target_app: Option<String>,
+    trigger_mode: crate::state::TriggerMode,
+    steps: Vec<ActionStep>,
+}
+
+impl RunningConfig {
+    fn from_config(config: &MacroConfig) -> Self {
+        Self {
+            interval_ms: config.interval_ms,
+            target_app: config.target_app.clone(),
+            trigger_mode: config.trigger_mode,
+            steps: config.sequence.steps.clone(),
+        }
+    }
+}
+
 pub struct Scheduler {
     /// Receives intents from the StateActor.
     intent_rx: mpsc::Receiver<SchedulerIntent>,
@@ -106,6 +135,8 @@ pub struct Scheduler {
     timeline: BTreeMap<Instant, Vec<StepId>>,
     /// Active sustained holds per macro (for release on stop).
     active_holds: HashMap<Uuid, Vec<InputEvent>>,
+    /// CR-04: Tracks config of currently running macros to avoid unnecessary restart.
+    running_configs: HashMap<Uuid, RunningConfig>,
 }
 
 impl Scheduler {
@@ -119,6 +150,7 @@ impl Scheduler {
             interval_tasks: HashMap::new(),
             timeline: BTreeMap::new(),
             active_holds: HashMap::new(),
+            running_configs: HashMap::new(),
         }
     }
 
@@ -135,7 +167,7 @@ impl Scheduler {
 
                         // Priority 1: Process incoming intents immediately.
                         Some(intent) = self.intent_rx.recv() => {
-                            self.handle_intent(intent);
+                            self.handle_intent(intent).await;
                         }
 
                         // Priority 2: Timer fires.
@@ -148,7 +180,7 @@ impl Scheduler {
                     // No active timers — block on intent channel only.
                     // 0% CPU when idle.
                     match self.intent_rx.recv().await {
-                        Some(intent) => self.handle_intent(intent),
+                        Some(intent) => self.handle_intent(intent).await,
                         None => break, // Channel closed — shutdown.
                     }
                 }
@@ -156,7 +188,7 @@ impl Scheduler {
         }
     }
 
-    fn handle_intent(&mut self, intent: SchedulerIntent) {
+    async fn handle_intent(&mut self, intent: SchedulerIntent) {
         match intent {
             SchedulerIntent::StartMacro(config) => {
                 self.start_macro(config);
@@ -165,14 +197,25 @@ impl Scheduler {
                 self.stop_macro(&id);
             }
             SchedulerIntent::StopAll => {
-                // Release all holds across all macros.
+                // @safety-officer: CR-02 — use `.await` (not try_send) for HoldRelease
+                // messages on the emergency-stop path so they are guaranteed to be
+                // delivered even when the action channel is near-full.
                 let all_ids: Vec<Uuid> = self.active_holds.keys().copied().collect();
                 for id in all_ids {
-                    self.release_holds(&id);
+                    if let Some(holds) = self.active_holds.remove(&id) {
+                        for input in holds {
+                            let _ = self.action_tx.send(ActionReady {
+                                macro_id: id,
+                                action_type: ActionType::HoldRelease(input),
+                                fired_at: Instant::now(),
+                            }).await;
+                        }
+                    }
                 }
                 self.interval_tasks.clear();
                 self.timeline.clear();
                 self.active_holds.clear();
+                self.running_configs.clear();
             }
             SchedulerIntent::UpdateInterval(macro_id, step_index, new_ms) => {
                 let step_id = StepId {
@@ -181,7 +224,7 @@ impl Scheduler {
                 };
                 if let Some(task) = self.interval_tasks.get_mut(&step_id) {
                     let old_fire = task.next_fire;
-                    task.interval = Duration::from_millis(new_ms.max(1));
+                    task.interval = Duration::from_millis(new_ms.max(5));
                     task.next_fire = Instant::now() + task.interval;
                     let new_fire = task.next_fire;
                     self.remove_from_timeline(&step_id, old_fire);
@@ -193,8 +236,20 @@ impl Scheduler {
 
     /// Expand a MacroConfig's ActionSequence into individual timeline entries
     /// and immediately fire HoldStart for any SustainedHold steps.
+    ///
+    /// CR-04: No-ops when the macro is already running with an identical config.
+    /// This prevents transient key-up+key-down on sustained-hold macros when
+    /// unrelated state changes (e.g. active-app switch) trigger reevaluate_all_macros.
     fn start_macro(&mut self, config: MacroConfig) {
         let macro_id = config.id;
+        let new_running = RunningConfig::from_config(&config);
+
+        // If the macro is already running with the same config, skip restart.
+        if let Some(existing) = self.running_configs.get(&macro_id) {
+            if existing == &new_running {
+                return;
+            }
+        }
 
         // Clean up any existing state for this macro.
         self.stop_macro(&macro_id);
@@ -253,6 +308,9 @@ impl Scheduler {
         if !holds.is_empty() {
             self.active_holds.insert(macro_id, holds);
         }
+
+        // CR-04: Record running config so we can skip no-op restarts.
+        self.running_configs.insert(macro_id, new_running);
     }
 
     /// Stop a macro: cancel all its interval timers and release all holds.
@@ -273,6 +331,9 @@ impl Scheduler {
 
         // Release all sustained holds.
         self.release_holds(macro_id);
+
+        // CR-04: Clear running config so the macro can be restarted fresh.
+        self.running_configs.remove(macro_id);
     }
 
     /// Send HoldRelease for all active sustained holds of a macro.

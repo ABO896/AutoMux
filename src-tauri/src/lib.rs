@@ -7,6 +7,7 @@ pub mod state;
 use persistence::ProfileManager;
 use scheduler::{Scheduler, SchedulerIntent};
 use state::{Intent, StateActor, StateManager};
+use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::mpsc;
 
@@ -25,24 +26,21 @@ pub fn run() {
             let (action_tx, action_rx) = mpsc::channel::<scheduler::ActionReady>(100);
 
             // ── Task 5.1: Initialize ProfileManager ──
-            let profile_mgr = ProfileManager::from_app_handle(app.handle())?;
+            let profile_mgr = Arc::new(ProfileManager::from_app_handle(app.handle())?);
             app.manage(profile_mgr.clone());
 
-            // ── Task 5.3: Startup Restoration ──
-            // Load the default profile and replay macros into the StateActor.
+            // ── Startup Restoration (RELY-04) ──
+            // Send a single LoadProfile intent — the StateActor handles the bracketed
+            // batch load, suppressing per-macro auto-saves (Pitfall 2: no N-write storm).
             let startup_tx = state_tx.clone();
-            let startup_mgr = profile_mgr.clone();
             tauri::async_runtime::spawn(async move {
-                let profile = startup_mgr.load_or_create_default().await;
                 #[cfg(debug_assertions)]
-                eprintln!(
-                    "[Startup] Restored profile '{}' with {} macros",
-                    profile.name,
-                    profile.macros.len()
-                );
-                for (_, config) in profile.macros {
-                    let _ = startup_tx.send(Intent::AddMacro(config)).await;
-                }
+                eprintln!("[Startup] Dispatching LoadProfile(\"default\") intent");
+                // CR-06: Use oneshot channel — result is silently dropped on startup.
+                let (tx, _rx) = tokio::sync::oneshot::channel();
+                let _ = startup_tx
+                    .send(Intent::LoadProfile("default".to_string(), tx))
+                    .await;
             });
 
             // Spawn Scheduler (single async task — no per-macro spawns)
@@ -53,7 +51,7 @@ pub fn run() {
 
             // Spawn the State Actor
             let app_handle = app.handle().clone();
-            let actor = StateActor::new(state_rx, sched_tx, action_rx, app_handle);
+            let actor = StateActor::new(state_rx, sched_tx, action_rx, app_handle, profile_mgr.clone());
             tauri::async_runtime::spawn(async move {
                 actor.run().await;
             });
@@ -69,7 +67,8 @@ pub fn run() {
                 platform::macos::observer::set_state_tx(state_tx);
                 let mut observer = MacPlatformObserver::new();
                 observer.start_observing();
-                // Observer is long-lived; it does not implement Drop, so the token is kept alive natively.
+                // Observer is owned by Tauri managed state for full app lifetime (SAFE-02).
+                app.manage(observer);
             }
             #[cfg(target_os = "windows")]
             {
@@ -99,6 +98,8 @@ pub fn run() {
             ipc::load_profile,
             ipc::delete_profile,
             ipc::list_profiles,
+            ipc::list_running_apps,
+            ipc::set_macro_trigger_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

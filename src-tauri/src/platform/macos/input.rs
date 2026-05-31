@@ -19,15 +19,22 @@ impl MacInputProvider {
     }
 
     /// Create a CGEventSource for the current call.
-    fn source() -> CGEventSource {
-        CGEventSource::new(CGEventSourceStateID::HIDSystemState)
-            .expect("Failed to create CGEventSource")
+    ///
+    /// Returns `None` if the OS cannot allocate the source under resource pressure.
+    /// All callers guard with `let Some(source) = Self::source() else { return; }` — D-08.
+    fn source() -> Option<CGEventSource> {
+        let result = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok();
+        #[cfg(debug_assertions)]
+        if result.is_none() {
+            eprintln!("[MacInput] CGEventSource creation failed — skipping injection");
+        }
+        result
     }
 }
 
 impl InputProvider for MacInputProvider {
     fn inject_key(&self, keycode: u16, is_down: bool) {
-        let source = Self::source();
+        let Some(source) = Self::source() else { return; };
         if let Ok(event) = CGEvent::new_keyboard_event(source, keycode, is_down) {
             event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
             event.post(CGEventTapLocation::HID);
@@ -35,7 +42,7 @@ impl InputProvider for MacInputProvider {
     }
 
     fn inject_mouse_click(&self, button: MouseButton, x: f64, y: f64) {
-        let source = Self::source();
+        let Some(source) = Self::source() else { return; };
         let position = CGPoint::new(x, y);
 
         let cg_button = match button {
@@ -70,7 +77,7 @@ impl InputProvider for MacInputProvider {
     }
 
     fn inject_mouse_move(&self, x: f64, y: f64) {
-        let source = Self::source();
+        let Some(source) = Self::source() else { return; };
         let position = CGPoint::new(x, y);
         if let Ok(event) = CGEvent::new_mouse_event(
             source,
@@ -84,7 +91,7 @@ impl InputProvider for MacInputProvider {
     }
 
     fn inject_mouse_button_raw(&self, button: MouseButton, is_down: bool) {
-        let source = Self::source();
+        let Some(source) = Self::source() else { return; };
 
         // Get the current cursor position for the event.
         let pos = if let Ok(ev) = CGEvent::new(source.clone()) {

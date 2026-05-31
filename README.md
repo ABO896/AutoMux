@@ -5,10 +5,10 @@
   <p>
     <a href="https://github.com/ABO896/AutoMux/releases"><img src="https://img.shields.io/github/v/release/ABO896/AutoMux?style=flat-square&color=blue" alt="Release"></a>
     <a href="https://github.com/ABO896/AutoMux/actions"><img src="https://img.shields.io/github/actions/workflow/status/ABO896/AutoMux/release.yml?style=flat-square" alt="Build Status"></a>
-    <a href="https://github.com/ABO896/AutoMux/blob/master/LICENSE"><img src="https://img.shields.io/github/license/ABO896/AutoMux?style=flat-square" alt="License"></a>
+    <a href="https://spdx.org/licenses/GPL-3.0-only.html"><img src="https://img.shields.io/badge/License-GPL--3.0--only-blue?style=flat-square" alt="License: GPL-3.0-only"></a>
   </p>
   
-  <p>A native, cross-platform macro engine architected for <b>$O(1)$ speed</b> and <b>0% idle CPU</b> overhead. Built for power users, developers, and gamers who demand absolute performance.</p>
+  <p>AutoMux lets you define multi-step macros — clicks, key presses, timing — and run them system-wide or scoped to a specific app, on both <b>macOS</b> and <b>Windows</b>. It's built for gamers, productivity power users, and anyone automating repetitive mouse and keyboard tasks. The engine is event-driven with a bare-metal Rust core: zero polling, sub-millisecond dispatch, and <60 MB RAM.</p>
 </div>
 
 <br/>
@@ -76,4 +76,4 @@ We welcome contributions! Whether it's adding new Trigger Modes, optimizing the 
 
 ## 📄 License
 
-Distributed under the GNU GPLv3 license. See `LICENSE` for more information.
+Distributed under the GNU General Public License v3. See `LICENSE` for more information.
