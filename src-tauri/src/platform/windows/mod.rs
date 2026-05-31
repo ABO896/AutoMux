@@ -296,7 +296,8 @@ unsafe fn get_app_name_from_hwnd(hwnd: HWND) -> Option<String> {
 #[cfg(target_os = "windows")]
 pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
     use std::collections::HashMap;
-    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::core::BOOL; // BOOL moved to windows::core in windows-rs 0.60+
     use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
 
     let mut apps: Vec<crate::ipc::RunningApp> = Vec::new();
