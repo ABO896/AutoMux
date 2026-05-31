@@ -8,9 +8,23 @@ AutoMux is a cross-platform desktop auto-clicker and macro automation tool for m
 
 A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
 
+## Current Milestone: v1.2.0 Reliability & Polish
+
+**Goal:** Eliminate all known bugs, compiler warnings, and tech debt so AutoMux is clean and solid before the UI redesign.
+
+**Target features:**
+- macOS permissions reports "not granted" even after explicit Request Access + OS approval (severe bug)
+- Rust compiler warnings in `platform/windows/mod.rs` (4 warnings: unused imports + unhandled bool)
+- `block v0.1.6` macOS deprecation (future Rust rejection)
+- CI: updater JSON signature silently skipped, `npm install` → `npm ci`, binary discovery fragility
+- RELY-01 full: passive System Settings grant should arm CGEventTap without restart
+- `flush_held_inputs` REGISTRY lock deadlock risk
+- `auto-save-error` event emitted but App.tsx has no listener
+- Windows `OpenProcess` handle leak in `list_running_apps_impl`
+
 ## Current State
 
-**Version:** v1.0 (shipped 2026-05-30)
+**Version:** v1.0 (shipped 2026-05-30) | v1.2.0 in progress
 
 - 4 phases completed, 14 plans shipped
 - ~22,900 lines added across Rust backend + SolidJS frontend
@@ -48,12 +62,20 @@ A macro that was set up must fire reliably — platform permissions must be dete
 
 ### Active
 
-- [ ] **A11Y-01**: ARIA attributes for screen reader compatibility
-- [ ] **RELY-01 full**: passive System Settings permission grant should arm CGEventTap without restart
-- [ ] Address accumulated tech debt from v1.0 audit (flush_held_inputs deadlock risk, auto-save-error listener, npm ci, binary discovery)
+- [ ] **PERM-01**: macOS reports "not granted" even after explicit Request Access approval — investigate and fix
+- [ ] **RELY-06**: passive System Settings grant (without clicking Request Access) arms CGEventTap without restart
+- [ ] **BUILD-01**: Rust compiler warnings cleaned (`platform/windows/mod.rs` — 4 warnings)
+- [ ] **BUILD-02**: `block v0.1.6` macOS deprecation resolved
+- [ ] **CI-03**: Updater JSON signature no longer silently skipped in release workflow
+- [ ] **CI-04**: `npm install` → `npm ci` for reproducible CI builds
+- [ ] **CI-05**: Binary discovery pattern hardened against tauri-action renames
+- [ ] **SAFE-04**: `flush_held_inputs` releases REGISTRY lock before posting CGEvents
+- [ ] **ERR-01**: `auto-save-error` Tauri event surfaces persistence failures to the user in the UI
+- [ ] **MEM-01**: Windows `OpenProcess` handle closed after use in `list_running_apps_impl`
 
 ### Out of Scope
 
+- **A11Y-01** (v1.3 UI milestone) — ARIA attributes deferred to UI redesign so they're built into the new component structure
 - Auto-updater (v2) — core reliability must be solid first; signing/entitlements required as prerequisite
 - macOS notarization (v2) — signing identity config is a one-way door; defer until process is finalized
 - Cross-platform profile portability (v2) — requires NamedKey schema migration (UX-04) first
@@ -102,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-30 after v1.0 milestone*
+*Last updated: 2026-05-31 — milestone v1.2.0 started*

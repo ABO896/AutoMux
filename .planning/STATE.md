@@ -1,44 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: next
-status: milestone_complete
-last_updated: "2026-05-30"
-last_activity: 2026-05-30 -- v1.0 milestone archived
+milestone: v1.2.0
+milestone_name: Reliability & Polish
+status: planning
+last_updated: "2026-05-31"
+last_activity: 2026-05-31 -- Milestone v1.2.0 started
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-30 after v1.0 milestone)
+See: .planning/PROJECT.md (updated 2026-05-31 — milestone v1.2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Planning next milestone (v2.0)
+**Current focus:** v1.2.0 — Reliability & Polish
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: v1.0 shipped — ready to plan v2.0
-Last activity: 2026-05-30
-
-Progress: [██████████] 100% (v1.0 complete)
-
-## Milestone Complete
-
-v1.0 shipped 2026-05-30.
-
-- 4 phases, 14 plans
-- 18/18 v1 requirements satisfied
-- Archive: `.planning/milestones/`
-- Tag: v1.0
+Status: Defining requirements
+Last activity: 2026-05-31 — Milestone v1.2.0 started
 
 ## Deferred Items
 
@@ -48,13 +37,10 @@ v1.0 shipped 2026-05-30.
 | Distribution | macOS notarization (DIST-02) | v2 scope | Roadmap creation |
 | UX | NamedKey schema migration (UX-04) | v2 scope | Roadmap creation |
 | UX | Cross-platform profile portability (UX-05) | v2 scope | Roadmap creation |
-| Tech debt | RELY-01 partial (passive System Settings grant) | v2 backlog | v1.0 audit |
-| Tech debt | flush_held_inputs REGISTRY lock risk | v2 backlog | v1.0 audit |
-| Tech debt | auto-save-error event no listener | v2 backlog | v1.0 audit |
-| Tech debt | Windows OpenProcess handle leak | v2 backlog | v1.0 audit |
+| Accessibility | A11Y-01 ARIA attributes | v1.3 UI milestone | v1.2.0 scope decision |
 
 ## Session Continuity
 
-Last session: 2026-05-30
-Stopped at: v1.0 milestone complete
-Next: /gsd-new-milestone to define v2.0
+Last session: 2026-05-31
+Stopped at: v1.2.0 milestone started — defining requirements
+Next: /gsd-plan-phase [N] after roadmap is created
