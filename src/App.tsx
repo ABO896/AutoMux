@@ -73,10 +73,13 @@ type Tab = "dashboard" | "profiles";
 
 // Module-level listener ref — survives across renders; prevents double-attach (T-03-08)
 let _keyCaptureListener: ((e: KeyboardEvent) => void) | null = null;
+// Pending-approval timeout handle — not reactive; no re-render needed on assignment.
+let _pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function App() {
   const [state, setState] = createSignal<AppState | null>(null);
   const [accessibility, setAccessibility] = createSignal<boolean | null>(null);
+  const [accessibilityPending, setAccessibilityPending] = createSignal(false);
   const [activeApp, setActiveApp] = createSignal<string | null>(null);
   const [, setLoading] = createSignal(true);
   const [activeTab, setActiveTab] = createSignal<Tab>("dashboard");
@@ -162,6 +165,7 @@ function App() {
       try {
         const ok = await invoke<boolean>("check_accessibility");
         setAccessibility(ok);
+        if (ok) clearPending();
       } catch (_) {
         /* ignore */
       }
@@ -175,16 +179,32 @@ function App() {
       document.removeEventListener("keydown", _keyCaptureListener, true);
       _keyCaptureListener = null;
     }
+    clearPending();
   });
 
   // ── Actions ───────────────────────────────────────────────────
 
+  function clearPending() {
+    setAccessibilityPending(false);
+    if (_pendingTimeoutId !== null) {
+      clearTimeout(_pendingTimeoutId);
+      _pendingTimeoutId = null;
+    }
+  }
+
   async function handleRequestAccess() {
+    setAccessibilityPending(true);
+    _pendingTimeoutId = setTimeout(() => {
+      setAccessibilityPending(false);
+      _pendingTimeoutId = null;
+    }, 30_000);
     try {
       const granted = await invoke<boolean>("request_accessibility");
       setAccessibility(granted);
+      if (granted) clearPending();
     } catch (e) {
       console.error("Accessibility request failed:", e);
+      clearPending();
     }
   }
 
@@ -451,12 +471,24 @@ function App() {
                 <Show
                   when={accessibility() === true}
                   fallback={
-                    <div class="flex items-center gap-1.5">
-                      <div class="w-2 h-2 rounded-full bg-danger status-pulse shadow-[0_0_6px_var(--color-danger-glow)]" />
-                      <span class="text-[11px] text-danger font-medium">
-                        Denied
-                      </span>
-                    </div>
+                    <Show
+                      when={accessibilityPending()}
+                      fallback={
+                        <div class="flex items-center gap-1.5">
+                          <div class="w-2 h-2 rounded-full bg-danger status-pulse shadow-[0_0_6px_var(--color-danger-glow)]" />
+                          <span class="text-[11px] text-danger font-medium">
+                            Denied
+                          </span>
+                        </div>
+                      }
+                    >
+                      <div class="flex items-center gap-1.5">
+                        <div class="w-2 h-2 rounded-full bg-warning status-pulse shadow-[0_0_6px_var(--color-warning-glow)]" />
+                        <span class="text-[11px] text-warning font-medium">
+                          Pending…
+                        </span>
+                      </div>
+                    </Show>
                   }
                 >
                   <div class="flex items-center gap-1.5">
@@ -468,7 +500,7 @@ function App() {
                 </Show>
               </div>
               <p class="text-xs text-text-dim">Accessibility Permissions</p>
-              <Show when={accessibility() === false}>
+              <Show when={accessibility() === false && !accessibilityPending()}>
                 <button
                   id="btn-request-access"
                   onClick={handleRequestAccess}
