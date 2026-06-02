@@ -82,7 +82,7 @@ Plans:
 | 2. Cleanup & Credibility | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
-| 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete   | 2026-06-02 |
+| 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete    | 2026-06-02 |
 | 6. Windows Platform Cleanup | v1.2.0 | 0/TBD | Not started | — |
 | 7. CI Pipeline Hardening | v1.2.0 | 0/TBD | Not started | — |
 | 8. Safety & Error Surface | v1.2.0 | 0/TBD | Not started | — |

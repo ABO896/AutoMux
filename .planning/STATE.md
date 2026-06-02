@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.2.0
 milestone_name: Reliability & Polish
-status: executing
+status: milestone_complete
 stopped_at: Phase 5 planned — 2 plans verified and ready
 last_updated: "2026-06-02T04:31:11.833Z"
 last_activity: 2026-06-02 -- Phase 05 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
   completed_plans: 0
-  percent: 0
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-31 — milestone v1.2.0 started)
 
 ## Current Position
 
-Phase: 05 (macos-permissions-reliability) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 05
-Last activity: 2026-06-02 -- Phase 05 execution started
+Phase: 5
+Plan: Not started
+Status: Milestone complete
+Last activity: 2026-06-02
 
 ```
 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
