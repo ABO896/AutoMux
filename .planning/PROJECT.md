@@ -8,23 +8,23 @@ AutoMux is a cross-platform desktop auto-clicker and macro automation tool for m
 
 A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
 
-## Current Milestone: v1.2.0 Reliability & Polish
+## Current Milestone: v2.0 Redesign & Platform Excellence
 
-**Goal:** Eliminate all known bugs, compiler warnings, and tech debt so AutoMux is clean and solid before the UI redesign.
+**Goal:** Make AutoMux fully functional on macOS Tahoe 26 and Windows, ship a modern liquid-glass UI redesign, add parallel macro execution and core UX improvements, and complete all outstanding reliability work — without sacrificing low overhead or click/hold macro support.
 
 **Target features:**
-- macOS permissions reports "not granted" even after explicit Request Access + OS approval (severe bug)
-- Rust compiler warnings in `platform/windows/mod.rs` (4 warnings: unused imports + unhandled bool)
-- `block v0.1.6` macOS deprecation (future Rust rejection)
-- CI: updater JSON signature silently skipped, `npm install` → `npm ci`, binary discovery fragility
-- RELY-01 full: passive System Settings grant should arm CGEventTap without restart
-- `flush_held_inputs` REGISTRY lock deadlock risk
-- `auto-save-error` event emitted but App.tsx has no listener
-- Windows `OpenProcess` handle leak in `list_running_apps_impl`
+- macOS Tahoe 26 compatibility: restore macro execution and fix permissions detection on the new OS
+- Cross-platform: all features and fixes work on both macOS and Windows
+- Parallel macro execution: multiple macros run simultaneously on both platforms
+- Macro management: delete and edit existing macros; clearer action-type UI (left click / right click / hold / key press)
+- Full UI redesign: Apple design language + Tahoe 26 liquid glass (macOS), modern equivalent (Windows), Raycast-inspired layout
+- Platform cleanup (v1.2.0 carry): Windows compiler warnings (BUILD-01), OpenProcess handle leak (MEM-01)
+- CI hardening (v1.2.0 carry): updater signature (CI-03), npm ci (CI-04), artifact discovery (CI-05)
+- Safety & error surface (v1.2.0 carry): REGISTRY deadlock risk (SAFE-04), auto-save error in UI (ERR-01)
 
 ## Current State
 
-**Version:** v1.0 (shipped 2026-05-30) | v1.2.0 in progress
+**Version:** v1.2.0 (shipped 2026-06-02, Phase 5 complete) | v2.0 in planning
 
 - 5 phases completed, 16 plans shipped — Phase 05 complete (CGEventTap post-grant arming, cocoa dep removal, pending UI state)
 - ~22,900 lines added across Rust backend + SolidJS frontend
@@ -59,19 +59,31 @@ A macro that was set up must fire reliably — platform permissions must be dete
 - ✓ UX-02/03: Running-process picker on macOS + Windows — v1.0
 - ✓ CI-01: Universal binary enforced (arm64+x86_64 via lipo) — v1.0
 - ✓ CI-02: Third-party GitHub Actions SHA-pinned — v1.0
+- ✓ PERM-01: macOS permissions correctly detected after Request Access approval — v1.2.0 Phase 5
+- ✓ RELY-06: Passive System Settings grant arms CGEventTap without restart — v1.2.0 Phase 5
+- ✓ BUILD-02: `block v0.1.6` macOS deprecation resolved — v1.2.0 Phase 5
 
 ### Active
 
-- [ ] **PERM-01**: macOS reports "not granted" even after explicit Request Access approval — investigate and fix
-- [ ] **RELY-06**: passive System Settings grant (without clicking Request Access) arms CGEventTap without restart
-- [ ] **BUILD-01**: Rust compiler warnings cleaned (`platform/windows/mod.rs` — 4 warnings)
-- [ ] **BUILD-02**: `block v0.1.6` macOS deprecation resolved
-- [ ] **CI-03**: Updater JSON signature no longer silently skipped in release workflow
-- [ ] **CI-04**: `npm install` → `npm ci` for reproducible CI builds
-- [ ] **CI-05**: Binary discovery pattern hardened against tauri-action renames
-- [ ] **SAFE-04**: `flush_held_inputs` releases REGISTRY lock before posting CGEvents
-- [ ] **ERR-01**: `auto-save-error` Tauri event surfaces persistence failures to the user in the UI
+- [ ] **COMPAT-01**: Macros fire correctly on macOS 26 Tahoe — input injection works
+- [ ] **COMPAT-02**: Permissions detection accurate on macOS 26 Tahoe — no false negatives
+- [ ] **COMPAT-03**: App launches fully on macOS 26 Tahoe without errors or crashes
+- [ ] **EXEC-01**: Multiple macros run simultaneously on macOS — parallel, not sequential
+- [ ] **EXEC-02**: Multiple macros run simultaneously on Windows — parallel, not sequential
+- [ ] **UX-08**: User can delete an existing macro from the macro list
+- [ ] **UX-09**: User can edit an existing macro's name, action type, key/button, and timing
+- [ ] **UX-10**: Action type selection clearly labels left click, right click, hold, and key press
+- [ ] **UI-01**: macOS app uses Apple design language with liquid glass effects native to macOS 26
+- [ ] **UI-02**: macOS UI layout is Raycast-inspired — clean, focused, keyboard-navigable
+- [ ] **UI-03**: Windows app uses a modern, polished equivalent UI
+- [ ] **UI-04**: UI redesign adds no measurable idle overhead vs v1.2.0
+- [ ] **BUILD-01**: Zero Rust compiler warnings on Windows target (`platform/windows/mod.rs`)
 - [ ] **MEM-01**: Windows `OpenProcess` handle closed after use in `list_running_apps_impl`
+- [ ] **CI-03**: Updater JSON signature included in release workflow (not silently skipped)
+- [ ] **CI-04**: CI uses `npm ci` for reproducible builds
+- [ ] **CI-05**: Binary artifact discovery resilient to tauri-action renames
+- [ ] **SAFE-04**: `flush_held_inputs` releases REGISTRY lock before posting CGEvents
+- [ ] **ERR-01**: `auto-save-error` event surfaces persistence failures in the UI
 
 ### Out of Scope
 
@@ -124,4 +136,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 — Phase 05 complete*
+*Last updated: 2026-06-02 — Milestone v2.0 started*

@@ -1,75 +1,73 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2.0
-milestone_name: Reliability & Polish
-status: milestone_complete
-stopped_at: Phase 5 planned — 2 plans verified and ready
-last_updated: "2026-06-02T04:31:11.833Z"
-last_activity: 2026-06-02 -- Phase 05 execution started
+milestone: v2.0
+milestone_name: Redesign & Platform Excellence
+status: planning
+stopped_at: Milestone v2.0 started — roadmap pending
+last_updated: "2026-06-02T00:00:00.000Z"
+last_activity: 2026-06-02 -- Milestone v2.0 started
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 2
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
   completed_plans: 0
-  percent: 100
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-31 — milestone v1.2.0 started)
+See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 05 — macos-permissions-reliability
+**Current focus:** Defining requirements and roadmap for v2.0
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-02
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-02 — Milestone v2.0 started
 
 ```
-Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/? phases)
 ```
 
 ## Phase Summary
 
-| Phase | Name | Requirements | Status |
-|-------|------|--------------|--------|
-| 5 | macOS Permissions & Reliability | PERM-01, RELY-06, BUILD-02 | Ready to execute (2 plans) |
-| 6 | Windows Platform Cleanup | BUILD-01, MEM-01 | Not started |
-| 7 | CI Pipeline Hardening | CI-03, CI-04, CI-05 | Not started |
-| 8 | Safety & Error Surface | SAFE-04, ERR-01 | Not started |
+*(Roadmap not yet created — phases defined after roadmap is approved)*
 
 ## Accumulated Context
 
 ### Key Decisions
 
-- Phases 5 and 6 are independent of each other — they touch different platform layers (macOS vs Windows) and can be planned/executed in any order
-- Phase 7 (CI) is also independent — pure workflow file changes with no Rust/frontend coupling
-- Phase 8 (Safety + Error Surface) is independent — SAFE-04 is macOS Rust, ERR-01 is SolidJS frontend; no cross-phase dependency
-- BUILD-02 grouped with PERM-01/RELY-06 in Phase 5 because all three are macOS layer concerns; fixing the deprecated block crate may touch the same macOS platform code touched by the permission fixes
+- v2.0 is a major version bump: full UI redesign + macOS Tahoe 26 compat + parallel macro execution
+- All features must ship on both macOS and Windows — no platform-exclusive fixes
+- UI redesign: Apple design language + liquid glass (macOS 26), modern equivalent on Windows, Raycast-inspired layout
+- Parallel execution: triggering macro B while macro A runs must not block or cancel macro A — architectural change required
+- macOS Tahoe 26 compatibility is the critical path: macros are fully broken on the new OS (CGEventTap regression suspected)
+- COMPAT investigation should happen first before assuming the architecture for EXEC-01/02 — the Tahoe 26 fix may require platform changes that affect parallel execution design
+- v1.2.0 Phase 5 completed: PERM-01, RELY-06, BUILD-02 — phases 6–8 not executed, carried to v2.0
 
 ### Known Constraints
 
-- PERM-01: Must work within what Tauri and CGEvent allow — OS permission API is fixed
-- RELY-06: The 3s frontend poll approach from v1.0 is the documented revisit point (see PROJECT.md Key Decisions)
-- SAFE-04: Fix requires careful lock ordering — release REGISTRY before any CGEvent dispatch
+- COMPAT-01/02: Must work within Tauri and CGEvent API surface — OS enforces permission model
+- UI-01: Liquid glass requires macOS 26+ APIs — cannot backport to Monterey/Ventura/Sonoma/Sequoia
+- UI-04: UI redesign must not increase idle memory/CPU overhead — keep AutoMux lightweight
+- SAFE-04: Lock ordering fix (release REGISTRY before CGEvent dispatch) is subtle — requires careful audit
 
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Distribution | Auto-updater (DIST-01) | v2 scope — Phase 9 | Roadmap creation |
-| Distribution | macOS notarization (DIST-02) | v2 scope — Phase 9 | Roadmap creation |
-| UX | NamedKey schema migration (UX-04) | v2 scope | Roadmap creation |
-| UX | Cross-platform profile portability (UX-05) | v2 scope | Roadmap creation |
-| Accessibility | A11Y-01 ARIA attributes | v1.3 UI milestone | v1.2.0 scope decision |
+| Distribution | Auto-updater (DIST-01) | v3 scope | v1.2.0 roadmap creation |
+| Distribution | macOS notarization (DIST-02) | v3 scope | v1.2.0 roadmap creation |
+| UX | NamedKey schema migration (UX-04) | future | v1.2.0 roadmap creation |
+| UX | Cross-platform profile portability (UX-05) | future | v1.2.0 roadmap creation |
 
 ## Session Continuity
 
-Last session: 2026-06-01
-Stopped at: Phase 5 planned — 2 plans verified and ready
-Next: /gsd-execute-phase 5
+Last session: 2026-06-02
+Stopped at: Milestone v2.0 requirements defined — roadmap pending
+Next: Spawn roadmapper to create ROADMAP.md
