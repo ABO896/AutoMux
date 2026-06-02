@@ -181,8 +181,13 @@ function App() {
     onCleanup(() => clearInterval(interval));
   });
 
+  // WR-03: Cancelled flag for handleRequestAccess — prevents stale setters from
+  // firing after component unmount when the in-flight invoke resolves late.
+  let requestAccessCancelled = false;
+
   // Cleanup dangling key capture listener on component unmount (T-03-08)
   onCleanup(() => {
+    requestAccessCancelled = true;
     if (_keyCaptureListener) {
       document.removeEventListener("keydown", _keyCaptureListener, true);
       _keyCaptureListener = null;
@@ -203,16 +208,20 @@ function App() {
   async function handleRequestAccess() {
     setAccessibilityPending(true);
     _pendingTimeoutId = setTimeout(() => {
-      setAccessibilityPending(false);
+      if (!requestAccessCancelled) setAccessibilityPending(false);
       _pendingTimeoutId = null;
     }, 30_000);
     try {
       const granted = await invoke<boolean>("request_accessibility");
-      setAccessibility(granted);
-      if (granted) clearPending();
+      if (!requestAccessCancelled) {
+        setAccessibility(granted);
+        clearPending();
+      }
     } catch (e) {
-      console.error("Accessibility request failed:", e);
-      clearPending();
+      if (!requestAccessCancelled) {
+        console.error("Accessibility request failed:", e);
+        clearPending();
+      }
     }
   }
 
