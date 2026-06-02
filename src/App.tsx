@@ -73,10 +73,12 @@ type Tab = "dashboard" | "profiles";
 
 // Module-level listener ref — survives across renders; prevents double-attach (T-03-08)
 let _keyCaptureListener: ((e: KeyboardEvent) => void) | null = null;
-// Pending-approval timeout handle — not reactive; no re-render needed on assignment.
-let _pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function App() {
+  // WR-01: Scoped inside App() so it does not outlive the component instance
+  // during HMR remounts. The existing onCleanup → clearPending() path handles teardown.
+  let _pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   const [state, setState] = createSignal<AppState | null>(null);
   const [accessibility, setAccessibility] = createSignal<boolean | null>(null);
   const [accessibilityPending, setAccessibilityPending] = createSignal(false);
