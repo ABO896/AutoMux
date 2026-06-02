@@ -26,7 +26,7 @@ A macro that was set up must fire reliably — platform permissions must be dete
 
 **Version:** v1.0 (shipped 2026-05-30) | v1.2.0 in progress
 
-- 4 phases completed, 14 plans shipped
+- 5 phases completed, 16 plans shipped — Phase 05 complete (CGEventTap post-grant arming, cocoa dep removal, pending UI state)
 - ~22,900 lines added across Rust backend + SolidJS frontend
 - Stack: Tauri 2 (IPC bridge), Rust (StateActor + Scheduler actors, CGEvent/SendInput platform layer), SolidJS + Tailwind CSS 4 + Vite 6
 - macOS: CGEventTap input injection, NSWorkspace process enumeration, AXIsProcessTrusted permission check
@@ -124,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-31 — milestone v1.2.0 started*
+*Last updated: 2026-06-02 — Phase 05 complete*
