@@ -67,6 +67,19 @@ static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = Onc
 /// @safety-officer: Atomic guard — guarantees `initialize_tap()` spawns at most
 /// ONE thread, even if called concurrently from multiple sites.
 static TAP_INITIALIZED: AtomicBool = AtomicBool::new(false);
+/// @safety-officer: In-flight spawn guard — prevents a second spawn attempt
+/// during the window between `TAP_INITIALIZED` being reset to `false` (after a
+/// failed CGEventTap creation) and the next poll cycle arriving.  The sequence is:
+///
+///   1. Caller checks TAP_INITIALIZED == false AND TAP_STARTING == false.
+///   2. TAP_STARTING is swapped to `true` atomically.
+///   3. TAP_INITIALIZED is set to `true`.
+///   4. Thread is spawned.
+///   5. On any exit branch the spawned thread clears BOTH flags (TAP_STARTING last).
+///
+/// A concurrent caller that finds TAP_STARTING == true returns `false` immediately,
+/// preventing double-tap injection and REGISTRY corruption.
+static TAP_STARTING: AtomicBool = AtomicBool::new(false);
 
 pub fn get_registry() -> &'static Mutex<HashSet<ActiveInput>> {
     REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
@@ -209,20 +222,29 @@ pub fn is_tap_initialized() -> bool {
 ///
 /// **Idempotent**: the first call spawns a tap thread; subsequent calls are no-ops.
 ///
-/// @safety-officer: `compare_exchange(false, true, SeqCst, SeqCst)` guarantees:
-///   - Exactly ONE thread is ever spawned, even under concurrent calls.
-///   - No thread leak, no duplicate registry, no duplicate tap.
-///   - Reverting `TAP_INITIALIZED` is intentionally impossible—once active,
-///     the tap lives until process termination.
+/// @safety-officer: Two AtomicBool guards prevent double-spawn under the TOCTOU race
+/// that arises when the spawned thread resets `TAP_INITIALIZED` to `false` (on failure)
+/// before the next poll cycle fires:
+///
+///   - `TAP_INITIALIZED` = true while the tap run loop is alive.
+///   - `TAP_STARTING`    = true from "about to spawn" until the thread exits (success or fail).
+///
+/// A concurrent caller that finds either flag set returns immediately without spawning.
+/// Exactly ONE thread is ever in-flight at any time.
 pub fn initialize_tap() -> bool {
-    // Atomic CAS: only the thread that flips false→true proceeds.
-    if TAP_INITIALIZED
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
-        // Already initialized — success (idempotent).
+    // Fast path: tap already running.
+    if TAP_INITIALIZED.load(Ordering::SeqCst) {
         return true;
     }
+    // In-flight guard: another call is already mid-spawn.
+    // swap returns the *old* value; if it was already true, someone else claimed the slot.
+    if TAP_STARTING.swap(true, Ordering::SeqCst) {
+        return false;
+    }
+
+    // We now hold the TAP_STARTING slot. Mark initialized before spawning so any
+    // concurrent caller that passes TAP_STARTING's window also sees the flag set.
+    TAP_INITIALIZED.store(true, Ordering::SeqCst);
 
     thread::spawn(|| {
         let tap_result = CGEventTap::new(
@@ -428,8 +450,11 @@ pub fn initialize_tap() -> bool {
             },
         );
 
-        // @safety-officer: CR-03 — TAP_INITIALIZED must be reset to false in ALL
-        // non-success branches so callers can retry after permissions are granted.
+        // @safety-officer: TAP_INITIALIZED and TAP_STARTING must BOTH be reset to false
+        // in ALL non-success branches so callers can retry after permissions are granted.
+        // TAP_STARTING is always cleared last — this is the release point for the in-flight
+        // spawn guard; any concurrent caller blocked on TAP_STARTING can only proceed once
+        // TAP_INITIALIZED has already been written to its final value.
         match tap_result {
             Ok(tap) => {
                 let current_loop = CFRunLoop::get_current();
@@ -437,15 +462,20 @@ pub fn initialize_tap() -> bool {
                     Ok(source) => {
                         current_loop.add_source(&source, unsafe { kCFRunLoopCommonModes });
                         tap.enable();
+                        // Clear TAP_STARTING now that the tap is live; the tap remains
+                        // TAP_INITIALIZED=true for the duration of the run loop.
+                        TAP_STARTING.store(false, Ordering::SeqCst);
                         CFRunLoop::run_current();
                         // run_current() only returns when the run loop is stopped (tap died).
                         // Reset so the tap can be re-initialized on next accessibility grant.
                         TAP_INITIALIZED.store(false, Ordering::SeqCst);
+                        TAP_STARTING.store(false, Ordering::SeqCst);
                     }
                     Err(e) => {
                         eprintln!("[Observer] Failed to create runloop source: {:?}", e);
                         // Reset so initialization can be retried.
                         TAP_INITIALIZED.store(false, Ordering::SeqCst);
+                        TAP_STARTING.store(false, Ordering::SeqCst);
                     }
                 }
             }
@@ -453,8 +483,9 @@ pub fn initialize_tap() -> bool {
                 eprintln!(
                     "Failed to create CGEventTap. Make sure the app has Accessibility permissions."
                 );
-                // Reset flag so initialization can be retried after permissions are granted.
+                // Reset flags so initialization can be retried after permissions are granted.
                 TAP_INITIALIZED.store(false, Ordering::SeqCst);
+                TAP_STARTING.store(false, Ordering::SeqCst);
             }
         }
     });
