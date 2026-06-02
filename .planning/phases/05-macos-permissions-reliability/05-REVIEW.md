@@ -1,73 +1,66 @@
 ---
-phase: 05-macos-permissions-reliability
+phase: "05"
+phase_name: "macos-permissions-reliability"
 reviewed: 2026-06-02T00:00:00Z
 depth: standard
 files_reviewed: 3
 files_reviewed_list:
-  - src-tauri/Cargo.toml
   - src-tauri/src/ipc/mod.rs
+  - src-tauri/Cargo.toml
   - src/App.tsx
 findings:
-  critical: 2
-  warning: 3
-  info: 2
-  total: 7
+  critical: 3
+  warning: 4
+  info: 3
+  total: 10
 status: issues_found
 ---
 
 # Phase 05: Code Review Report
 
-**Reviewed:** 2026-06-02  
-**Depth:** standard  
-**Files Reviewed:** 3  
+**Reviewed:** 2026-06-02
+**Depth:** standard
+**Files Reviewed:** 3
 **Status:** issues_found
 
 ## Summary
 
-Phase 05 introduces three changes: (1) `check_accessibility` in `ipc/mod.rs` now calls `initialize_tap()` when accessibility is granted — mirroring `request_accessibility`; (2) the `cocoa` crate is removed from `Cargo.toml`; (3) `App.tsx` gains an `accessibilityPending` signal, a `clearPending()` helper, a 3-branch permission UI, a 30-second timeout, and `onCleanup` cancellation.
+Phase 05 targeted macOS Accessibility permission detection and IPC reliability. The three reviewed files introduce `check_accessibility` / `request_accessibility` commands that arm the CGEventTap after a permission grant, an `accessibilityPending` UI state machine with a 30-second timeout, and profile-management IPC commands.
 
-The tap-initialization path contains a race window that can spawn a second thread before the first thread's failure resets the flag. The frontend `accessibilityPending` state is never cleared by the 3-second polling loop when accessibility transitions from `null` (unknown) to `false` (denied), creating a stuck "Pending…" indicator when the OS denies the dialog immediately. Additional issues include the timeout not being cancelled on component unmount in one code path, and a `navigator.platform` API that is deprecated and unreliable.
+Three critical issues were found: a TOCTOU race in `initialize_tap()` can spawn a second CGEventTap thread between the time the CAS succeeds and the spawned thread reaches its failure-reset branch; the accessibility poll loop never clears `accessibilityPending` on a `false` response, locking users in "Pending…" after a denied dialog; and `save_profile` accepts an un-sanitized name from the IPC caller but passes it directly to `ProfileData.name`, letting the unsanitized name be stored in the JSON and used as a display string — while `profile_path()` does sanitize before building the path, a crafted name containing special characters can cause the stored `name` field to diverge from the filename stem, breaking subsequent `load_profile` lookups by name.
 
 ---
 
 ## Critical Issues
 
-### CR-01: Race between `initialize_tap()` CAS success and thread startup allows double-tap spawn
+### CR-01: TOCTOU race in `initialize_tap()` — second tap thread can spawn between CAS and failure-reset
 
-**File:** `src-tauri/src/platform/macos/observer.rs:219-460`  
-**Issue:** `initialize_tap()` uses `compare_exchange(false, true, …)` to set `TAP_INITIALIZED` to `true` before the spawned thread even calls `CGEventTap::new`. If `CGEventTap::new` fails (permissions not yet granted), the spawned thread resets `TAP_INITIALIZED` back to `false` — but this reset happens on the OS thread, asynchronously. If `check_accessibility` is called again (by the 3-second poll) while the first thread is still inside `CGEventTap::new` and has not yet reset the flag, the CAS will see `true` and return early (correct behavior). However, if the first thread fails and resets to `false` *just before* the second poll fires the CAS, the CAS succeeds again and a second thread is spawned. This is a TOCTOU window, not a theoretical one: the 3-second poll fires while `CGEventTap::new` runs, and the total time to create a tap when permissions are absent is non-deterministic.
+**File:** `src-tauri/src/platform/macos/observer.rs:217-463`
+**Issue:** `initialize_tap()` does a `compare_exchange(false, true)` to mark initialization, then unconditionally spawns a thread. Inside the spawned thread, if `CGEventTap::new` fails (permissions not granted), the thread resets `TAP_INITIALIZED` back to `false` (line 457). This reset is asynchronous — it runs on the spawned OS thread after the CAS has already returned `true` to the caller.
 
-The consequence is two concurrent `CFRunLoop::run_current()` invocations on two different OS threads, each with their own tap and `REGISTRY` event stream. This can silently double-count injected inputs and corrupt the `REGISTRY` set.
+The 3-second accessibility poll in `App.tsx` (line 164) calls `check_accessibility`, which calls `initialize_tap()` on every successful permission check. If the first spawned thread is inside `CGEventTap::new` and has not yet reset the flag (which can take dozens of milliseconds on a slow system or under permission-denied conditions), the next poll fires the CAS, sees `true` (already set), and returns early — this is the intended behavior. However, if the first thread has already reset `TAP_INITIALIZED` to `false` and then the poll fires, the CAS succeeds again and a second thread is spawned. Two threads then run `CFRunLoop::run_current()` concurrently, each with their own tap source, double-consuming events from `REGISTRY` and causing unpredictable double-injection or corrupted held-input tracking.
 
-**Fix:** Keep `TAP_INITIALIZED` true while any attempt is in-flight. Introduce a second `AtomicBool` (`TAP_STARTING`) as a "spin-lock" during thread startup, or move the reset to a Tokio channel acknowledgment from the spawned thread once the tap either succeeds or definitively fails:
+The comment at line 212-215 claims "Exactly ONE thread is ever spawned" but the guarantee breaks whenever the spawned thread resets the flag before the next poll cycle.
+
+**Impact:** Silent double-injection of inputs, corrupted `REGISTRY` state, undefined behavior in the held-input emergency-stop path.
+
+**Fix:** Introduce a `TAP_STARTING` `AtomicBool` that is set to `true` before spawning and cleared only by the spawned thread. `initialize_tap()` returns early if either `TAP_INITIALIZED` or `TAP_STARTING` is true:
 
 ```rust
-// In the spawned thread, only reset on definitive failure:
-match tap_result {
-    Ok(tap) => {
-        // ... run loop ...
-        // Only reset AFTER run loop exits (tap died at runtime):
-        TAP_INITIALIZED.store(false, Ordering::SeqCst);
-    }
-    Err(_) => {
-        eprintln!("Failed to create CGEventTap.");
-        TAP_INITIALIZED.store(false, Ordering::SeqCst);
-        // ↑ This is fine here, but the window is between CAS and this line.
-    }
-}
-// Fix: add a TAP_STARTING AtomicBool that is set true before spawn and
-// cleared by the thread itself; initialize_tap() returns early if TAP_STARTING is true.
 static TAP_STARTING: AtomicBool = AtomicBool::new(false);
 
 pub fn initialize_tap() -> bool {
     if TAP_INITIALIZED.load(Ordering::SeqCst) { return true; }
-    // Guard against concurrent startup attempts:
+    // Prevent concurrent spawn attempts from racing through the window
+    // between CAS and the spawned thread setting TAP_INITIALIZED to false.
     if TAP_STARTING.swap(true, Ordering::SeqCst) { return false; }
-    // CAS is now safe — only one caller passes the swap guard.
+
     TAP_INITIALIZED.store(true, Ordering::SeqCst);
     thread::spawn(|| {
-        // ... tap setup ...
-        TAP_STARTING.store(false, Ordering::SeqCst); // clear on exit
+        // ... existing tap code ...
+        // In ALL exit branches (Ok runloop exit, Err runloop source, Err tap):
+        TAP_INITIALIZED.store(false, Ordering::SeqCst);
+        TAP_STARTING.store(false, Ordering::SeqCst); // always last
     });
     true
 }
@@ -75,105 +68,128 @@ pub fn initialize_tap() -> bool {
 
 ---
 
-### CR-02: `accessibilityPending` not cleared when accessibility is definitively `false` after the dialog is dismissed
+### CR-02: Accessibility poll never clears `accessibilityPending` on `false` — UI stuck in "Pending…" after deny
 
-**File:** `src/App.tsx:163-174`  
-**Issue:** The 3-second polling loop calls `clearPending()` only when `ok === true`:
-
-```ts
-const ok = await invoke<boolean>("check_accessibility");
-setAccessibility(ok);
-if (ok) clearPending();
-```
-
-When the user clicks "Deny" in the macOS system dialog, `request_accessibility` returns `false`, and the next poll will set `accessibility` to `false`. However, `clearPending()` is never called for the `false` case. The UI will remain stuck in the "Pending…" branch indefinitely (or until the 30-second timeout fires). Users who deny the dialog and then look at the UI will see "Pending…" rather than "Denied", and the "Grant Access" button will not be shown. This masks the error state.
-
-The timeout at line 197-200 will eventually fire and call `setAccessibilityPending(false)`, but 30 seconds is far too long for a user who has already dismissed the dialog; the UI should reflect the deny immediately.
-
-**Fix:** Clear pending on any definitive non-null response:
+**File:** `src/App.tsx:163-174`
+**Issue:** The 3-second poll calls `clearPending()` only when `ok === true`:
 
 ```ts
 const ok = await invoke<boolean>("check_accessibility");
 setAccessibility(ok);
-clearPending(); // clear on any definitive response, not just granted
+if (ok) clearPending();          // ← false branch never clears
 ```
 
-Or more explicitly, only remain pending while `accessibility()` is still `null`:
+When the user dismisses the macOS dialog with "Don't Allow", `request_accessibility` returns `false` and the next poll sets `accessibility` to `false`. However, `accessibilityPending` remains `true`. The UI renders the "Pending…" branch (lines 484-491) instead of the "Denied" branch with the "Grant Access" button — hiding the recovery action from the user for up to 30 seconds. Since the 30-second timeout fires `setAccessibilityPending(false)` without calling `clearTimeout`, there is also a one-time callback fire even after the timeout has been superseded by the poll result.
+
+**Impact:** After the user denies accessibility, the "Grant Access" button is hidden for up to 30 seconds. Users who deny and want to retry cannot do so immediately.
+
+**Fix:**
 
 ```ts
+const ok = await invoke<boolean>("check_accessibility");
 setAccessibility(ok);
-if (ok !== null) clearPending();
+// Clear pending on any definitive response (granted or denied).
+// Only remain "pending" while the dialog is actually in-flight (null).
+clearPending();
 ```
 
 ---
 
-## Warnings
+### CR-03: `save_profile` stores unsanitized name in `ProfileData.name` — load-by-name will fail for names with special characters
 
-### WR-01: `_pendingTimeoutId` is a module-level mutable — not cleared on component re-mount, causing a stale timeout to fire `setAccessibilityPending` on the new instance
+**File:** `src-tauri/src/ipc/mod.rs:259-279`
+**Issue:** `save_profile` takes the raw `name: String` from the IPC caller, puts it verbatim into `ProfileData { name, .. }`, and passes it to `profile_mgr.save_profile()`. Inside `save_profile`, `profile_path()` sanitizes the name before building the filename (stripping anything that is not alphanumeric, `-`, `_`, or space). The JSON file therefore has a sanitized filename but a `name` field containing the raw, unsanitized string.
 
-**File:** `src/App.tsx:77`  
-**Issue:** `_pendingTimeoutId` is declared at module level (line 77), outside `App()`. If the `App` component is ever unmounted and remounted (e.g., during hot-module replacement in development or if Tauri reloads the page), the old timeout handle is lost. The `onCleanup` at line 177 calls `clearPending()` which does clear `_pendingTimeoutId`, but only if `clearPending()` is available on the closure captured at unmount time. More concretely: when the component is destroyed, `clearPending` captures the `setAccessibilityPending` setter from the first mount. If the module reloads and a new `App` instance is created, `_pendingTimeoutId` holds a handle from the previous instance's `setTimeout`. The module-level variable persists across component re-mounts — the first mount's `onCleanup` will run `clearTimeout(_pendingTimeoutId)` correctly, but in HMR scenarios the cleanup does not always fire before the new mount initializes.
+Example: caller sends `name = "My Profile!!!"`. The file is written to `My Profile.json` (characters stripped). The JSON contains `"name": "My Profile!!!"`. When `list_profiles()` reads this file back, it returns a `ProfileSummary` with `name = "My Profile!!!"`. When the user then calls `load_profile("My Profile!!!")`, `profile_path("My Profile!!!")` sanitizes to `My Profile.json` and finds the file — this lookup accidentally succeeds. However, if the user calls `delete_profile("My Profile!!!")`, `eq_ignore_ascii_case("default")` check passes, and `profile_path` sanitizes to `My Profile.json` and deletes the correct file. So in the current code the roundtrip works by coincidence because `profile_path()` re-sanitizes on every call.
 
-This is a lower-severity concern in production (Tauri webviews don't do HMR there), but it is an architectural smell that should be addressed: the timeout should be a `let` variable inside `App()`, managed entirely within the component scope.
+The real breakage occurs when the sanitized form of two different raw names collides: `"My Profile"` and `"My Profile!!!"` both map to `My Profile.json`. The second save overwrites the first silently. The frontend will display two distinct profile names from `list_profiles()`, but both load from and write to the same file, causing silent data loss.
 
-**Fix:** Move `_pendingTimeoutId` inside `App()` alongside `_keyCaptureListener`:
+**Impact:** Silent overwrite of one profile by another when their sanitized names collide. Data loss is reproducible with any two names that differ only in stripped characters.
+
+**Fix:** Sanitize the name before storing it in `ProfileData`, so the stored name always matches the filename stem:
+
+```rust
+pub async fn save_profile(
+    state: State<'_, StateManager>,
+    profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
+    name: String,
+) -> Result<(), String> {
+    // Sanitize early so stored name matches filename stem.
+    let safe_name = crate::persistence::ProfileManager::sanitize_name_pub(&name);
+    if safe_name.is_empty() {
+        return Err("Profile name must contain at least one alphanumeric character.".to_string());
+    }
+    // ... snapshot current state ...
+    let profile = crate::persistence::ProfileData {
+        name: safe_name,
+        macros: app_state.macros,
+        engine_active: app_state.engine_active,
+    };
+    profile_mgr.save_profile(&profile).await
+}
+```
+
+This also requires exposing `sanitize_name` as `pub fn sanitize_name_pub` (or making it `pub`). Additionally, add a maximum-length guard to prevent arbitrarily long filenames.
+
+---
+
+## Warning Findings
+
+### WR-01: `_pendingTimeoutId` at module level survives HMR remount — dangling setTimeout callback
+
+**File:** `src/App.tsx:77`
+**Issue:** `_pendingTimeoutId` is declared at module scope (line 77), outside `App()`. The `onCleanup` at line 177 calls `clearPending()` on unmount, which is correct for normal lifecycle. In development HMR or any scenario where the page is reloaded without a full process restart, the module-level variable persists. If the component is destroyed before the 30-second timeout fires and the timeout handle was lost (e.g., HMR replaced the module), `setAccessibilityPending` will be called on a stale signal setter from the previous `App` instance.
+
+`_keyCaptureListener` is correctly scoped at module level for single-listener enforcement (per the T-03-08 comment), but `_pendingTimeoutId` has no such architectural justification for module scope — it is purely local state.
+
+**Impact:** In development builds, stale `setAccessibilityPending(false)` calls against a dead component instance. In production this is benign but represents an architectural inconsistency.
+
+**Fix:** Move `_pendingTimeoutId` inside `App()`:
 
 ```ts
 function App() {
   let _pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  // ... rest of component
+  // ...
 }
 ```
 
 ---
 
-### WR-02: `navigator.platform` is deprecated and unreliable for platform detection
+### WR-02: `navigator.platform` is deprecated — `IS_MACOS` can be `false` on macOS, silently skipping hotkey bind
 
-**File:** `src/App.tsx:119`  
+**File:** `src/App.tsx:119`
 **Issue:**
+
 ```ts
 const IS_MACOS = navigator.platform.toLowerCase().includes("mac");
 ```
-`navigator.platform` is deprecated in all major browser engines (MDN: "deprecated since 2021"). In some Chromium versions embedded in Tauri, it returns an empty string or a generic value depending on the OS/WebView version. If this returns an empty string or `"Win32"` on a macOS build (possible in some Tauri 2 WebView configurations), `IS_MACOS` will be `false`, and the `bind_hotkey`/`unbind_hotkey` path in `handleCardSetTriggerKey` will be skipped on macOS, meaning hotkeys will not be registered after a trigger key is set on a card. This is a silent behavior gap — no error, no warning, wrong code path.
 
-The correct approach for a Tauri app is to use a Tauri API or a backend IPC command that returns the platform string, since the backend is compiled per-platform and is authoritative.
+`navigator.platform` is deprecated (MDN: deprecated since 2021, removed from some contexts). In Chromium-based WebViews used by Tauri, this property returns an empty string in some configurations. If `IS_MACOS` is incorrectly `false` on macOS, `handleCardSetTriggerKey` takes the `else` branch (line 307-308) and only calls `set_macro_trigger_key` — skipping `unbind_hotkey` and `bind_hotkey`. The CGEventTap will not register the new binding, so the hotkey never fires. This is a silent behavioral failure with no error or warning to the user.
 
-**Fix:**
+**Impact:** On macOS builds where `navigator.platform` returns an empty string or unexpected value, trigger key bindings set from the card UI are silently never registered in the CGEventTap.
+
+**Fix:** Use the Tauri platform API, which reads from the compiled Rust platform constant:
+
 ```ts
-// Option 1: use @tauri-apps/plugin-os (already available in Tauri 2 ecosystem)
 import { platform } from "@tauri-apps/plugin-os";
+// In App(), inside an async init or createEffect:
 const IS_MACOS = (await platform()) === "macos";
-
-// Option 2: add a minimal `get_platform` IPC command that returns
-// a compile-time constant from the Rust side.
-// cfg!(target_os = "macos") is authoritative.
-
-// Option 3 (minimal change, avoids the deprecated API):
-const IS_MACOS = navigator.userAgent.includes("Mac");
-// userAgent is not deprecated and is more consistently populated in WebView.
 ```
+
+Or expose a `get_platform` command on the Rust side using `cfg!(target_os = "macos")`, which is authoritative.
 
 ---
 
-### WR-03: `handleRequestAccess` leaves `accessibilityPending` as `true` if `invoke` hangs and the 30-second timeout fires concurrently with a successful `invoke` response
+### WR-03: `handleRequestAccess` does not guard against post-unmount state updates — stale setter risk
 
-**File:** `src/App.tsx:195-209`  
-**Issue:** There is a race between the 30-second `setTimeout` callback and the resolution of the `invoke<boolean>("request_accessibility")` promise:
+**File:** `src/App.tsx:195-209`
+**Issue:** `handleRequestAccess` is an `async` function that calls `invoke<boolean>("request_accessibility")` and then calls `setAccessibility(granted)` and `clearPending()` on the result. There is no `cancelled` guard. If the component is destroyed while the `invoke` is in-flight (e.g., the Tauri window is closed, or in tests), the promise resolves and fires the setters on a dead signal. The initial data fetch (lines 123-148) correctly uses a `cancelled` flag via `onCleanup`, but this pattern was not applied to `handleRequestAccess`.
 
-1. User clicks "Grant Access" — `setAccessibilityPending(true)` set, 30s timer started.
-2. User takes 29s to click "Allow" in System Settings.
-3. At t=30s, the timeout fires: `setAccessibilityPending(false)`, `_pendingTimeoutId = null`.
-4. At t=30.1s (or even t=29.9s if the invoke resolves just after timeout), `invoke` resolves with `granted = true`.
-5. `setAccessibility(true)` is called — correct.
-6. `clearPending()` is called — `_pendingTimeoutId` is already `null` so this is a no-op, but `setAccessibilityPending(false)` is called again redundantly.
+Additionally, the race between the 30-second timeout and a late `invoke` resolution is not handled: if the timeout fires and clears `_pendingTimeoutId = null`, then `invoke` resolves with `granted = false`, `clearPending()` is called — `setAccessibilityPending(false)` fires again redundantly (benign but imprecise).
 
-The race itself is benign in the `granted = true` path. However in the `granted = false` path (deny occurred after a long delay, then the timeout fires, then `invoke` resolves):
-- Timeout fires → `setAccessibilityPending(false)`.
-- `invoke` resolves with `false` → `clearPending()` → `setAccessibilityPending(false)` (redundant, benign).
+**Impact:** Potential state update on unmounted component. In SolidJS this does not crash but may produce unexpected reactive effects if the signal is tracked elsewhere.
 
-The more dangerous scenario: the user grants access after the timeout, but the component has already been destroyed (navigated away). The `invoke` promise still resolves and calls `setAccessibilityPending` and `setAccessibility` on a dead signal. The `cancelled` flag pattern from the initial fetch (line 122-148) is not applied here.
-
-**Fix:** Add a `cancelled` guard to `handleRequestAccess` using the same pattern as the initial fetch:
+**Fix:** Apply the same `cancelled` closure pattern used in the initial data fetch:
 
 ```ts
 async function handleRequestAccess() {
@@ -187,7 +203,7 @@ async function handleRequestAccess() {
     const granted = await invoke<boolean>("request_accessibility");
     if (!cancelled) {
       setAccessibility(granted);
-      if (granted) clearPending();
+      clearPending();
     }
   } catch (e) {
     if (!cancelled) {
@@ -195,43 +211,114 @@ async function handleRequestAccess() {
       clearPending();
     }
   }
-  onCleanup(() => { cancelled = true; clearPending(); });
+  // Register cleanup at call site in a createEffect if needed,
+  // or store cancelled setter in component scope ref.
 }
 ```
 
-Note: `onCleanup` inside a non-reactive function won't auto-register in SolidJS unless it is called from within a reactive tracking scope. A simpler approach is to check `cancelled` using a closure variable scoped to the `handleRequestAccess` call, as shown above, and store the cancel flag in a signal or ref readable by `onCleanup`.
+Note that `onCleanup` only works inside reactive tracking scopes (i.e., `createEffect`). The correct approach is to store `cancelled` as a `let` in component scope and set it to `true` inside the existing `onCleanup` at line 177.
+
+---
+
+### WR-04: `handleLoadProfile` discards the returned `ProfileData` — frontend state not updated from profile contents
+
+**File:** `src/App.tsx:376-387`
+**Issue:**
+
+```ts
+async function handleLoadProfile(name: string) {
+  setProfileLoading(true);
+  try {
+    await invoke<ProfileData>("load_profile", { name });  // return value discarded
+    setActiveProfile(name);
+    showProfileMsg(`Loaded "${name}"`, "success");
+  }
+  ...
+}
+```
+
+`load_profile` returns `ProfileData` (the full macro map and `engine_active` flag). The return value is explicitly typed as `invoke<ProfileData>` but is discarded. The frontend instead relies on the backend emitting a `state-changed` event after the profile is applied by the StateActor.
+
+If the `state-changed` event is lost (channel backpressure, event delivery failure, or timing) the UI will show "Loaded" but display stale macros. The frontend has no fallback to re-request state when the event is missed.
+
+**Impact:** If the backend `state-changed` event is dropped, the UI will show the wrong macro list after a profile load. The success toast is shown before the UI has confirmed the new state is reflected.
+
+**Fix:** Either use the returned `ProfileData` to update state directly (eliminating the event dependency for this path), or immediately call `get_state` after a successful load to confirm synchronization:
+
+```ts
+const profileData = await invoke<ProfileData>("load_profile", { name });
+// Option A: apply the returned data directly
+setState(prev => prev ? { ...prev, macros: profileData.macros, engine_active: profileData.engine_active } : prev);
+// Option B: explicit re-fetch as fallback
+const freshState = await invoke<AppState>("get_state");
+setState(freshState);
+```
 
 ---
 
 ## Info
 
-### IN-01: `cocoa` removal is correct, but `Cargo.lock` should be committed to verify no transitive pin breakage
+### IN-01: `tokio-util` declared as dependency but not used in any source file
 
-**File:** `src-tauri/Cargo.toml`  
-**Issue:** The `cocoa = "0.26.1"` removal is the right call (it pulls in deprecated `block 0.1.6` alongside `block2 0.6.2`). However, `Cargo.lock` shows as modified in the git status but was not submitted for review. Removing `cocoa` may change the resolved version of shared transitive dependencies (e.g., `core-foundation`, `objc`, `objc2`). The compiled output should be verified to confirm no version regressions were introduced by the dependency graph change.
+**File:** `src-tauri/Cargo.toml:24`
+**Issue:**
 
-**Fix:** Run `cargo tree --duplicates` after the removal and confirm no unexpected duplicate versions of `objc`, `core-foundation`, or `core-graphics` appear. Commit the updated `Cargo.lock`.
+```toml
+tokio-util = "0.7"
+```
+
+No `use tokio_util` or `tokio_util::` references appear anywhere in `src-tauri/src/`. This is an unused dependency that increases compile time and binary size.
+
+**Fix:** Remove the `tokio-util` line from `[dependencies]`.
 
 ---
 
-### IN-02: `println!` left in hot CGEventTap callback path (emergency stop trigger)
+### IN-02: `println!` in CGEventTap callback on the hot path — blocks on stdout lock
 
-**File:** `src-tauri/src/platform/macos/observer.rs:318`  
+**File:** `src-tauri/src/platform/macos/observer.rs:318`
 **Issue:**
+
 ```rust
 println!("EMERGENCY STOP TRIGGERED");
 ```
-This `println!` executes in the CGEventTap callback, which runs on the CFRunLoop OS thread. `println!` acquires a stdout lock and can block the callback. While this is in the emergency-stop branch (which then calls `process::exit(1)`), any lock contention delays the exit and delays the release of held inputs. This is pre-existing code, not introduced in phase 05, but it sits in a file that was read as part of cross-file analysis.
 
-**Fix:** Replace with `eprintln!` wrapped in `#[cfg(debug_assertions)]` to be consistent with the pattern already used in the tap-disabled branch (line 260), or remove it entirely since `process::exit(1)` follows immediately:
+This executes in the CGEventTap callback on the CFRunLoop OS thread. `println!` acquires the global stdout lock, which can block if another thread is writing to stdout. This delays the emergency-stop path — specifically, it delays `flush_held_inputs()` and `process::exit(1)`. While emergency stop calls `exit(1)` shortly after, any delay to input release can cause inputs to remain held for an additional scheduler tick, injecting spurious events.
+
+The rest of the observer uses `#[cfg(debug_assertions)]` `eprintln!` for diagnostic output. This `println!` is unconditional and inconsistent with that pattern.
+
+**Fix:**
 
 ```rust
 #[cfg(debug_assertions)]
 eprintln!("[Observer] Emergency stop triggered");
 ```
 
+Or remove it entirely — `process::exit(1)` follows immediately and is unambiguous in any crash dump.
+
 ---
 
-_Reviewed: 2026-06-02_  
-_Reviewer: Claude (gsd-code-reviewer)_  
+### IN-03: `[, setLoading]` signal — getter is discarded, `loading` state never used in render
+
+**File:** `src/App.tsx:84`
+**Issue:**
+
+```ts
+const [, setLoading] = createSignal(true);
+```
+
+The `loading` getter is discarded with `,`. `setLoading(false)` is called once in the initial fetch `finally` block (line 146), but the value is never read in the render tree. There is no loading spinner, skeleton, or disabled state gated on this signal. The signal therefore has no observable effect on the UI and exists as dead state.
+
+**Impact:** Dead code. With `noUnusedLocals: true` in `tsconfig.json`, the discarded getter pattern avoids the TypeScript lint error, masking the dead code from the compiler.
+
+**Fix:** If a loading state is desired, implement it in the UI. If not, remove both the signal and the `setLoading(false)` call:
+
+```ts
+// Remove line 84 entirely and remove:
+// if (!cancelled) setLoading(false);  (line 146)
+```
+
+---
+
+_Reviewed: 2026-06-02_
+_Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
