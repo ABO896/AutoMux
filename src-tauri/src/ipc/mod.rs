@@ -255,12 +255,26 @@ pub async fn update_step_interval(
 
 /// Save the current macro state as a named profile.
 /// If a profile with this name already exists, it is overwritten.
+///
+/// CR-03: the name is sanitized early so the stored `ProfileData.name` always
+/// matches the filename stem.  Two raw names that map to the same sanitized form
+/// (e.g. "My Profile" and "My Profile!!!") would silently overwrite each other
+/// without this guard; after sanitization they produce the same `safe_name` and
+/// the caller gets an accurate on-disk name back.
 #[command]
 pub async fn save_profile(
     state: State<'_, StateManager>,
     profile_mgr: State<'_, Arc<crate::persistence::ProfileManager>>,
     name: String,
 ) -> Result<(), String> {
+    // Sanitize early so the stored name always matches the filename stem.
+    let safe_name = crate::persistence::ProfileManager::sanitize_name(&name);
+    if safe_name.is_empty() {
+        return Err(
+            "Profile name must contain at least one alphanumeric character.".to_string(),
+        );
+    }
+
     // Snapshot the current state.
     let (tx, rx) = tokio::sync::oneshot::channel();
     state
@@ -270,7 +284,7 @@ pub async fn save_profile(
     let app_state = rx.await.map_err(|e| e.to_string())?;
 
     let profile = crate::persistence::ProfileData {
-        name,
+        name: safe_name,
         macros: app_state.macros,
         engine_active: app_state.engine_active,
     };

@@ -81,7 +81,8 @@ impl ProfileManager {
 
     /// Sanitize a profile name to a safe filename.
     /// Strips path separators and special characters.
-    fn sanitize_name(name: &str) -> String {
+    /// `pub` so IPC callers can sanitize before constructing `ProfileData`.
+    pub fn sanitize_name(name: &str) -> String {
         name.chars()
             .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_' || *c == ' ')
             .collect::<String>()
