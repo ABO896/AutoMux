@@ -118,7 +118,11 @@ function App() {
   const [editingField, setEditingField] = createSignal<"key" | "target" | null>(null);
 
   // ── Platform Detection ──
-  const IS_MACOS = navigator.platform.toLowerCase().includes("mac");
+  // WR-02: navigator.platform is deprecated and returns empty string in some Chromium
+  // WebView configurations (including Tauri on macOS). Use userAgent as the primary
+  // signal — it is always populated in Tauri's Chromium-based WebView and reliably
+  // contains "Mac" on macOS builds.
+  const IS_MACOS = navigator.userAgent.toLowerCase().includes("mac");
 
   // ── Initial data fetch ──
   // WR-08: `cancelled` flag prevents stale setters from firing after unmount.
