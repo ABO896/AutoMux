@@ -22,7 +22,7 @@ Full phase details: `.planning/milestones/v1.0-ROADMAP.md`
 
 ### 📋 v1.2.0 Reliability & Polish
 
-- [ ] **Phase 5: macOS Permissions & Reliability** — Fix false "not granted" detection after Request Access approval, arm CGEventTap on direct System Settings grant, and remove the deprecated block crate dependency
+- [x] **Phase 5: macOS Permissions & Reliability** — Fix false "not granted" detection after Request Access approval, arm CGEventTap on direct System Settings grant, and remove the deprecated block crate dependency (completed 2026-06-02)
 - [ ] **Phase 6: Windows Platform Cleanup** — Eliminate all Rust compiler warnings in platform/windows/mod.rs and close the OpenProcess handle leak in the process-list path
 - [ ] **Phase 7: CI Pipeline Hardening** — Fix updater JSON signature upload, replace npm install with npm ci, and harden binary artifact discovery against tauri-action renames
 - [ ] **Phase 8: Safety & Error Surface** — Eliminate the REGISTRY deadlock risk in flush_held_inputs and surface auto-save failures to the user in the UI
@@ -43,8 +43,8 @@ Full phase details: `.planning/milestones/v1.0-ROADMAP.md`
   3. The Rust build produces no deprecation warnings related to block v0.1.6 on macOS — build output is clean
 **Plans**: 2 plans
 Plans:
-- [ ] 05-01-PLAN.md — Arm CGEventTap in check_accessibility + remove cocoa dep (RELY-06, BUILD-02)
-- [ ] 05-02-PLAN.md — Add accessibilityPending state machine and 3-branch permission UI (PERM-01)
+- [x] 05-01-PLAN.md — Arm CGEventTap in check_accessibility + remove cocoa dep (RELY-06, BUILD-02)
+- [x] 05-02-PLAN.md — Add accessibilityPending state machine and 3-branch permission UI (PERM-01)
 
 ### Phase 6: Windows Platform Cleanup
 **Goal**: The Windows build is warning-free and the process-list path has no handle leak
@@ -82,7 +82,7 @@ Plans:
 | 2. Cleanup & Credibility | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
-| 5. macOS Permissions & Reliability | v1.2.0 | 0/2 | Ready to execute | — |
+| 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete   | 2026-06-02 |
 | 6. Windows Platform Cleanup | v1.2.0 | 0/TBD | Not started | — |
 | 7. CI Pipeline Hardening | v1.2.0 | 0/TBD | Not started | — |
 | 8. Safety & Error Surface | v1.2.0 | 0/TBD | Not started | — |

@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2.0
 milestone_name: Reliability & Polish
-status: ready_to_execute
-stopped_at: Phase 5 planned — 2 plans ready
-last_updated: "2026-06-01T00:00:00.000Z"
-last_activity: 2026-06-01 — Phase 5 planned (2 plans, Wave 1)
+status: executing
+stopped_at: Phase 5 planned — 2 plans verified and ready
+last_updated: "2026-06-02T04:31:11.833Z"
+last_activity: 2026-06-02 -- Phase 05 execution started
 progress:
-  total_phases: 4
+  total_phases: 1
   completed_phases: 0
   total_plans: 2
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31 — milestone v1.2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** v1.2.0 — Reliability & Polish (Phase 5 — ready to execute)
+**Current focus:** Phase 05 — macos-permissions-reliability
 
 ## Current Position
 
-Phase: Phase 5 — macOS Permissions & Reliability (ready to execute)
-Plan: 2 plans (05-01, 05-02) — Wave 1, parallel
-Status: Planned — ready to execute
-Last activity: 2026-06-01 — Phase 5 planned (2 plans, Wave 1)
+Phase: 05 (macos-permissions-reliability) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 05
+Last activity: 2026-06-02 -- Phase 05 execution started
 
 ```
 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
