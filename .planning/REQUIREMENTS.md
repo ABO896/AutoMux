@@ -72,31 +72,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMPAT-01 | TBD | Pending |
-| COMPAT-02 | TBD | Pending |
-| COMPAT-03 | TBD | Pending |
-| EXEC-01 | TBD | Pending |
-| EXEC-02 | TBD | Pending |
-| UX-08 | TBD | Pending |
-| UX-09 | TBD | Pending |
-| UX-10 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| BUILD-01 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| CI-03 | TBD | Pending |
-| CI-04 | TBD | Pending |
-| CI-05 | TBD | Pending |
-| SAFE-04 | TBD | Pending |
-| ERR-01 | TBD | Pending |
+| COMPAT-01 | Phase 6 | Pending |
+| COMPAT-02 | Phase 6 | Pending |
+| COMPAT-03 | Phase 6 | Pending |
+| EXEC-01 | Phase 8 | Pending |
+| EXEC-02 | Phase 8 | Pending |
+| UX-08 | Phase 9 | Pending |
+| UX-09 | Phase 9 | Pending |
+| UX-10 | Phase 9 | Pending |
+| UI-01 | Phase 9 | Pending |
+| UI-02 | Phase 9 | Pending |
+| UI-03 | Phase 9 | Pending |
+| UI-04 | Phase 9 | Pending |
+| BUILD-01 | Phase 7 | Pending |
+| MEM-01 | Phase 7 | Pending |
+| CI-03 | Phase 7 | Pending |
+| CI-04 | Phase 7 | Pending |
+| CI-05 | Phase 7 | Pending |
+| SAFE-04 | Phase 7 | Pending |
+| ERR-01 | Phase 7 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 19 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 — milestone v2.0 started*
+*Last updated: 2026-06-02 — roadmap created, all 19 requirements mapped*

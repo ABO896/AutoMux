@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
 status: planning
-stopped_at: Milestone v2.0 started — roadmap pending
+stopped_at: Roadmap created — Phase 6 ready to plan
 last_updated: "2026-06-02T00:00:00.000Z"
-last_activity: 2026-06-02 -- Milestone v2.0 started
+last_activity: 2026-06-02 -- Milestone v2.0 roadmap created (4 phases, 19 requirements)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,22 +21,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Defining requirements and roadmap for v2.0
+**Current focus:** Phase 6 — macOS Tahoe 26 Compatibility
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 6 — macOS Tahoe 26 Compatibility (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-02 — Milestone v2.0 started
+Status: Roadmap approved, ready for `/gsd:plan-phase 6`
+Last activity: 2026-06-02 — v2.0 roadmap created
 
 ```
-Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/? phases)
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
 ```
 
 ## Phase Summary
 
-*(Roadmap not yet created — phases defined after roadmap is approved)*
+| Phase | Name | Requirements | Status |
+|-------|------|--------------|--------|
+| 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Not started |
+| 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01 | Not started |
+| 8 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
+| 9 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
 ## Accumulated Context
 
@@ -46,9 +51,11 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/?
 - All features must ship on both macOS and Windows — no platform-exclusive fixes
 - UI redesign: Apple design language + liquid glass (macOS 26), modern equivalent on Windows, Raycast-inspired layout
 - Parallel execution: triggering macro B while macro A runs must not block or cancel macro A — architectural change required
-- macOS Tahoe 26 compatibility is the critical path: macros are fully broken on the new OS (CGEventTap regression suspected)
-- COMPAT investigation should happen first before assuming the architecture for EXEC-01/02 — the Tahoe 26 fix may require platform changes that affect parallel execution design
-- v1.2.0 Phase 5 completed: PERM-01, RELY-06, BUILD-02 — phases 6–8 not executed, carried to v2.0
+- macOS Tahoe 26 compatibility is the critical path: macros may be broken on the new OS (CGEventTap regression suspected)
+- COMPAT investigation happens first (Phase 6) before assuming the architecture for EXEC-01/02 — Tahoe 26 fix may require platform changes affecting parallel execution design
+- Phase 7 folds all v1.2.0 carry work (Phases 6–8 unexecuted) — Windows cleanup, CI hardening, safety & error surface
+- Phase 9 (UI redesign) depends on Phase 6 because liquid glass APIs must be understood before implementation
+- Phase 7 is independent and can proceed in parallel with Phase 6
 
 ### Known Constraints
 
@@ -69,5 +76,5 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/?
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: Milestone v2.0 requirements defined — roadmap pending
-Next: Spawn roadmapper to create ROADMAP.md
+Stopped at: v2.0 roadmap created — 4 phases, 19/19 requirements mapped
+Next: `/gsd:plan-phase 6` — macOS Tahoe 26 Compatibility
