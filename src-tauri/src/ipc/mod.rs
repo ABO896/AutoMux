@@ -185,13 +185,19 @@ pub async fn request_accessibility() -> Result<bool, String> {
 }
 
 /// Silent check: returns current accessibility status without prompting.
+///
+/// D-03: arms CGEventTap on post-launch grant (idempotent via TAP_INITIALIZED AtomicBool guard).
+/// Called by the frontend 3s poll loop — if the user granted access directly in System Settings
+/// (without clicking Request Access), the next poll will arm the tap without requiring a restart.
 #[command]
 pub async fn check_accessibility() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        Ok(crate::platform::macos::check_accessibility_permissions(
-            false,
-        ))
+        let granted = crate::platform::macos::check_accessibility_permissions(false);
+        if granted {
+            crate::platform::macos::observer::initialize_tap();
+        }
+        Ok(granted)
     }
     #[cfg(not(target_os = "macos"))]
     {
