@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2.0
 milestone_name: Reliability & Polish
-status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-05-31T21:57:22.648Z"
-last_activity: 2026-05-31 — Roadmap created for v1.2.0 (Phases 5–8)
+status: ready_to_execute
+stopped_at: Phase 5 planned — 2 plans ready
+last_updated: "2026-06-01T00:00:00.000Z"
+last_activity: 2026-06-01 — Phase 5 planned (2 plans, Wave 1)
 progress:
-  total_phases: 1
+  total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31 — milestone v1.2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** v1.2.0 — Reliability & Polish (Phase 5 next)
+**Current focus:** v1.2.0 — Reliability & Polish (Phase 5 — ready to execute)
 
 ## Current Position
 
-Phase: Phase 5 — macOS Permissions & Reliability (not started)
-Plan: —
-Status: Roadmap created — ready to plan Phase 5
-Last activity: 2026-05-31 — Roadmap created for v1.2.0 (Phases 5–8)
+Phase: Phase 5 — macOS Permissions & Reliability (ready to execute)
+Plan: 2 plans (05-01, 05-02) — Wave 1, parallel
+Status: Planned — ready to execute
+Last activity: 2026-06-01 — Phase 5 planned (2 plans, Wave 1)
 
 ```
 Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
@@ -38,7 +38,7 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 5 | macOS Permissions & Reliability | PERM-01, RELY-06, BUILD-02 | Not started |
+| 5 | macOS Permissions & Reliability | PERM-01, RELY-06, BUILD-02 | Ready to execute (2 plans) |
 | 6 | Windows Platform Cleanup | BUILD-01, MEM-01 | Not started |
 | 7 | CI Pipeline Hardening | CI-03, CI-04, CI-05 | Not started |
 | 8 | Safety & Error Surface | SAFE-04, ERR-01 | Not started |
@@ -70,6 +70,6 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 
 ## Session Continuity
 
-Last session: 2026-05-31T21:57:22.644Z
-Stopped at: Phase 5 context gathered
-Next: /gsd-plan-phase 5
+Last session: 2026-06-01
+Stopped at: Phase 5 planned — 2 plans verified and ready
+Next: /gsd-execute-phase 5

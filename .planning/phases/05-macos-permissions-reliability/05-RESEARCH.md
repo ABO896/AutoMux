@@ -434,7 +434,7 @@ The `block v0.1.6` deprecation warning is a build warning, not a compilation fai
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `request_accessibility` also clear pending on the backend side?**
    - What we know: `request_accessibility` returns `false` before the user acts on the dialog. The frontend sets pending immediately on click, before the `await` resolves.
