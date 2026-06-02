@@ -395,6 +395,11 @@ function App() {
     try {
       await invoke<ProfileData>("load_profile", { name });
       setActiveProfile(name);
+      // WR-04: Explicitly re-fetch state as a fallback in case the backend
+      // `state-changed` event is dropped (channel backpressure or delivery failure).
+      // This guarantees the UI reflects the loaded profile even without the event.
+      const freshState = await invoke<AppState>("get_state");
+      setState(freshState);
       showProfileMsg(`Loaded "${name}"`, "success");
     } catch (e) {
       showProfileMsg(`Load failed: ${e}`, "error");
