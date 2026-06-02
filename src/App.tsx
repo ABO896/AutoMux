@@ -165,7 +165,9 @@ function App() {
       try {
         const ok = await invoke<boolean>("check_accessibility");
         setAccessibility(ok);
-        if (ok) clearPending();
+        // Clear pending on any definitive response (granted or denied).
+        // Only remain "pending" while the dialog is actually in-flight (null).
+        clearPending();
       } catch (_) {
         /* ignore */
       }
