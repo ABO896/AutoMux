@@ -417,22 +417,22 @@ This file is placed in `src-tauri/` and is auto-merged by the Tauri CLI into the
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `NSAccessibilityUsageDescription` absence cause app to vanish from Accessibility Settings list on Tahoe 26?**
    - What we know: The key is documented as recommended for apps using Accessibility APIs.
    - What's unclear: Whether its absence on Tahoe 26 specifically prevents the app from appearing in the Accessibility pane, making grant impossible.
-   - Recommendation: Add the key regardless (zero-risk change); validate in manual test that app appears in list.
+   - **RESOLVED:** NSAccessibilityUsageDescription is added in Plan 06-01 (src-tauri/Info.plist). Whether its absence was the blocker is validated in 06-02 Scenario D — app appearing in the Accessibility Settings list confirms the key is sufficient.
 
 2. **Is the live probe approach sufficient on its own, or does Tahoe 26 require an additional entitlement for the app to even appear in the Accessibility grant list?**
    - What we know: Entitlements are ignored by TCC for unsigned apps. Info.plist NSAccessibilityUsageDescription works without signing.
    - What's unclear: Whether Tahoe 26 added a new requirement that unsigned apps must have a specific Info.plist key to be grantable.
-   - Recommendation: Test after implementing the live probe fix. If the app doesn't appear in Accessibility Settings, investigate Info.plist keys further.
+   - **RESOLVED:** Plan is: live CGEventTap probe + NSAccessibilityUsageDescription in Info.plist. If the app doesn't appear in Accessibility Settings on Tahoe 26 (06-02 Scenario D fails), it signals a deeper Info.plist requirement — escalate as v3 blocker investigation.
 
 3. **Does D-09 (Apple hard-blocking unsigned CGEventTap) apply on current Tahoe 26 release?**
    - What we know: No developer reports of this; Karabiner-Elements and other unsigned tools report permission-related issues but not hard-blocking.
    - What's unclear: Whether Apple tightened this specifically in any Tahoe 26.x release.
-   - Recommendation: Tester verifies on Tahoe 26 device. If `CGEventTap::new()` returns `Err` even after confirmed Accessibility grant, D-09 is triggered → v3 blocker flag.
+   - **RESOLVED:** Validated in 06-02 Scenario B on the Tahoe 26 device. If `CGEventTap::new()` probe returns true but macros still don't fire, D-09 is triggered → v3 blocker flag. No plan-time resolution possible without a real Tahoe 26 device test.
 
 ---
 

@@ -22,7 +22,7 @@ Diagnose and fix what is broken on macOS 26 Tahoe so that AutoMux is fully funct
 
 ### Entitlements
 
-- **D-05:** Add an `entitlements.plist` as part of this phase. An entitlements file can be added to the `.app` bundle without code signing. The hypothesis is that Tahoe 26 requires specific Accessibility-related entitlements for `AXIsProcessTrusted()` to return true and for CGEventTap to be permitted.
+- **D-05:** ~~Add an `entitlements.plist` as part of this phase.~~ **REVISED BY RESEARCH (2026-06-04):** Entitlements in an unsigned `.app` bundle are ignored by TCC at runtime — confirmed by Tauri 2 official docs and Apple's code signing model. The entitlements.plist approach cannot fix COMPAT-01/02 for an unsigned build. The plan substitutes `src-tauri/Info.plist` with `NSAccessibilityUsageDescription` (which works without signing) plus a live CGEventTap probe replacing the stale `AXIsProcessTrusted()` call. No entitlements.plist will be created in this phase.
 - **D-06:** Scope of entitlements file: **minimal only** — include only the entitlements confirmed as required for Accessibility permission detection and CGEventTap input injection on Tahoe 26. Do not add a full Tauri template or anticipate future needs. Let researcher determine the exact entitlements needed.
 - **D-07:** Code signing itself stays deferred to v3. The entitlements file is separate from signing.
 
