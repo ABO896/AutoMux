@@ -61,7 +61,7 @@ Plans:
   3. The app launches on macOS 26 Tahoe to a working UI with no crash, missing entitlement error, or framework exception in the console
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Live CGEventTap probe fix in check_accessibility_permissions() + Info.plist NSAccessibilityUsageDescription (COMPAT-01, COMPAT-02, COMPAT-03)
+- [x] 06-01-PLAN.md — Live CGEventTap probe fix in check_accessibility_permissions() + Info.plist NSAccessibilityUsageDescription (COMPAT-01, COMPAT-02, COMPAT-03)
 - [ ] 06-02-PLAN.md — Build release DMG + manual Tahoe 26 device verification checkpoint (COMPAT-01, COMPAT-02, COMPAT-03)
 
 ### Phase 7: Carry Work — Platform, CI & Safety
@@ -107,7 +107,7 @@ Plans:
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
-| 6. macOS Tahoe 26 Compatibility | v2.0 | 0/2 | Not started | — |
+| 6. macOS Tahoe 26 Compatibility | v2.0 | 1/2 | In Progress|  |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 0/TBD | Not started | — |
 | 8. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 9. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
