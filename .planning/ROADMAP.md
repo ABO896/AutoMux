@@ -59,8 +59,10 @@ Plans:
   1. A macro configured to click or press a key fires correctly on macOS 26 Tahoe — CGEventTap input injection is not blocked or silently dropped by the OS
   2. After approving Accessibility in System Settings on macOS 26 Tahoe, the app shows "granted" — no false "not granted" state or API regression
   3. The app launches on macOS 26 Tahoe to a working UI with no crash, missing entitlement error, or framework exception in the console
-**Plans**: TBD
-**UI hint**: no
+**Plans**: 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Live CGEventTap probe fix in check_accessibility_permissions() + Info.plist NSAccessibilityUsageDescription (COMPAT-01, COMPAT-02, COMPAT-03)
+- [ ] 06-02-PLAN.md — Build release DMG + manual Tahoe 26 device verification checkpoint (COMPAT-01, COMPAT-02, COMPAT-03)
 
 ### Phase 7: Carry Work — Platform, CI & Safety
 **Goal**: All v1.2.0 outstanding reliability work is complete — the Windows build is clean, CI is reproducible and complete, and the macOS emergency-stop path cannot deadlock or silently lose errors
@@ -105,7 +107,7 @@ Plans:
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
-| 6. macOS Tahoe 26 Compatibility | v2.0 | 0/TBD | Not started | — |
+| 6. macOS Tahoe 26 Compatibility | v2.0 | 0/2 | Not started | — |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 0/TBD | Not started | — |
 | 8. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 9. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
