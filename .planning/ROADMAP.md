@@ -31,7 +31,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 
 ### 📋 v2.0 Redesign & Platform Excellence
 
-- [ ] **Phase 6: macOS Tahoe 26 Compatibility** — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors
+- [ ] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 2 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors
 - [ ] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI
 - [ ] **Phase 8: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
 - [ ] **Phase 9: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
