@@ -27,10 +27,10 @@ pub fn check_accessibility_permissions(prompt: bool) -> bool {
         // and returns stale false on macOS 15 Sequoia / 26 Tahoe after a grant.
         let probe = CGEventTap::new(
             CGEventTapLocation::HID,
-            CGEventTapPlacement::HeadInsertEventTap,
+            CGEventTapPlacement::TailAppendEventTap, // passive observer — avoids false negatives on macOS 15+
             CGEventTapOptions::ListenOnly,
             vec![CGEventType::MouseMoved],
-            |_, _, event| Some(event.clone()),
+            |_, _, _| None, // listen-only: return value is ignored; avoid unnecessary clone
         );
         return probe.is_ok();
     }
