@@ -31,7 +31,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 
 ### 📋 v2.0 Redesign & Platform Excellence
 
-- [ ] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 2 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors
+- [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 2 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (completed 2026-06-04)
 - [ ] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI
 - [ ] **Phase 8: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
 - [ ] **Phase 9: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
@@ -62,7 +62,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 06-01-PLAN.md — Live CGEventTap probe fix in check_accessibility_permissions() + Info.plist NSAccessibilityUsageDescription (COMPAT-01, COMPAT-02, COMPAT-03)
-- [ ] 06-02-PLAN.md — Build release DMG + manual Tahoe 26 device verification checkpoint (COMPAT-01, COMPAT-02, COMPAT-03)
+- [x] 06-02-PLAN.md — Build release DMG + manual Tahoe 26 device verification checkpoint (COMPAT-01, COMPAT-02, COMPAT-03)
 
 ### Phase 7: Carry Work — Platform, CI & Safety
 **Goal**: All v1.2.0 outstanding reliability work is complete — the Windows build is clean, CI is reproducible and complete, and the macOS emergency-stop path cannot deadlock or silently lose errors
@@ -107,7 +107,7 @@ Plans:
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
-| 6. macOS Tahoe 26 Compatibility | v2.0 | 1/2 | In Progress|  |
+| 6. macOS Tahoe 26 Compatibility | v2.0 | 2/2 | Complete   | 2026-06-04 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 0/TBD | Not started | — |
 | 8. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 9. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
