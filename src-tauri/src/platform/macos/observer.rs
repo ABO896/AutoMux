@@ -12,6 +12,8 @@ use core_graphics::event::{
 // created with, per Apple's CGEventTapCreate documentation.
 extern "C" {
     fn CGEventTapEnable(tap: CFMachPortRef, enable: bool);
+    fn CFRetain(cf: CFMachPortRef) -> CFMachPortRef;
+    fn CFRelease(cf: CFMachPortRef);
 }
 use std::collections::HashSet;
 use std::process;
@@ -279,10 +281,23 @@ pub fn initialize_tap() -> bool {
                     CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput
                 ) {
                     #[cfg(debug_assertions)]
-                    eprintln!("[Observer] CGEventTap re-enabled after timeout");
-                    // SAFETY: CGEventTapProxy == CFMachPortRef in Apple's API — the proxy IS
-                    // the mach port reference, as documented by CGEventTapCreate.
-                    unsafe { CGEventTapEnable(tap_proxy as CFMachPortRef, true) };
+                    eprintln!("[Observer] CGEventTap re-enabling (deferred — macOS 26 PAC-safe)");
+                    // On macOS 26 ARM64e, calling CGEventTapEnable from within the tap's own
+                    // callback triggers a PAC authentication trap in CFMachPortGetContext
+                    // (__CFCheckCFInfoPACSignature). Defer to a spawned thread to call it
+                    // outside the callback's PAC-protected execution context.
+                    //
+                    // CFRetain keeps the port alive across the thread boundary; CFRelease
+                    // balances the retain after CGEventTapEnable returns.
+                    //
+                    // SAFETY: CGEventTapProxy == CFMachPortRef per Apple's CGEventTapCreate docs.
+                    let port: usize = tap_proxy as usize;
+                    std::thread::spawn(move || unsafe {
+                        let p = port as CFMachPortRef;
+                        let retained = CFRetain(p);
+                        CGEventTapEnable(retained, true);
+                        CFRelease(retained);
+                    });
                     return None;
                 }
 
