@@ -1,4 +1,5 @@
 use crate::platform::PlatformObserver;
+use core_foundation::base::TCFType;
 use core_foundation::runloop::CFRunLoop;
 use core_foundation_sys::mach_port::CFMachPortRef;
 use core_foundation_sys::runloop::kCFRunLoopCommonModes;
@@ -8,8 +9,8 @@ use core_graphics::event::{
 };
 
 // RELY-02: CGEventTapEnable is not re-exported by the core-graphics crate; declare directly.
-// The CGEventTapProxy passed to the callback IS the same CFMachPortRef that the tap was
-// created with, per Apple's CGEventTapCreate documentation.
+// NOTE: CGEventTapProxy is NOT the same as CFMachPortRef on macOS 26 — do not cast it.
+// Use tap.mach_port.as_concrete_TypeRef() (the actual port from CGEventTap::new) instead.
 extern "C" {
     fn CGEventTapEnable(tap: CFMachPortRef, enable: bool);
     fn CFRetain(cf: CFMachPortRef) -> CFMachPortRef;
@@ -18,8 +19,8 @@ extern "C" {
 use std::collections::HashSet;
 use std::process;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use block2::RcBlock;
@@ -249,6 +250,12 @@ pub fn initialize_tap() -> bool {
     TAP_INITIALIZED.store(true, Ordering::SeqCst);
 
     thread::spawn(|| {
+        // Share the real CFMachPortRef with the TapDisabledByTimeout callback.
+        // CGEventTapProxy is NOT a valid CFMachPortRef on macOS 26 — the RELY-02
+        // assumption broke. We resolve the port after tap creation and store it here.
+        let tap_port_shared: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        let tap_port_cb = Arc::clone(&tap_port_shared);
+
         let tap_result = CGEventTap::new(
             CGEventTapLocation::HID,
             CGEventTapPlacement::HeadInsertEventTap,
@@ -268,36 +275,35 @@ pub fn initialize_tap() -> bool {
                 CGEventType::OtherMouseDragged,
                 CGEventType::ScrollWheel,
             ],
-            |tap_proxy, event_type, event| {
-                // RELY-02: Re-enable tap inline if OS disabled it due to callback timeout.
+            move |_tap_proxy, event_type, event| {
+                // Re-enable tap if OS disabled it due to callback timeout or user input.
                 // VERIFIED: core-graphics 0.24.0/src/event.rs:140-142 defines TapDisabledByTimeout
                 // (0xFFFFFFFE) and TapDisabledByUserInput (0xFFFFFFFF). CGEventType::Null (value 0)
                 // is NOT the timeout signal — match the named variants only.
                 //
-                // The CGEventTapProxy is the same CFMachPortRef the tap was created with
-                // (per Apple's CGEventTapCreate docs). Cast and re-enable via CGEventTapEnable.
+                // On macOS 26 ARM64e, calling CGEventTapEnable directly from within the callback
+                // triggers a PAC authentication trap (SLEventTapEnable → CFMachPortGetContext →
+                // __CFCheckCFInfoPACSignature). We defer the call to a spawned thread.
+                //
+                // CGEventTapProxy is NOT a valid CFMachPortRef on macOS 26, so we use the real
+                // port stored in tap_port_cb (populated from tap.mach_port after creation).
+                // CFRetain is called here (callback thread) — it only bumps a refcount and does
+                // not access PAC-protected mach port context, so it is safe in this position.
                 if matches!(
                     event_type,
                     CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput
                 ) {
                     #[cfg(debug_assertions)]
                     eprintln!("[Observer] CGEventTap re-enabling (deferred — macOS 26 PAC-safe)");
-                    // On macOS 26 ARM64e, calling CGEventTapEnable from within the tap's own
-                    // callback triggers a PAC authentication trap in CFMachPortGetContext
-                    // (__CFCheckCFInfoPACSignature). Defer to a spawned thread to call it
-                    // outside the callback's PAC-protected execution context.
-                    //
-                    // CFRetain keeps the port alive across the thread boundary; CFRelease
-                    // balances the retain after CGEventTapEnable returns.
-                    //
-                    // SAFETY: CGEventTapProxy == CFMachPortRef per Apple's CGEventTapCreate docs.
-                    let port: usize = tap_proxy as usize;
-                    std::thread::spawn(move || unsafe {
-                        let p = port as CFMachPortRef;
-                        let retained = CFRetain(p);
-                        CGEventTapEnable(retained, true);
-                        CFRelease(retained);
-                    });
+                    let port_usize = tap_port_cb.load(Ordering::Acquire);
+                    if port_usize != 0 {
+                        unsafe { CFRetain(port_usize as CFMachPortRef); }
+                        std::thread::spawn(move || unsafe {
+                            let p = port_usize as CFMachPortRef;
+                            CGEventTapEnable(p, true);
+                            CFRelease(p);
+                        });
+                    }
                     return None;
                 }
 
@@ -475,6 +481,13 @@ pub fn initialize_tap() -> bool {
                 let current_loop = CFRunLoop::get_current();
                 match tap.mach_port.create_runloop_source(0) {
                     Ok(source) => {
+                        // Publish the real CFMachPortRef before starting the run loop.
+                        // Events cannot arrive until run_current() begins, so no race exists
+                        // between storing here and reading in the TapDisabledByTimeout handler.
+                        tap_port_shared.store(
+                            tap.mach_port.as_concrete_TypeRef() as usize,
+                            Ordering::Release,
+                        );
                         current_loop.add_source(&source, unsafe { kCFRunLoopCommonModes });
                         tap.enable();
                         // Clear TAP_STARTING now that the tap is live; the tap remains
