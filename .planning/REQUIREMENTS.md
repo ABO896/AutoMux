@@ -8,9 +8,9 @@
 
 ### macOS Tahoe 26 Compatibility
 
-- [ ] **COMPAT-01**: User's macros (mouse clicks, key presses) fire correctly on macOS 26 Tahoe — CGEventTap input injection works without modification by the OS
+- [x] **COMPAT-01**: User's macros (mouse clicks, key presses) fire correctly on macOS 26 Tahoe — CGEventTap input injection works without modification by the OS
 - [ ] **COMPAT-02**: Permissions detection accurately reports granted/denied status on macOS 26 Tahoe — no false "not granted" after approval, no silent API change regressions
-- [ ] **COMPAT-03**: App launches and runs fully on macOS 26 Tahoe without crashes, missing entitlements, or framework errors
+- [x] **COMPAT-03**: App launches and runs fully on macOS 26 Tahoe without crashes, missing entitlements, or framework errors
 
 ### Parallel Macro Execution
 
@@ -72,9 +72,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMPAT-01 | Phase 6 | Pending |
+| COMPAT-01 | Phase 6 | Complete |
 | COMPAT-02 | Phase 6 | Pending |
-| COMPAT-03 | Phase 6 | Pending |
+| COMPAT-03 | Phase 6 | Complete |
 | EXEC-01 | Phase 8 | Pending |
 | EXEC-02 | Phase 8 | Pending |
 | UX-08 | Phase 9 | Pending |
@@ -93,6 +93,7 @@
 | ERR-01 | Phase 7 | Pending |
 
 **Coverage:**
+
 - v2.0 requirements: 19 total
 - Mapped to phases: 19
 - Unmapped: 0
