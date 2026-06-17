@@ -175,6 +175,18 @@ function App() {
     });
   });
 
+  // Auto-save error listener (D-11) — shows persistent banner until dismissed.
+  // D-13: the event payload is intentionally ignored; we always show the fixed
+  // user-friendly copy rather than the raw Rust error string.
+  createEffect(() => {
+    const unlisten = listen<string>("auto-save-error", (_event) => {
+      setSaveError(true);
+    });
+    onCleanup(() => {
+      unlisten.then((fn) => fn());
+    });
+  });
+
   // Poll accessibility AND input monitoring every 3s (D-04: single effect).
   createEffect(() => {
     const interval = setInterval(async () => {
@@ -699,6 +711,28 @@ function App() {
               📁 {activeProfile()}
             </span>
           </div>
+
+          {/* ── Auto-Save Error Banner ── */}
+          <Show when={saveError()}>
+            <div
+              id="auto-save-error-banner"
+              class="bg-warning/10 border border-warning/20 rounded-lg p-3 flex items-center gap-3"
+            >
+              <span class="text-warning text-base">⚠</span>
+              <div class="flex-1">
+                <p class="text-xs font-medium text-warning">Save failed</p>
+                <p class="text-[11px] text-text-dim">
+                  Your changes are not being saved. Check available disk space and file permissions.
+                </p>
+              </div>
+              <button
+                onClick={() => setSaveError(false)}
+                class="text-[11px] text-text-muted hover:text-text-main transition-colors duration-200 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </Show>
 
           {/* ── Macros List ── */}
           <div class="flex items-center justify-between mt-1">
