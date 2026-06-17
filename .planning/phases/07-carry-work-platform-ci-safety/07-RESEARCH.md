@@ -523,19 +523,22 @@ No frontend test framework is installed.
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **BUILD-01: Are HMODULE and HHOOK actually unused?**
+   - **RESOLVED:** Plan 07-01 Task 1 — HHOOK KEEP (used in UnhookWindowsHookEx), HMODULE removed at top level (verified unused, re-imported in callback), GetWindowTextW/IsWindowVisible removed (re-imported in callback), TranslateMessage wrapped in `let _ =` for must_use lint.
    - What we know: CONTEXT.md says remove them; code audit suggests HHOOK IS used in `UnhookWindowsHookEx`; HMODULE's usage is ambiguous (passed as `None` which may or may not require the import).
    - What's unclear: Whether the Rust compiler generates a warning for HMODULE when it's used only for the type of an `Option<HMODULE>` passed as `None`.
    - Recommendation: The planner should verify by running `cargo build --target x86_64-pc-windows-msvc` in CI (or with a Windows cross-compiler) and using the actual compiler warning list, not CONTEXT.md's list.
 
 2. **COMPAT-04: Opener plugin API for URLs**
+   - **RESOLVED:** Plan 07-03 Task 1 — use `import { open } from "@tauri-apps/plugin-opener"` directly in App.tsx (Tauri 2 documented pattern, no custom IPC command needed).
    - What we know: `tauri-plugin-opener` is in the dep tree; the `open` function can open URLs.
    - What's unclear: Whether `invoke("open_url", ...)` or `import { open } from "@tauri-apps/plugin-opener"` is the right frontend call pattern.
    - Recommendation: Use the frontend JS import path (`@tauri-apps/plugin-opener`) directly in App.tsx — it's the documented Tauri 2 pattern and doesn't require a custom IPC command.
 
 3. **COMPAT-04: App restart required after granting Input Monitoring?**
+   - **RESOLVED:** Plan 07-03 Task 1 — extend the existing 3s Accessibility polling createEffect to also probe Input Monitoring using the CGEventTap ListenOnly pattern (same behavior as Accessibility, no restart required).
    - What we know: One source notes the app must be restarted after granting Input Monitoring, as macOS TCC changes don't take effect in a running process.
    - What's unclear: Whether this applies when detecting via CGEventTap probe (not AXIsProcessTrusted), and whether the existing 3s poll pattern can detect the grant without restart.
    - Recommendation: The existing Accessibility poll pattern on Phase 5 already handles dynamic grants without restart (using CGEventTap probe). The same probe for Input Monitoring should behave identically.

@@ -88,11 +88,14 @@ Plans:
   5. On macOS 26, the app shows a clear prompt when Input Monitoring is not granted — user knows why hotkeys don't fire and how to fix it
   6. After installing a signed build over an unsigned one, the app detects the TCC identity change and prompts the user to re-add Accessibility in System Settings
 
-**Plans**: 3 plans
-Plans:
+**Plans**: 3 plansPlans:
+**Wave 1**
 
 - [ ] 07-01-PLAN.md — Windows platform cleanup (BUILD-01, MEM-01) + CI hardening (CI-03, CI-04, CI-05) + SAFE-04 verification
 - [ ] 07-02-PLAN.md — macOS 26 permission backend: check_input_monitoring probe + TCC flag helpers + get_tcc_identity_status IPC (COMPAT-04, COMPAT-05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 07-03-PLAN.md — Frontend: combined PermissionsCard with Accessibility + Input Monitoring, TCC identity-change copy swap, auto-save error banner (COMPAT-04, COMPAT-05, ERR-01)
 
 ### Phase 8: Hotkey Reliability & Conflict Safety
