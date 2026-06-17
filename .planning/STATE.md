@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
 status: executing
-stopped_at: context exhaustion at 81% (2026-06-12)
-last_updated: "2026-06-12T12:51:25.453Z"
-last_activity: 2026-06-04 -- Phase 06 execution started
+stopped_at: active debug session — awaiting device verify for HID→Session post() fix
+last_updated: "2026-06-17T18:00:00Z"
+last_activity: 2026-06-17 -- macros-dont-fire-post-crash debug session, fix applied, awaiting device test
 progress:
   total_phases: 5
   completed_phases: 2
@@ -75,6 +75,6 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 
 ## Session Continuity
 
-Last session: 2026-06-12T12:51:25.450Z
-Stopped at: context exhaustion at 81% (2026-06-12)
-Next: `/gsd:plan-phase 6` — macOS Tahoe 26 Compatibility
+Last session: 2026-06-17T20:30:00Z
+Stopped at: COMPAT-01 + COMPAT-03 FIXED — macros fire on macOS 26, no crash. Code clean, compile clean. Not yet committed.
+Next: Commit the fix (06-03 tasks 1-4 complete). Then: plan follow-up for Input Monitoring detection (macOS 26 new requirement for hotkeys) and handle re-grant UX for users upgrading from unsigned builds.

@@ -23,12 +23,7 @@ impl MacInputProvider {
     /// Returns `None` if the OS cannot allocate the source under resource pressure.
     /// All callers guard with `let Some(source) = Self::source() else { return; }` — D-08.
     fn source() -> Option<CGEventSource> {
-        let result = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok();
-        #[cfg(debug_assertions)]
-        if result.is_none() {
-            eprintln!("[MacInput] CGEventSource creation failed — skipping injection");
-        }
-        result
+        CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok()
     }
 }
 
@@ -37,7 +32,8 @@ impl InputProvider for MacInputProvider {
         let Some(source) = Self::source() else { return; };
         if let Ok(event) = CGEvent::new_keyboard_event(source, keycode, is_down) {
             event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
-            event.post(CGEventTapLocation::HID);
+            // kCGSessionEventTap: requires code signing on macOS 26 — use ad-hoc signing in build.
+            event.post(CGEventTapLocation::Session);
         }
     }
 
@@ -61,7 +57,7 @@ impl InputProvider for MacInputProvider {
             CGEvent::new_mouse_event(source.clone(), event_type_down, position, cg_button)
         {
             event_down.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
-            event_down.post(CGEventTapLocation::HID);
+            event_down.post(CGEventTapLocation::Session);
         }
 
         let event_type_up = match button {
@@ -72,7 +68,7 @@ impl InputProvider for MacInputProvider {
 
         if let Ok(event_up) = CGEvent::new_mouse_event(source, event_type_up, position, cg_button) {
             event_up.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
-            event_up.post(CGEventTapLocation::HID);
+            event_up.post(CGEventTapLocation::Session);
         }
     }
 
@@ -86,7 +82,7 @@ impl InputProvider for MacInputProvider {
             CGMouseButton::Left,
         ) {
             event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
-            event.post(CGEventTapLocation::HID);
+            event.post(CGEventTapLocation::Session);
         }
     }
 
@@ -117,7 +113,7 @@ impl InputProvider for MacInputProvider {
 
         if let Ok(event) = CGEvent::new_mouse_event(source, event_type, pos, cg_button) {
             event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, LLMHF_INJECTED);
-            event.post(CGEventTapLocation::HID);
+            event.post(CGEventTapLocation::Session);
         }
     }
 

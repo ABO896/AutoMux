@@ -101,7 +101,7 @@ pub fn flush_held_inputs() {
                             EventField::EVENT_SOURCE_USER_DATA,
                             crate::platform::macos::input::LLMHF_INJECTED,
                         );
-                        up_event.post(CGEventTapLocation::HID);
+                        up_event.post(CGEventTapLocation::Session);
                     }
                 }
                 ActiveInput::Mouse(m) => {
@@ -129,7 +129,7 @@ pub fn flush_held_inputs() {
                             EventField::EVENT_SOURCE_USER_DATA,
                             crate::platform::macos::input::LLMHF_INJECTED,
                         );
-                        up_event.post(CGEventTapLocation::HID);
+                        up_event.post(CGEventTapLocation::Session);
                     }
                 }
             }
@@ -374,7 +374,7 @@ pub fn initialize_tap() -> bool {
                                                 EventField::EVENT_SOURCE_USER_DATA,
                                                 crate::platform::macos::input::LLMHF_INJECTED,
                                             );
-                                            up_event.post(CGEventTapLocation::HID);
+                                            up_event.post(CGEventTapLocation::Session);
                                         }
                                     }
                                     ActiveInput::Mouse(m) => {
@@ -404,7 +404,7 @@ pub fn initialize_tap() -> bool {
                                                 EventField::EVENT_SOURCE_USER_DATA,
                                                 crate::platform::macos::input::LLMHF_INJECTED,
                                             );
-                                            up_event.post(CGEventTapLocation::HID);
+                                            up_event.post(CGEventTapLocation::Session);
                                         }
                                     }
                                 }
@@ -483,9 +483,7 @@ pub fn initialize_tap() -> bool {
                 }
             }
             Err(_) => {
-                eprintln!(
-                    "Failed to create CGEventTap. Make sure the app has Accessibility permissions."
-                );
+                eprintln!("[Observer] CGEventTap::new() failed — check Accessibility permission");
                 // Reset flags so initialization can be retried after permissions are granted.
                 TAP_INITIALIZED.store(false, Ordering::SeqCst);
                 TAP_STARTING.store(false, Ordering::SeqCst);
