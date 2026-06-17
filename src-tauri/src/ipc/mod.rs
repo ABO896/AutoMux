@@ -189,13 +189,18 @@ pub async fn request_accessibility() -> Result<bool, String> {
 /// D-03: arms CGEventTap on post-launch grant (idempotent via TAP_INITIALIZED AtomicBool guard).
 /// Called by the frontend 3s poll loop — if the user granted access directly in System Settings
 /// (without clicking Request Access), the next poll will arm the tap without requiring a restart.
+///
+/// On macOS, also writes the TCC was-ever-granted sentinel file on every
+/// successful grant (COMPAT-05). The flag is idempotent: its existence is
+/// the only signal; its content is always `b"1"`.
 #[command]
-pub async fn check_accessibility() -> Result<bool, String> {
+pub async fn check_accessibility(app_handle: tauri::AppHandle) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         let granted = crate::platform::macos::check_accessibility_permissions(false);
         if granted {
             crate::platform::macos::observer::initialize_tap();
+            crate::persistence::write_tcc_granted_flag(&app_handle);
         }
         Ok(granted)
     }
@@ -203,6 +208,13 @@ pub async fn check_accessibility() -> Result<bool, String> {
     {
         Ok(true)
     }
+}
+
+/// Returns true if the was-ever-granted TCC flag exists. Used by the
+/// frontend to detect a TCC identity change after a signed-build upgrade.
+#[command]
+pub async fn get_tcc_identity_status(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    Ok(crate::persistence::tcc_granted_flag_exists(&app_handle))
 }
 
 /// Silent check: returns current Input Monitoring status without prompting.

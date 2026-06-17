@@ -16,6 +16,7 @@ use crate::state::MacroConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tauri::Manager;
 use uuid::Uuid;
 
 /// The data persisted within a single profile file.
@@ -204,6 +205,47 @@ impl ProfileManager {
             }
         }
     }
+}
+
+// ── Task 7-02: TCC was-ever-granted sentinel file (COMPAT-05) ──
+//
+// macOS invalidates both Accessibility and Input Monitoring grants whenever
+// the app's code-signing identity changes (e.g. a signed-build upgrade).
+// The flag file lets the frontend detect the identity change and prompt
+// the user to re-add Accessibility in System Settings. The flag lives
+// directly in `app_data_dir` (not the `profiles/` subdir) so it survives
+// profile operations and is discoverable alongside other top-level state.
+
+/// Sentinel filename written on the first successful Accessibility grant.
+const TCC_GRANTED_FLAG_FILENAME: &str = "tcc_granted.flag";
+
+/// Path of the was-ever-granted sentinel file. Lives directly in
+/// `app_data_dir` (not the `profiles/` subdir) so it survives profile
+/// operations and is discoverable alongside other top-level state.
+pub fn tcc_granted_flag_path(app_handle: &tauri::AppHandle) -> Option<PathBuf> {
+    app_handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join(TCC_GRANTED_FLAG_FILENAME))
+}
+
+/// Write the sentinel file. Best-effort; failures are silently dropped
+/// because the flag is advisory (TCC flag tampering is not a security
+/// boundary — see RESEARCH §Security Domain). Called on every successful
+/// Accessibility grant (idempotent: file content is always `b"1"`).
+pub fn write_tcc_granted_flag(app_handle: &tauri::AppHandle) {
+    if let Some(path) = tcc_granted_flag_path(app_handle) {
+        let _ = std::fs::write(&path, b"1");
+    }
+}
+
+/// Returns true if the sentinel file exists. Read on demand by the
+/// frontend to detect a TCC identity change after a signed-build upgrade.
+pub fn tcc_granted_flag_exists(app_handle: &tauri::AppHandle) -> bool {
+    tcc_granted_flag_path(app_handle)
+        .map(|p| p.exists())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
