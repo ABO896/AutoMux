@@ -261,6 +261,7 @@ impl WindowsPlatformObserver {
 
 #[cfg(target_os = "windows")]
 unsafe fn get_app_name_from_hwnd(hwnd: HWND) -> Option<String> {
+    use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
         PROCESS_QUERY_LIMITED_INFORMATION,
@@ -279,13 +280,18 @@ unsafe fn get_app_name_from_hwnd(hwnd: HWND) -> Option<String> {
     let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()?;
     let mut buf = [0u16; 260];
     let mut len = buf.len() as u32;
-    QueryFullProcessImageNameW(
+    // @safety-officer: MEM-01 — close the process handle on BOTH the success
+    // and error paths of QueryFullProcessImageNameW. Holding the handle across
+    // the `?` propagation would leak a Win32 HANDLE per call (and the kernel
+    // process object it references) for the lifetime of the process.
+    let query_result = QueryFullProcessImageNameW(
         handle,
         PROCESS_NAME_FORMAT(0),
         windows::core::PWSTR(buf.as_mut_ptr()),
         &mut len,
-    )
-    .ok()?;
+    );
+    unsafe { CloseHandle(handle); }
+    query_result.ok()?;
 
     Some(String::from_utf16_lossy(&buf[..len as usize]))
 }
@@ -298,7 +304,7 @@ pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
     use std::collections::HashMap;
     use windows::Win32::Foundation::{HWND, LPARAM};
     use windows::core::BOOL; // BOOL moved to windows::core in windows-rs 0.60+
-    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
+    use windows::Win32::UI::WindowsAndMessaging::EnumWindows;
 
     let mut apps: Vec<crate::ipc::RunningApp> = Vec::new();
     let apps_ptr = &mut apps as *mut Vec<crate::ipc::RunningApp> as isize;
@@ -386,7 +392,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use uuid::Uuid;
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{HMODULE, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Accessibility::{
     SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK,
@@ -511,7 +517,10 @@ pub fn initialize_hook() -> bool {
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).into() {
-            TranslateMessage(&msg);
+            // BUILD-01: TranslateMessage returns BOOL indicating whether it
+            // translated the message; the message-pump loop does not need that
+            // signal, so explicitly discard to silence the `must_use` lint.
+            let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
 
