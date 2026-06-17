@@ -32,8 +32,8 @@
 
 ### macOS 26 Follow-ups *(surfaced during Phase 6)*
 
-- [ ] **COMPAT-04**: App detects when Input Monitoring (`kTCCServiceListenEvent`) is not granted on macOS 26 and shows actionable guidance — user understands why hotkeys do not fire without it
-- [ ] **COMPAT-05**: App detects TCC identity change (unsigned → signed upgrade) and prompts user to re-add Accessibility in System Settings — no silent grant failure after a build upgrade
+- [x] **COMPAT-04**: App detects when Input Monitoring (`kTCCServiceListenEvent`) is not granted on macOS 26 and shows actionable guidance — user understands why hotkeys do not fire without it
+- [x] **COMPAT-05**: App detects TCC identity change (unsigned → signed upgrade) and prompts user to re-add Accessibility in System Settings — no silent grant failure after a build upgrade
 
 ### Hotkey System Reliability
 
@@ -87,8 +87,8 @@
 | COMPAT-01 | Phase 6 | Complete |
 | COMPAT-02 | Phase 6 | Pending |
 | COMPAT-03 | Phase 6 | Complete |
-| COMPAT-04 | Phase 7 | Pending |
-| COMPAT-05 | Phase 7 | Pending |
+| COMPAT-04 | Phase 7 | Complete |
+| COMPAT-05 | Phase 7 | Complete |
 | UX-11 | Phase 8 | Pending |
 | UX-12 | Phase 8 | Pending |
 | UX-13 | Phase 8 | Pending |
