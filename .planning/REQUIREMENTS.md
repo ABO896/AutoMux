@@ -56,7 +56,7 @@
 ### Safety & Error Surface *(carried from v1.2.0)*
 
 - [x] **SAFE-04**: `flush_held_inputs` releases the REGISTRY lock before posting CGEvents — eliminates the potential deadlock on macOS emergency stop
-- [ ] **ERR-01**: Persistence failures surface to the user in the UI — App.tsx listens to the `auto-save-error` Tauri event and shows a visible error notification when auto-save fails
+- [x] **ERR-01**: Persistence failures surface to the user in the UI — App.tsx listens to the `auto-save-error` Tauri event and shows a visible error notification when auto-save fails
 
 ## Future Requirements
 
@@ -99,7 +99,7 @@
 | CI-04 | Phase 7 | Complete |
 | CI-05 | Phase 7 | Complete |
 | SAFE-04 | Phase 7 | Complete |
-| ERR-01 | Phase 7 | Pending |
+| ERR-01 | Phase 7 | Complete |
 | EXEC-01 | Phase 9 | Pending |
 | EXEC-02 | Phase 9 | Pending |
 | UX-08 | Phase 10 | Pending |

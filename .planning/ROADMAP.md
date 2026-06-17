@@ -32,7 +32,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 ### 📋 v2.0 Redesign & Platform Excellence
 
 - [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 3 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (06-01/06-02 shipped 2026-06-04; 06-03 fixes UAF crash + injection regression surfaced on device) (completed 2026-06-12)
-- [ ] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades
+- [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
 - [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior
 - [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
 - [ ] **Phase 10: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
@@ -96,7 +96,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-03-PLAN.md — Frontend: combined PermissionsCard with Accessibility + Input Monitoring, TCC identity-change copy swap, auto-save error banner (COMPAT-04, COMPAT-05, ERR-01)
+- [x] 07-03-PLAN.md — Frontend: combined PermissionsCard with Accessibility + Input Monitoring, TCC identity-change copy swap, auto-save error banner (COMPAT-04, COMPAT-05, ERR-01)
 
 ### Phase 8: Hotkey Reliability & Conflict Safety
 
@@ -151,7 +151,7 @@ Plans:
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
-| 7. Carry Work — Platform, CI & Safety | v2.0 | 2/3 | In Progress|  |
+| 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 0/TBD | Not started | — |
 | 9. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
