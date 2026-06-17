@@ -66,3 +66,31 @@ pub fn check_accessibility_permissions(prompt: bool) -> bool {
         result != 0
     }
 }
+
+/// Check whether this process has Input Monitoring permissions.
+///
+/// Returns the current status without prompting — same probe pattern as the
+/// silent Accessibility check above. Probe is scoped to this function and
+/// does NOT set `TAP_INITIALIZED` or interact with `TAP_STARTING`.
+///
+/// [RESEARCH §D-05]: Required since macOS 10.15 Catalina; subsumed by
+/// Accessibility when both are needed, but a separate probe is required
+/// because the CGEventTap `ListenOnly` option is the only reliable signal
+/// independent of the stale `AXIsProcessTrusted()` cache.
+pub fn check_input_monitoring() -> bool {
+    use core_graphics::event::{
+        CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
+    };
+    // @safety-officer: This probe tap must NOT set TAP_INITIALIZED or interact with TAP_STARTING.
+    // It is scoped to this function and dropped immediately. Only initialize_tap() in observer.rs
+    // sets those flags. AXIsProcessTrusted() is NOT used here — it caches its result per-process
+    // and returns stale false on macOS 15 Sequoia / 26 Tahoe after a grant.
+    let probe = CGEventTap::new(
+        CGEventTapLocation::HID,
+        CGEventTapPlacement::TailAppendEventTap, // passive observer — avoids false negatives on macOS 15+
+        CGEventTapOptions::ListenOnly,
+        vec![CGEventType::MouseMoved],
+        |_, _, _| None, // listen-only: return value is ignored; avoid unnecessary clone
+    );
+    probe.is_ok()
+}

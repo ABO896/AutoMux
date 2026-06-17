@@ -205,6 +205,23 @@ pub async fn check_accessibility() -> Result<bool, String> {
     }
 }
 
+/// Silent check: returns current Input Monitoring status without prompting.
+///
+/// Paired with the 3s accessibility poll in App.tsx. Same dual-platform stub
+/// pattern as `check_accessibility` — returns `Ok(true)` on non-macOS because
+/// the permission has no equivalent on Windows/Linux.
+#[command]
+pub async fn check_input_monitoring() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(crate::platform::macos::check_input_monitoring())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
 // ── Task 3.7: ActionSequence IPC Commands ────────────────────────
 
 /// Set the full action sequence for a macro.
