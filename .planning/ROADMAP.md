@@ -91,7 +91,7 @@ Plans:
 **Plans**: 3 plansPlans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Windows platform cleanup (BUILD-01, MEM-01) + CI hardening (CI-03, CI-04, CI-05) + SAFE-04 verification
+- [x] 07-01-PLAN.md — Windows platform cleanup (BUILD-01, MEM-01) + CI hardening (CI-03, CI-04, CI-05) + SAFE-04 verification
 - [ ] 07-02-PLAN.md — macOS 26 permission backend: check_input_monitoring probe + TCC flag helpers + get_tcc_identity_status IPC (COMPAT-04, COMPAT-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -151,7 +151,7 @@ Plans:
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
-| 7. Carry Work — Platform, CI & Safety | v2.0 | 0/TBD | Not started | — |
+| 7. Carry Work — Platform, CI & Safety | v2.0 | 1/3 | In Progress|  |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 0/TBD | Not started | — |
 | 9. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |

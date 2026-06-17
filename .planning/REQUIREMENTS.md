@@ -44,18 +44,18 @@
 
 ### Platform Cleanup *(carried from v1.2.0)*
 
-- [ ] **BUILD-01**: `cargo build --target x86_64-pc-windows-msvc` produces zero warnings — unused `GetWindowTextW`, `IsWindowVisible`, `HMODULE`, `HHOOK` imports removed; `TranslateMessage` unused-bool handled
-- [ ] **MEM-01**: Every `OpenProcess` handle opened in `list_running_apps_impl` is closed before the function returns — no HANDLE leak on process list refresh
+- [x] **BUILD-01**: `cargo build --target x86_64-pc-windows-msvc` produces zero warnings — unused `GetWindowTextW`, `IsWindowVisible`, `HMODULE`, `HHOOK` imports removed; `TranslateMessage` unused-bool handled
+- [x] **MEM-01**: Every `OpenProcess` handle opened in `list_running_apps_impl` is closed before the function returns — no HANDLE leak on process list refresh
 
 ### CI Hardening *(carried from v1.2.0)*
 
-- [ ] **CI-03**: Release workflow correctly uploads updater JSON signature artifact — no more silent "Signature not found" skip in CI output
-- [ ] **CI-04**: CI uses `npm ci` instead of `npm install` for reproducible, lockfile-gated dependency installs
-- [ ] **CI-05**: Binary artifact discovery pattern is resilient to tauri-action output path renames — no silent miss when artifact location changes
+- [x] **CI-03**: Release workflow correctly uploads updater JSON signature artifact — no more silent "Signature not found" skip in CI output
+- [x] **CI-04**: CI uses `npm ci` instead of `npm install` for reproducible, lockfile-gated dependency installs
+- [x] **CI-05**: Binary artifact discovery pattern is resilient to tauri-action output path renames — no silent miss when artifact location changes
 
 ### Safety & Error Surface *(carried from v1.2.0)*
 
-- [ ] **SAFE-04**: `flush_held_inputs` releases the REGISTRY lock before posting CGEvents — eliminates the potential deadlock on macOS emergency stop
+- [x] **SAFE-04**: `flush_held_inputs` releases the REGISTRY lock before posting CGEvents — eliminates the potential deadlock on macOS emergency stop
 - [ ] **ERR-01**: Persistence failures surface to the user in the UI — App.tsx listens to the `auto-save-error` Tauri event and shows a visible error notification when auto-save fails
 
 ## Future Requirements
@@ -93,12 +93,12 @@
 | UX-12 | Phase 8 | Pending |
 | UX-13 | Phase 8 | Pending |
 | UX-14 | Phase 8 | Pending |
-| BUILD-01 | Phase 7 | Pending |
-| MEM-01 | Phase 7 | Pending |
-| CI-03 | Phase 7 | Pending |
-| CI-04 | Phase 7 | Pending |
-| CI-05 | Phase 7 | Pending |
-| SAFE-04 | Phase 7 | Pending |
+| BUILD-01 | Phase 7 | Complete |
+| MEM-01 | Phase 7 | Complete |
+| CI-03 | Phase 7 | Complete |
+| CI-04 | Phase 7 | Complete |
+| CI-05 | Phase 7 | Complete |
+| SAFE-04 | Phase 7 | Complete |
 | ERR-01 | Phase 7 | Pending |
 | EXEC-01 | Phase 9 | Pending |
 | EXEC-02 | Phase 9 | Pending |
