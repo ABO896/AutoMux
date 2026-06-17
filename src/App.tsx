@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, For } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { domKeycodeToNative, resolveKeyName } from "./keymap";
 import "./App.css";
@@ -78,10 +79,15 @@ function App() {
   // WR-01: Scoped inside App() so it does not outlive the component instance
   // during HMR remounts. The existing onCleanup → clearPending() path handles teardown.
   let _pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let _imPendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const [state, setState] = createSignal<AppState | null>(null);
   const [accessibility, setAccessibility] = createSignal<boolean | null>(null);
   const [accessibilityPending, setAccessibilityPending] = createSignal(false);
+  const [inputMonitoring, setInputMonitoring] = createSignal<boolean | null>(null);
+  const [inputMonitoringPending, setInputMonitoringPending] = createSignal(false);
+  const [saveError, setSaveError] = createSignal(false);
+  const [tccIdentityChanged, setTccIdentityChanged] = createSignal(false);
   const [activeApp, setActiveApp] = createSignal<string | null>(null);
   const [, setLoading] = createSignal(true);
   const [activeTab, setActiveTab] = createSignal<Tab>("dashboard");
@@ -132,9 +138,11 @@ function App() {
 
     (async () => {
       try {
-        const [stateData, accessOk, app, profileList, version] = await Promise.all([
+        const [stateData, accessOk, imOk, tccChanged, app, profileList, version] = await Promise.all([
           invoke<AppState>("get_state"),
           invoke<boolean>("check_accessibility"),
+          invoke<boolean>("check_input_monitoring"),
+          invoke<boolean>("get_tcc_identity_status"),
           invoke<string | null>("get_active_app"),
           invoke<ProfileSummary[]>("list_profiles"),
           getVersion(),
@@ -142,6 +150,8 @@ function App() {
         if (cancelled) return;
         setState(stateData);
         setAccessibility(accessOk);
+        setInputMonitoring(imOk);
+        setTccIdentityChanged(tccChanged);
         setActiveApp(app);
         setProfiles(profileList);
         setAppVersion(version);
@@ -165,15 +175,20 @@ function App() {
     });
   });
 
-  // Poll accessibility every 3s
+  // Poll accessibility AND input monitoring every 3s (D-04: single effect).
   createEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const ok = await invoke<boolean>("check_accessibility");
-        setAccessibility(ok);
+        const [a11y, im] = await Promise.all([
+          invoke<boolean>("check_accessibility"),
+          invoke<boolean>("check_input_monitoring"),
+        ]);
+        setAccessibility(a11y);
+        setInputMonitoring(im);
         // Clear pending on any definitive response (granted or denied).
         // Only remain "pending" while the dialog is actually in-flight (null).
         clearPending();
+        clearImPending();
       } catch (_) {
         /* ignore */
       }
@@ -221,6 +236,32 @@ function App() {
       if (!requestAccessCancelled) {
         console.error("Accessibility request failed:", e);
         clearPending();
+      }
+    }
+  }
+
+  function clearImPending() {
+    setInputMonitoringPending(false);
+    if (_imPendingTimeoutId !== null) {
+      clearTimeout(_imPendingTimeoutId);
+      _imPendingTimeoutId = null;
+    }
+  }
+
+  async function handleRequestInputMonitoringAccess() {
+    setInputMonitoringPending(true);
+    // 30s timeout mirrors Accessibility flow
+    _imPendingTimeoutId = setTimeout(() => {
+      if (!requestAccessCancelled) setInputMonitoringPending(false);
+      _imPendingTimeoutId = null;
+    }, 30_000);
+    try {
+      await openUrl("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent");
+    } catch (e) {
+      if (!requestAccessCancelled) {
+        console.error("Failed to open Input Monitoring settings:", e);
+        setInputMonitoringPending(false);
+        _imPendingTimeoutId = null;
       }
     }
   }
@@ -484,54 +525,132 @@ function App() {
 
           {/* ── Status Row ── */}
           <div class="flex gap-3">
-            {/* Accessibility Status */}
+            {/* Permissions — combined Accessibility + Input Monitoring */}
             <div class="glass-card flex-1 p-4">
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between mb-3">
                 <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
-                  Security
+                  Permissions
                 </span>
-                <Show
-                  when={accessibility() === true}
-                  fallback={
+              </div>
+              <div class="flex flex-col gap-3">
+                {/* Accessibility row */}
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-text-main">
+                      Accessibility
+                    </span>
                     <Show
-                      when={accessibilityPending()}
+                      when={accessibility() === true}
                       fallback={
-                        <div class="flex items-center gap-1.5">
-                          <div class="w-2 h-2 rounded-full bg-danger status-pulse shadow-[0_0_6px_var(--color-danger-glow)]" />
-                          <span class="text-[11px] text-danger font-medium">
-                            Denied
-                          </span>
-                        </div>
+                        <Show
+                          when={accessibilityPending()}
+                          fallback={
+                            <div class="flex items-center gap-1.5">
+                              <div class="w-2 h-2 rounded-full bg-danger status-pulse shadow-[0_0_6px_var(--color-danger-glow)]" />
+                              <span class="text-[11px] text-danger font-medium">
+                                Denied
+                              </span>
+                            </div>
+                          }
+                        >
+                          <div class="flex items-center gap-1.5">
+                            <div class="w-2 h-2 rounded-full bg-warning status-pulse shadow-[0_0_6px_var(--color-warning-glow)]" />
+                            <span class="text-[11px] text-warning font-medium">
+                              Pending…
+                            </span>
+                          </div>
+                        </Show>
                       }
                     >
                       <div class="flex items-center gap-1.5">
-                        <div class="w-2 h-2 rounded-full bg-warning status-pulse shadow-[0_0_6px_var(--color-warning-glow)]" />
-                        <span class="text-[11px] text-warning font-medium">
-                          Pending…
+                        <div class="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)]" />
+                        <span class="text-[11px] text-success font-medium">
+                          Granted
                         </span>
                       </div>
                     </Show>
-                  }
-                >
-                  <div class="flex items-center gap-1.5">
-                    <div class="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)]" />
-                    <span class="text-[11px] text-success font-medium">
-                      Granted
-                    </span>
                   </div>
-                </Show>
+                  <Show
+                    when={tccIdentityChanged() === true && accessibility() === false}
+                    fallback={
+                      <p class="text-xs text-text-dim">Required for input injection</p>
+                    }
+                  >
+                    <p class="text-xs text-text-dim">
+                      AutoMux was updated — Accessibility needs to be re-added in System Settings.
+                    </p>
+                  </Show>
+                  <Show when={accessibility() === false && !accessibilityPending()}>
+                    <button
+                      id="btn-request-access"
+                      onClick={handleRequestAccess}
+                      class="mt-2 w-full py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium
+                             hover:bg-accent/20 hover:border-accent/50 transition-all duration-200 cursor-pointer"
+                    >
+                      Grant Access
+                    </button>
+                  </Show>
+                </div>
+
+                {/* Input Monitoring row */}
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-medium text-text-main">
+                      Input Monitoring
+                    </span>
+                    <Show
+                      when={inputMonitoring() === true}
+                      fallback={
+                        <Show
+                          when={inputMonitoringPending()}
+                          fallback={
+                            <div class="flex items-center gap-1.5">
+                              <div class="w-2 h-2 rounded-full bg-danger status-pulse shadow-[0_0_6px_var(--color-danger-glow)]" />
+                              <span class="text-[11px] text-danger font-medium">
+                                Warning
+                              </span>
+                            </div>
+                          }
+                        >
+                          <div class="flex items-center gap-1.5">
+                            <div class="w-2 h-2 rounded-full bg-warning status-pulse shadow-[0_0_6px_var(--color-warning-glow)]" />
+                            <span class="text-[11px] text-warning font-medium">
+                              Pending…
+                            </span>
+                          </div>
+                        </Show>
+                      }
+                    >
+                      <div class="flex items-center gap-1.5">
+                        <div class="w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)]" />
+                        <span class="text-[11px] text-success font-medium">
+                          Granted
+                        </span>
+                      </div>
+                    </Show>
+                  </div>
+                  <Show
+                    when={accessibility() === false && inputMonitoring() === false}
+                    fallback={
+                      <p class="text-xs text-text-dim">Required for global hotkeys</p>
+                    }
+                  >
+                    <p class="text-xs text-text-dim">
+                      Hotkeys will not fire. Mouse macros still work.
+                    </p>
+                  </Show>
+                  <Show when={inputMonitoring() === false && !inputMonitoringPending()}>
+                    <button
+                      id="btn-request-input-monitoring"
+                      onClick={handleRequestInputMonitoringAccess}
+                      class="mt-2 w-full py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium
+                             hover:bg-accent/20 hover:border-accent/50 transition-all duration-200 cursor-pointer"
+                    >
+                      Grant Access
+                    </button>
+                  </Show>
+                </div>
               </div>
-              <p class="text-xs text-text-dim">Accessibility Permissions</p>
-              <Show when={accessibility() === false && !accessibilityPending()}>
-                <button
-                  id="btn-request-access"
-                  onClick={handleRequestAccess}
-                  class="mt-3 w-full py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs font-medium
-                         hover:bg-accent/20 hover:border-accent/50 transition-all duration-200 cursor-pointer"
-                >
-                  Grant Access
-                </button>
-              </Show>
             </div>
 
             {/* Engine Status */}
