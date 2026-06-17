@@ -30,6 +30,18 @@
 - [ ] **UI-03**: Windows app uses a modern, polished equivalent UI — matches AutoMux's visual identity without mimicking macOS-specific effects unavailable on Windows
 - [ ] **UI-04**: UI redesign adds no measurable increase in memory or CPU overhead at idle compared to v1.2.0 — AutoMux stays lightweight
 
+### macOS 26 Follow-ups *(surfaced during Phase 6)*
+
+- [ ] **COMPAT-04**: App detects when Input Monitoring (`kTCCServiceListenEvent`) is not granted on macOS 26 and shows actionable guidance — user understands why hotkeys do not fire without it
+- [ ] **COMPAT-05**: App detects TCC identity change (unsigned → signed upgrade) and prompts user to re-add Accessibility in System Settings — no silent grant failure after a build upgrade
+
+### Hotkey System Reliability
+
+- [ ] **UX-11**: Binding a hotkey that is already assigned to another macro shows an error or asks the user to reassign — no silent shadowing of an existing bind
+- [ ] **UX-12**: App prevents or warns when multiple enabled macros inject the same input type simultaneously (e.g., two left-click macros both active) — unpredictable timing multiplication is surfaced, not silently allowed
+- [ ] **UX-13**: Hotkey binding supports the full practical key range — not just letters (A-Z) but also number keys (0-9), function keys (F1-F12), and modifier combinations (Cmd/Ctrl/Shift/Option as modifiers on macOS; Ctrl/Alt/Shift/Win on Windows)
+- [ ] **UX-14**: Macros trigger correctly when AutoMux is not the focused application — global hotkey observation is verified on both macOS (CGEventTap HID) and Windows (Win32 global hook), and the UI clearly communicates that binds are system-wide
+
 ### Platform Cleanup *(carried from v1.2.0)*
 
 - [ ] **BUILD-01**: `cargo build --target x86_64-pc-windows-msvc` produces zero warnings — unused `GetWindowTextW`, `IsWindowVisible`, `HMODULE`, `HHOOK` imports removed; `TranslateMessage` unused-bool handled
@@ -75,15 +87,12 @@
 | COMPAT-01 | Phase 6 | Complete |
 | COMPAT-02 | Phase 6 | Pending |
 | COMPAT-03 | Phase 6 | Complete |
-| EXEC-01 | Phase 8 | Pending |
-| EXEC-02 | Phase 8 | Pending |
-| UX-08 | Phase 9 | Pending |
-| UX-09 | Phase 9 | Pending |
-| UX-10 | Phase 9 | Pending |
-| UI-01 | Phase 9 | Pending |
-| UI-02 | Phase 9 | Pending |
-| UI-03 | Phase 9 | Pending |
-| UI-04 | Phase 9 | Pending |
+| COMPAT-04 | Phase 7 | Pending |
+| COMPAT-05 | Phase 7 | Pending |
+| UX-11 | Phase 8 | Pending |
+| UX-12 | Phase 8 | Pending |
+| UX-13 | Phase 8 | Pending |
+| UX-14 | Phase 8 | Pending |
 | BUILD-01 | Phase 7 | Pending |
 | MEM-01 | Phase 7 | Pending |
 | CI-03 | Phase 7 | Pending |
@@ -91,13 +100,22 @@
 | CI-05 | Phase 7 | Pending |
 | SAFE-04 | Phase 7 | Pending |
 | ERR-01 | Phase 7 | Pending |
+| EXEC-01 | Phase 9 | Pending |
+| EXEC-02 | Phase 9 | Pending |
+| UX-08 | Phase 10 | Pending |
+| UX-09 | Phase 10 | Pending |
+| UX-10 | Phase 10 | Pending |
+| UI-01 | Phase 10 | Pending |
+| UI-02 | Phase 10 | Pending |
+| UI-03 | Phase 10 | Pending |
+| UI-04 | Phase 10 | Pending |
 
 **Coverage:**
 
-- v2.0 requirements: 19 total
-- Mapped to phases: 19
+- v2.0 requirements: 25 total
+- Mapped to phases: 25
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 — roadmap created, all 19 requirements mapped*
+*Last updated: 2026-06-17 — added COMPAT-04/05 (macOS 26 follow-ups) and UX-11/12/13/14 (hotkey reliability); phases renumbered 8→9, 9→10*

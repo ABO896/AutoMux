@@ -32,9 +32,10 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 ### 📋 v2.0 Redesign & Platform Excellence
 
 - [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 3 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (06-01/06-02 shipped 2026-06-04; 06-03 fixes UAF crash + injection regression surfaced on device) (completed 2026-06-12)
-- [ ] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI
-- [ ] **Phase 8: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
-- [ ] **Phase 9: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
+- [ ] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades
+- [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior
+- [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
+- [ ] **Phase 10: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
 
 ## Phase Details
 
@@ -75,42 +76,58 @@ Plans:
 
 ### Phase 7: Carry Work — Platform, CI & Safety
 
-**Goal**: All v1.2.0 outstanding reliability work is complete — the Windows build is clean, CI is reproducible and complete, and the macOS emergency-stop path cannot deadlock or silently lose errors
+**Goal**: All v1.2.0 outstanding reliability work is complete and macOS 26 permission follow-ups are addressed — the Windows build is clean, CI is reproducible and complete, the macOS emergency-stop path cannot deadlock, and the app handles macOS 26 TCC changes gracefully
 **Depends on**: Nothing (all items are independent of COMPAT and EXEC work; can run in parallel)
-**Requirements**: BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01
+**Requirements**: BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05
 **Success Criteria** (what must be TRUE):
 
-  1. `cargo build --target x86_64-pc-windows-msvc` produces zero warnings — no unused-import or unused-bool warnings in platform/windows/mod.rs
-  2. Repeated calls to list running apps (opening the process picker multiple times) do not accumulate open HANDLE objects — every OpenProcess call is matched by a CloseHandle before the function returns
-  3. A release CI run completes without "Signature not found for the updater JSON. Skipping upload" — the updater JSON signature artifact is successfully uploaded
-  4. Triggering a macro emergency stop on macOS does not deadlock — the REGISTRY lock is released before any CGEvent is posted; and when a profile auto-save fails, the user sees a visible error in the UI
+  1. `cargo build --target x86_64-pc-windows-msvc` produces zero warnings
+  2. Repeated calls to list running apps do not accumulate open HANDLE objects — every OpenProcess is matched by a CloseHandle
+  3. A release CI run completes without the "Signature not found" skip — updater JSON artifact uploads successfully
+  4. Triggering a macro emergency stop on macOS does not deadlock — REGISTRY lock released before CGEvent post; auto-save failures show a visible UI error
+  5. On macOS 26, the app shows a clear prompt when Input Monitoring is not granted — user knows why hotkeys don't fire and how to fix it
+  6. After installing a signed build over an unsigned one, the app detects the TCC identity change and prompts the user to re-add Accessibility in System Settings
 
 **Plans**: TBD
 
-### Phase 8: Parallel Macro Execution
+### Phase 8: Hotkey Reliability & Conflict Safety
+
+**Goal**: The hotkey binding system is reliable, full-featured, and safe — supports a broad key range, prevents silent conflicts between macros, and users understand that binds are system-wide
+**Depends on**: Nothing (independent of EXEC and UI work)
+**Requirements**: UX-11, UX-12, UX-13, UX-14
+**Success Criteria** (what must be TRUE):
+
+  1. A user can bind a hotkey using not just A-Z but also 0-9, F1-F12, and modifier combinations — the binding UI exposes a picker or accepts any of these inputs
+  2. Attempting to bind a key that is already assigned to another macro shows an explicit conflict error or reassignment prompt — no silent shadowing
+  3. Enabling a second macro that injects the same input (e.g., left click) as an already-active macro triggers a visible warning — the user is not left wondering why double-speed clicks are happening
+  4. Hotkeys fire when AutoMux is not the focused app — the UI communicates this clearly (e.g., "Binds are system-wide"), and global operation is verified on both macOS and Windows
+
+**Plans**: TBD
+
+### Phase 9: Parallel Macro Execution
 
 **Goal**: Multiple macros can run simultaneously on both macOS and Windows — triggering a second macro never blocks, queues, or cancels a running one
 **Depends on**: Phase 6 (COMPAT findings may affect platform-layer changes needed for parallel execution on macOS)
 **Requirements**: EXEC-01, EXEC-02
 **Success Criteria** (what must be TRUE):
 
-  1. On macOS, enabling macro B while macro A is actively firing does not pause, delay, or cancel macro A — both macros fire their actions concurrently at their configured intervals
-  2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A without either blocking the other
+  1. On macOS, enabling macro B while macro A is actively firing does not pause, delay, or cancel macro A — both fire concurrently at their configured intervals
+  2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
 **Plans**: TBD
 
-### Phase 9: UI Redesign & Macro Management
+### Phase 10: UI Redesign & Macro Management
 
 **Goal**: AutoMux has a fully redesigned UI — Apple design language with liquid glass on macOS 26, a modern equivalent on Windows, and users can delete and edit existing macros with unambiguous action-type labels
-**Depends on**: Phase 6 (macOS 26 Tahoe APIs must be understood before implementing liquid glass effects)
+**Depends on**: Phase 6 (macOS 26 Tahoe APIs must be understood before implementing liquid glass effects); Phase 8 (hotkey UI rework feeds into the redesign)
 **Requirements**: UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10
 **Success Criteria** (what must be TRUE):
 
-  1. On macOS 26 Tahoe, the AutoMux window uses native liquid glass materials and vibrancy — window chrome and controls visually match the Tahoe HIG; layout is clean, focused, and keyboard-navigable in a Raycast-inspired hierarchy
-  2. On Windows, the app presents a modern, polished UI that matches AutoMux's visual identity without macOS-specific effects
+  1. On macOS 26 Tahoe, the AutoMux window uses native liquid glass materials and vibrancy — window chrome and controls match the Tahoe HIG; layout is clean, focused, and keyboard-navigable in a Raycast-inspired hierarchy
+  2. On Windows, the app presents a modern, polished UI matching AutoMux's visual identity without macOS-specific effects
   3. A user can delete any existing macro directly from the macro list without entering a separate edit mode
-  4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across app restarts
+  4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across restarts
   5. Action type selection displays unambiguous labels — "Left Click", "Right Click", "Hold", "Key Press" — with no unlabeled or ambiguous options
 
 **Plans**: TBD
@@ -125,7 +142,8 @@ Plans:
 | 3. Macro Setup UX | v1.0 | 4/4 | Complete | 2026-05-30 |
 | 4. CI Hardening | v1.0 | 2/2 | Complete | 2026-05-30 |
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
-| 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete   | 2026-06-12 |
+| 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 0/TBD | Not started | — |
-| 8. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
-| 9. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
+| 8. Hotkey Reliability & Conflict Safety | v2.0 | 0/TBD | Not started | — |
+| 9. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
+| 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |

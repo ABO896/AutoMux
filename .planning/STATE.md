@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
 status: executing
-stopped_at: active debug session — awaiting device verify for HID→Session post() fix
-last_updated: "2026-06-17T18:00:00Z"
-last_activity: 2026-06-17 -- macros-dont-fire-post-crash debug session, fix applied, awaiting device test
+stopped_at: Phase 6 complete — committed f965b7e. Planning updated. Ready to start Phase 7.
+last_updated: "2026-06-17T21:00:00Z"
+last_activity: 2026-06-17 -- Phase 6 complete; added COMPAT-04/05 + UX-11/12/13/14; roadmap renumbered (Phases 8–10)
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
   completed_plans: 5
-  percent: 40
+  percent: 30
 ---
 
 # Project State
@@ -21,27 +21,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 06 — macos-tahoe-26-compatibility
+**Current focus:** Phase 07 — carry-work-platform-ci-safety (next up)
 
 ## Current Position
 
-Phase: 06 (macos-tahoe-26-compatibility) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-06-04 -- Phase 06 execution started
+Phase: 06 (macos-tahoe-26-compatibility) — COMPLETE (2026-06-17)
+Next: Phase 07 — Carry Work, Platform, CI & Safety
+Status: Ready to plan Phase 07
 
 ```
-Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
+Progress: [████░░░░░░░░░░░░░░░░] ~20% (phases 6/10 complete in v2.0)
 ```
 
 ## Phase Summary
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Not started |
-| 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01 | Not started |
-| 8 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
-| 9 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
+| 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
+| 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Not started |
+| 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | Not started |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
+| 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
 ## Accumulated Context
 
@@ -51,20 +51,20 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 - All features must ship on both macOS and Windows — no platform-exclusive fixes
 - UI redesign: Apple design language + liquid glass (macOS 26), modern equivalent on Windows, Raycast-inspired layout
 - Parallel execution: triggering macro B while macro A runs must not block or cancel macro A — architectural change required
-- macOS Tahoe 26 compatibility is the critical path: macros may be broken on the new OS (CGEventTap regression suspected)
-- COMPAT investigation happens first (Phase 6) before assuming the architecture for EXEC-01/02 — Tahoe 26 fix may require platform changes affecting parallel execution design
-- Phase 7 folds all v1.2.0 carry work (Phases 6–8 unexecuted) — Windows cleanup, CI hardening, safety & error surface
-- Phase 9 (UI redesign) depends on Phase 6 because liquid glass APIs must be understood before implementation
-- Phase 7 is independent and can proceed in parallel with Phase 6
+- macOS Tahoe 26 compatibility is the critical path — DONE (Phase 6 complete)
+- kink-fixing and hotkey reliability (Phase 7+8) happens BEFORE the full UI/UX redesign (Phase 10)
+- Phase 10 (UI redesign) depends on Phase 6 because liquid glass APIs must be understood before implementation
+- Phase 9 (parallel execution) is independent and can proceed in parallel with Phase 7/8
 
 ### Known Constraints
 
 - COMPAT-01/02: Must work within Tauri and CGEvent API surface — OS enforces permission model
+- macOS 26 signing: ad-hoc signing (`signingIdentity: "-"`) is in place; CGEvent injection uses Session tap
 - UI-01: Liquid glass requires macOS 26+ APIs — cannot backport to Monterey/Ventura/Sonoma/Sequoia
 - UI-04: UI redesign must not increase idle memory/CPU overhead — keep AutoMux lightweight
 - SAFE-04: Lock ordering fix (release REGISTRY before CGEvent dispatch) is subtle — requires careful audit
 
-## Deferred Items
+### Deferred Items
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
@@ -75,6 +75,6 @@ Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0/4
 
 ## Session Continuity
 
-Last session: 2026-06-17T20:30:00Z
-Stopped at: COMPAT-01 + COMPAT-03 FIXED — macros fire on macOS 26, no crash. Code clean, compile clean. Not yet committed.
-Next: Commit the fix (06-03 tasks 1-4 complete). Then: plan follow-up for Input Monitoring detection (macOS 26 new requirement for hotkeys) and handle re-grant UX for users upgrading from unsigned builds.
+Last session: 2026-06-17T21:00:00Z
+Stopped at: Phase 6 committed (f965b7e). Planning updated with 6 new requirements (COMPAT-04/05, UX-11/12/13/14). Phases renumbered — Phase 8 is now Hotkey Reliability, old Phase 8/9 are now 9/10.
+Next: Start Phase 7 (Carry Work) — `/gsd-execute-phase` or `/gsd-plan-phase` for Phase 7.
