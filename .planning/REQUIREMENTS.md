@@ -92,7 +92,7 @@
 | UX-11 | Phase 8 | Complete (UI toast ships 08-05) |
 | UX-12 | Phase 8 | Complete (UI surfaces ship 08-05) |
 | UX-13 | Phase 8 | In Progress (data model + bit pinning complete 08-01; frontend computeModifiers + ModifierPreviewChip ship 08-04/05; OS-level modifier matching on macOS is a follow-up) |
-| UX-14 | Phase 8 | In Progress (Windows HOTKEY_BINDINGS + IPC routing complete 08-03; UI first-run banner + ↗ Global subtitle ship 08-05; platform verification pending 08-06) |
+| UX-14 | Phase 8 | Complete (Windows HOTKEY_BINDINGS + IPC routing complete 08-03; UI first-run banner + ↗ Global subtitle ship 08-05; 08-VERIFICATION.md gate artifact + manual device test plans ship 08-06; Windows cross-compile gate deferred to CI per plan) |
 | BUILD-01 | Phase 7 | Complete |
 | MEM-01 | Phase 7 | Complete |
 | CI-03 | Phase 7 | Complete |
@@ -118,4 +118,4 @@
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-30 — UX-11/UX-12/UX-14 user-facing surfaces complete (plan 08-05: ConflictErrorToast, ConflictWarningRegion, FirstRunGlobalNotice, ↗ Global subtitle, ModifierPreviewChip); UX-13 frontend complete; platform verification pending plan 08-06*
+*Last updated: 2026-06-30 — UX-11/UX-12/UX-14 user-facing surfaces complete (plan 08-05: ConflictErrorToast, ConflictWarningRegion, FirstRunGlobalNotice, ↗ Global subtitle, ModifierPreviewChip); UX-13 frontend complete; UX-14 platform verification complete (plan 08-06: 08-VERIFICATION.md gate artifact + manual device test plans; 4/4 automated gates green, 1 gate deferred to CI per plan)*
