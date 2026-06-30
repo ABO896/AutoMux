@@ -1018,4 +1018,86 @@ mod tests {
             state.conflicts
         );
     }
+
+    /// R-5 / Plan 08-06 Task 3: A v2.0 profile saved before Phase 8 must
+    /// deserialize cleanly. The pre-Phase-8 `MacroConfig` did not have a
+    /// `trigger_modifiers` field, and the pre-Phase-8 `AppState` did not
+    /// have a `conflicts` field. `#[serde(default)]` on both new fields
+    /// ensures backwards compatibility.
+    ///
+    /// This test deserializes a hand-crafted JSON string that matches the
+    /// pre-Phase-8 on-disk shape (no `trigger_modifiers` on `MacroConfig`,
+    /// no `conflicts` on `AppState`) and asserts that the new fields
+    /// default to `0` and `[]` respectively while preserving the original
+    /// `trigger_key` and `sequence` data.
+    #[test]
+    fn profile_backwards_compat() {
+        // Pre-Phase-8 on-disk shape: a ProfileData with one MacroConfig
+        // that has NO `trigger_modifiers` field. The `trigger_key` is set
+        // to F5 (keycode 96) so we can verify it's preserved.
+        let pre_phase_8_json = r#"{
+            "name": "Default",
+            "macros": {
+                "11111111-1111-1111-1111-111111111111": {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "name": "Pre-Phase-8 Macro",
+                    "interval_ms": 100,
+                    "enabled": true,
+                    "target_app": null,
+                    "sequence": {
+                        "steps": [
+                            {
+                                "InterleavedInterval": {
+                                    "input": { "MouseButton": "Left" },
+                                    "interval_ms": 100
+                                }
+                            }
+                        ]
+                    },
+                    "trigger_key": 96,
+                    "trigger_mode": "Pulse"
+                }
+            },
+            "engine_active": true
+        }"#;
+
+        // Deserialize via ProfileData — the on-disk wrapper.
+        let profile: crate::persistence::ProfileData = serde_json::from_str(pre_phase_8_json)
+            .expect("pre-Phase-8 profile JSON must deserialize cleanly");
+
+        assert_eq!(profile.name, "Default");
+        assert_eq!(profile.macros.len(), 1);
+        assert!(profile.engine_active);
+
+        let mac = profile
+            .macros
+            .values()
+            .next()
+            .expect("profile must contain one macro");
+        assert_eq!(mac.name, "Pre-Phase-8 Macro");
+        // trigger_key preserved across the serde boundary.
+        assert_eq!(mac.trigger_key, Some(96));
+        // trigger_modifiers defaulted to 0 (was missing in the JSON).
+        assert_eq!(
+            mac.trigger_modifiers, 0,
+            "trigger_modifiers must default to 0 when absent from the JSON"
+        );
+        // sequence preserved.
+        assert_eq!(mac.sequence.steps.len(), 1);
+
+        // AppState also gets the conflicts field via #[serde(default)].
+        // Round-trip an AppState with no `conflicts` key in the JSON.
+        let pre_phase_8_appstate_json = r#"{
+            "macros": {},
+            "emergency_stop_active": false,
+            "active_app": null,
+            "engine_active": true
+        }"#;
+        let state: AppState = serde_json::from_str(pre_phase_8_appstate_json)
+            .expect("pre-Phase-8 AppState JSON must deserialize cleanly");
+        assert!(
+            state.conflicts.is_empty(),
+            "conflicts must default to [] when absent from the JSON"
+        );
+    }
 }
