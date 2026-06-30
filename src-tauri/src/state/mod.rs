@@ -156,7 +156,7 @@ pub enum Intent {
     RemoveMacro(Uuid),
     SetMacroEnabled(Uuid, bool),
     SetMacroTargetApp(Uuid, Option<String>),
-    SetMacroTriggerKey(Uuid, Option<u16>),
+    SetMacroTriggerKey(Uuid, Option<u16>, Option<u64>),
     TriggerEmergencyStop,
     ResetEmergencyStop,
     ActiveAppChanged(Option<String>),
@@ -390,8 +390,29 @@ impl StateActor {
                 // id (if any) is ignored to prevent spoofing or UUID collisions.
                 let new_id = Uuid::new_v4();
                 config.id = new_id;
+                // UX-11: Pre-check the trigger key against other enabled macros
+                // before inserting. If the new macro's trigger_key collides with
+                // an existing macro's (keycode, modifiers) pair, drop the trigger
+                // (set to None) so the macro is still created but with no hotkey.
+                // The full Result<(), String> error path is shipped in plan 08-03
+                // (Intent::BindHotkey) — this drop-on-conflict is the interim
+                // defense-in-depth (T-08-07 / T-08-12 in 08-02-PLAN.md).
+                if let Some(key) = config.trigger_key {
+                    if let Some(_conflicting_id) =
+                        self.check_trigger_key_conflict(new_id, key, config.trigger_modifiers)
+                    {
+                        config.trigger_key = None;
+                        config.trigger_modifiers = 0;
+                    }
+                }
                 self.state.macros.insert(new_id, config);
                 self.reevaluate_all_macros().await;
+                // UX-12: refresh the derived `conflicts` field after the
+                // new macro lands in `state.macros` and the platform statics
+                // are re-pushed. Order matters: reevaluate first so any
+                // scheduler / platform-side state is consistent, then
+                // recompute the derived conflict graph.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
                 let _ = reply.send(new_id);
             }
@@ -417,11 +438,32 @@ impl StateActor {
                 self.reevaluate_all_macros().await;
                 self.auto_save_default().await;
             }
-            Intent::SetMacroTriggerKey(id, trigger_key) => {
+            Intent::SetMacroTriggerKey(id, trigger_key, trigger_modifiers) => {
+                // UX-11: Same pre-check as AddMacro. If a DIFFERENT macro
+                // already holds the requested (keycode, modifiers) pair, drop
+                // the trigger (set to None / 0) on the existing macro instead
+                // of applying the change. Self-rebind (same id) is allowed
+                // and falls through to the apply branch — `check_trigger_key_conflict`
+                // returns None for self_id matches, so the conflict branch
+                // is not entered. See T-08-08 / T-08-12 in 08-02-PLAN.md.
+                let mut new_key = trigger_key;
+                let mut new_mods = trigger_modifiers.unwrap_or(0);
+                if let Some(key) = new_key {
+                    if let Some(_conflicting_id) =
+                        self.check_trigger_key_conflict(id, key, new_mods)
+                    {
+                        new_key = None;
+                        new_mods = 0;
+                    }
+                }
                 if let Some(mac) = self.state.macros.get_mut(&id) {
-                    mac.trigger_key = trigger_key;
+                    mac.trigger_key = new_key;
+                    mac.trigger_modifiers = new_mods;
                 }
                 self.reevaluate_all_macros().await;
+                // UX-12: refresh derived `conflicts` after a successful
+                // (or coerced) trigger-key update.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
             }
             Intent::TriggerEmergencyStop => {

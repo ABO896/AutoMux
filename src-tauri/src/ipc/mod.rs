@@ -138,14 +138,16 @@ pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
 /// Update the trigger key for an existing macro.
 /// macOS: the CGEventTap observes keycode via HOTKEY_BINDINGS (managed separately by bind_hotkey).
 /// Windows: trigger key is propagated to MACRO_TRIGGER_KEYS via reevaluate_all_macros in StateActor.
+/// `modifiers`: platform-native bitmask (CGEventFlags on macOS, MOD_* on Windows).
 #[command]
 pub async fn set_macro_trigger_key(
     state: State<'_, StateManager>,
     id: Uuid,
     trigger_key: Option<u16>,
+    modifiers: Option<u64>,
 ) -> Result<(), String> {
     state
-        .send_intent(Intent::SetMacroTriggerKey(id, trigger_key))
+        .send_intent(Intent::SetMacroTriggerKey(id, trigger_key, modifiers))
         .await
         .map_err(|e| e.to_string())
 }
