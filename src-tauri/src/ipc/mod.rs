@@ -73,36 +73,38 @@ pub async fn get_active_app(state: State<'_, StateManager>) -> Result<Option<Str
 }
 
 /// Bind a global hotkey to toggle a specific macro.
-/// `keycode`: macOS virtual keycode (e.g. 12 = Q, 0 = A)
-/// `modifiers`: raw CGEventFlags bits (e.g. Cmd=0x100000, Shift=0x20000)
+/// UX-11: Routes through the StateActor so the conflict check can be enforced.
+/// The oneshot sender carries the conflict result back to the frontend.
+/// `keycode` and `modifiers` are platform-native (CGKeyCode + CGEventFlags
+/// bits on macOS, VK + MOD_* on Windows).
 #[command]
 pub async fn bind_hotkey(
-    _state: State<'_, StateManager>,
-    _macro_id: Uuid,
-    _keycode: u16,
-    _modifiers: u64,
+    state: State<'_, StateManager>,
+    macro_id: Uuid,
+    keycode: u16,
+    modifiers: u64,
 ) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::platform::macos::observer::{add_hotkey_binding, HotkeyAction, HotkeyBinding};
-        add_hotkey_binding(HotkeyBinding {
-            keycode: _keycode,
-            modifiers: _modifiers,
-            action: HotkeyAction::ToggleMacro(_macro_id),
-        });
-    }
-    Ok(())
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    state
+        .send_intent(Intent::BindHotkey(macro_id, keycode, modifiers, tx))
+        .await
+        .map_err(|e| e.to_string())?;
+    rx.await.map_err(|e| e.to_string())?
 }
 
-/// Remove all hotkey bindings for a specific macro.
+/// Remove a hotkey binding for a specific macro.
+/// UX-11/UX-14: Now enabled on Windows too (was macOS-only — see
+/// CONCERNS.md:150-152). The StateActor's UnbindHotkey handler clears the
+/// macro's trigger and rebuilds the platform HOTKEY_BINDINGS registry.
 #[command]
-pub async fn unbind_hotkey(_state: State<'_, StateManager>, _macro_id: Uuid) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        use crate::platform::macos::observer::remove_hotkey_bindings_for;
-        remove_hotkey_bindings_for(&_macro_id);
-    }
-    Ok(())
+pub async fn unbind_hotkey(
+    state: State<'_, StateManager>,
+    macro_id: Uuid,
+) -> Result<(), String> {
+    state
+        .send_intent(Intent::UnbindHotkey(macro_id))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ── Process Picker: RunningApp type and list_running_apps command ─
