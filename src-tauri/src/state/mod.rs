@@ -193,6 +193,76 @@ pub struct StateActor {
     input_provider: crate::platform::windows::WindowsInputProvider,
 }
 
+/// UX-11: Return the existing macro_id that holds the given (keycode, modifiers)
+/// pair, or `None` if the slot is free.
+///
+/// Self-rebind is allowed: if the existing holder is `self_id`, returns `None`
+/// (same macro, same key+mods is treated as a no-op, not a conflict).
+/// See RESEARCH.md D-4.
+pub(crate) fn check_trigger_key_conflict(
+    state: &AppState,
+    self_id: Uuid,
+    keycode: u16,
+    modifiers: u64,
+) -> Option<Uuid> {
+    for (other_id, mac) in &state.macros {
+        if other_id == &self_id {
+            continue; // self — not a conflict
+        }
+        if mac.trigger_key == Some(keycode) && mac.trigger_modifiers == modifiers {
+            return Some(*other_id);
+        }
+    }
+    None
+}
+
+/// UX-12: Recompute `state.conflicts` from the current enabled macro set.
+///
+/// For each enabled macro, expand its sequence with the same legacy fallback
+/// the scheduler uses (see `scheduler/mod.rs:257-270`), group macros by
+/// `InputEvent`, and emit an `InputConflict` for any group with ≥2 macros.
+///
+/// O(n × steps) — typical config is <50 macros × <5 steps, negligible cost
+/// (RESEARCH.md §3.2 / T-08-10). Pure mutator on `state.conflicts` only;
+/// the caller is responsible for `reevaluate_all_macros` and `broadcast_state`.
+pub(crate) fn recompute_conflicts(state: &mut AppState) {
+    use std::collections::HashMap;
+    let mut by_input: HashMap<InputEvent, Vec<Uuid>> = HashMap::new();
+
+    for (id, mac) in &state.macros {
+        if !mac.enabled {
+            continue;
+        }
+        // Mirror the scheduler's legacy fallback exactly (scheduler/mod.rs:257-270):
+        // empty sequence + Pulse → single left-click interval;
+        // empty sequence + Hold  → sustained left-click hold.
+        let inputs: Vec<InputEvent> = if mac.sequence.steps.is_empty() {
+            vec![InputEvent::MouseButton(MouseButton::Left)]
+        } else {
+            mac.sequence
+                .steps
+                .iter()
+                .map(|step| match step {
+                    ActionStep::SustainedHold { input } => *input,
+                    ActionStep::InterleavedInterval { input, .. } => *input,
+                })
+                .collect()
+        };
+        for input in inputs {
+            by_input.entry(input).or_default().push(*id);
+        }
+    }
+
+    state.conflicts = by_input
+        .into_iter()
+        .filter(|(_, ids)| ids.len() >= 2)
+        .map(|(input, mut macros)| {
+            macros.sort_unstable();
+            InputConflict { input, macros }
+        })
+        .collect();
+}
+
 impl StateActor {
     pub fn new(
         receiver: mpsc::Receiver<Intent>,
@@ -502,6 +572,24 @@ impl StateActor {
         crate::platform::windows::update_macro_trigger_keys(trigger_keys);
     }
 
+    /// UX-11 wrapper: delegates to the free function so intent handlers can
+    /// call `self.check_trigger_key_conflict(...)` and the helper can be
+    /// unit-tested without a Tauri AppHandle.
+    fn check_trigger_key_conflict(
+        &self,
+        self_id: Uuid,
+        keycode: u16,
+        modifiers: u64,
+    ) -> Option<Uuid> {
+        check_trigger_key_conflict(&self.state, self_id, keycode, modifiers)
+    }
+
+    /// UX-12 wrapper: delegates to the free function. See `recompute_conflicts`
+    /// docs for behavior.
+    fn recompute_conflicts(&mut self) {
+        recompute_conflicts(&mut self.state);
+    }
+
     fn broadcast_state(&self) {
         use tauri::Emitter;
         let _ = self.app_handle.emit("state-changed", &self.state);
@@ -541,5 +629,176 @@ impl StateManager {
 
     pub async fn send_intent(&self, intent: Intent) -> Result<(), mpsc::error::SendError<Intent>> {
         self.sender.send(intent).await
+    }
+}
+
+// ── Unit tests for conflict-detection helpers ────────────────────
+//
+// These tests exercise the UX-11 (`check_trigger_key_conflict`) and
+// UX-12 (`recompute_conflicts`) helpers via the free functions in this
+// module, matching the persistence test style (no `StateActor`
+// construction required → no Tauri AppHandle / channel plumbing).
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: build a `MacroConfig` with the given trigger key+mods and an
+    /// optional pre-populated `sequence`. Used by all four tests below.
+    fn make_macro(id: Uuid, name: &str, trigger_key: Option<u16>, trigger_modifiers: u64, sequence: ActionSequence) -> MacroConfig {
+        MacroConfig {
+            id,
+            name: name.to_string(),
+            interval_ms: 100,
+            enabled: false,
+            target_app: None,
+            sequence,
+            trigger_key,
+            trigger_modifiers,
+            trigger_mode: TriggerMode::Pulse,
+        }
+    }
+
+    /// UX-11: Rebinding the same macro to the same key+mods must succeed.
+    /// (Self-rebind is allowed — same macro, same key+mods is a no-op, not
+    /// a conflict. See RESEARCH.md D-4.)
+    #[test]
+    fn self_rebind_allowed() {
+        let mut state = AppState::default();
+        let id = Uuid::new_v4();
+        state.macros.insert(
+            id,
+            make_macro(id, "self", Some(96), 0, ActionSequence::default()),
+        );
+
+        // Self-rebind: same id, same key+mods → no conflict.
+        assert_eq!(check_trigger_key_conflict(&state, id, 96, 0), None);
+    }
+
+    /// UX-11: Binding a different macro to the same (keycode, modifiers) pair
+    /// must report the existing holder's id.
+    #[test]
+    fn bind_conflict_rejected() {
+        let mut state = AppState::default();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+        state.macros.insert(
+            id_a,
+            make_macro(id_a, "alpha", Some(96), 0, ActionSequence::default()),
+        );
+        state.macros.insert(
+            id_b,
+            make_macro(id_b, "beta", Some(96), 0, ActionSequence::default()),
+        );
+
+        // From `id_a`'s perspective, `id_b` holds the same (96, 0) pair.
+        assert_eq!(
+            check_trigger_key_conflict(&state, id_a, 96, 0),
+            Some(id_b)
+        );
+        // And symmetrically.
+        assert_eq!(
+            check_trigger_key_conflict(&state, id_b, 96, 0),
+            Some(id_a)
+        );
+        // Different keycode → no conflict.
+        assert_eq!(check_trigger_key_conflict(&state, id_a, 97, 0), None);
+    }
+
+    /// UX-12: Two enabled macros sharing the same `InputEvent` appear in
+    /// `state.conflicts` after `recompute_conflicts`.
+    #[test]
+    fn conflict_detection_overlap() {
+        let mut state = AppState::default();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+        state.macros.insert(
+            id_a,
+            make_macro(
+                id_a,
+                "alpha",
+                None,
+                0,
+                ActionSequence {
+                    steps: vec![ActionStep::InterleavedInterval {
+                        input: InputEvent::MouseButton(MouseButton::Left),
+                        interval_ms: 100,
+                    }],
+                },
+            ),
+        );
+        state.macros.insert(
+            id_b,
+            make_macro(
+                id_b,
+                "beta",
+                None,
+                0,
+                ActionSequence {
+                    steps: vec![ActionStep::InterleavedInterval {
+                        input: InputEvent::MouseButton(MouseButton::Left),
+                        interval_ms: 200,
+                    }],
+                },
+            ),
+        );
+        // Enable both — `recompute_conflicts` only considers enabled macros.
+        state.macros.get_mut(&id_a).unwrap().enabled = true;
+        state.macros.get_mut(&id_b).unwrap().enabled = true;
+
+        recompute_conflicts(&mut state);
+
+        assert_eq!(state.conflicts.len(), 1, "expected exactly one conflict group");
+        assert_eq!(state.conflicts[0].macros.len(), 2);
+        // The `macros` vec is `sort_unstable`-d by `Uuid::Ord` (NOT insertion
+        // order) — the contract is "both ids present" not "this specific order".
+        let mut got = state.conflicts[0].macros.clone();
+        got.sort();
+        let mut want = vec![id_a, id_b];
+        want.sort();
+        assert_eq!(got, want);
+        assert_eq!(
+            state.conflicts[0].input,
+            InputEvent::MouseButton(MouseButton::Left)
+        );
+    }
+
+    /// UX-12: Disabling one of the conflicting macros removes the conflict
+    /// from the derived `conflicts` field.
+    #[test]
+    fn conflict_disappear_on_disable() {
+        let mut state = AppState::default();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+        let mk = |id: Uuid| MacroConfig {
+            id,
+            name: format!("m{}", id),
+            interval_ms: 100,
+            enabled: true,
+            target_app: None,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                    interval_ms: 100,
+                }],
+            },
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: TriggerMode::Pulse,
+        };
+        state.macros.insert(id_a, mk(id_a));
+        state.macros.insert(id_b, mk(id_b));
+
+        recompute_conflicts(&mut state);
+        assert_eq!(state.conflicts.len(), 1);
+
+        // Disable one of the two — conflict group must drop out.
+        state.macros.get_mut(&id_b).unwrap().enabled = false;
+        recompute_conflicts(&mut state);
+        assert!(
+            state.conflicts.is_empty(),
+            "expected no conflicts after disabling one macro, got {:?}",
+            state.conflicts
+        );
     }
 }
