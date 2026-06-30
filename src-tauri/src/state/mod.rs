@@ -42,6 +42,19 @@ pub enum InputEvent {
     Key(u16),
 }
 
+/// UX-12: A group of macros that share the same input. Surfaced in the UI
+/// as a non-blocking warning ("{A} and {B} both inject Left Click — clicks
+/// will fire at 2× rate.").
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputConflict {
+    /// The set of macros sharing this input. Order is non-deterministic
+    /// (HashMap iteration order) — frontend sorts by macro name for display.
+    pub macros: Vec<Uuid>,
+    /// The shared input event. Uses `InputEvent` (Hash + Eq) so the conflict
+    /// can be detected by `HashMap<InputEvent, Vec<Uuid>>` accumulation.
+    pub input: InputEvent,
+}
+
 // ── Action Sequence Model ────────────────────────────────────────
 // Supports simultaneous "Sustained Holds" and "Interleaved Intervals"
 // for complex automation like Minecraft AFK farms.
@@ -93,6 +106,13 @@ pub struct MacroConfig {
     /// The keycode that toggles this macro. If None, it relies on global toggle.
     #[serde(default)]
     pub trigger_key: Option<u16>,
+    /// Raw modifier bits for the trigger key. Platform-specific:
+    ///   macOS: CGEventFlags bits (Shift=0x20000, Control=0x40000,
+    ///          Option=0x80000, Command=0x100000)
+    ///   Windows: MOD_* values (MOD_ALT=0x1, MOD_CONTROL=0x2,
+    ///            MOD_SHIFT=0x4, MOD_WIN=0x8)
+    #[serde(default)]
+    pub trigger_modifiers: u64,
     /// The behavior mode of this macro when triggered.
     #[serde(default)]
     pub trigger_mode: TriggerMode,
@@ -108,6 +128,12 @@ pub struct AppState {
     /// Not serialized to frontend — internal StateActor flag only.
     #[serde(skip)]
     pub loading_profile: bool,
+    /// UX-12: derived list of input-event conflicts between currently
+    /// enabled macros. Recomputed by `recompute_conflicts()` after every
+    /// state-mutating intent. Sent to the frontend via the `state-changed`
+    /// event; not persisted in profile JSON (#[serde(default)]).
+    #[serde(default)]
+    pub conflicts: Vec<InputConflict>,
 }
 
 impl Default for AppState {
@@ -118,6 +144,7 @@ impl Default for AppState {
             active_app: None,
             engine_active: true,
             loading_profile: false,
+            conflicts: Vec::new(),
         }
     }
 }

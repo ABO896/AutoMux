@@ -418,6 +418,7 @@ mod tests {
             enabled: true,
             target_app: None,
             trigger_key: None,
+            trigger_modifiers: 0,
             trigger_mode: crate::state::TriggerMode::Pulse,
             sequence: ActionSequence {
                 steps: vec![
@@ -516,6 +517,7 @@ mod tests {
             enabled: true,
             target_app: None,
             trigger_key: None,
+            trigger_modifiers: 0,
             trigger_mode: crate::state::TriggerMode::Pulse,
             sequence: ActionSequence {
                 steps: vec![ActionStep::InterleavedInterval {

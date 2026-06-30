@@ -269,6 +269,7 @@ mod tests {
                     enabled: false,
                     target_app: Some("com.example.app".to_string()),
                     trigger_key: None,
+                    trigger_modifiers: 0,
                     trigger_mode: crate::state::TriggerMode::Pulse,
                     sequence: ActionSequence {
                         steps: vec![
