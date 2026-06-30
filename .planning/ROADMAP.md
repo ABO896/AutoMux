@@ -33,7 +33,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 
 - [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 3 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (06-01/06-02 shipped 2026-06-04; 06-03 fixes UAF crash + injection regression surfaced on device) (completed 2026-06-12)
 - [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
-- [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior
+- [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 2/6 plans done; UX-11+UX-12 backend complete)*
 - [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
 - [ ] **Phase 10: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
 
@@ -110,7 +110,15 @@ Plans:
   3. Enabling a second macro that injects the same input (e.g., left click) as an already-active macro triggers a visible warning — the user is not left wondering why double-speed clicks are happening
   4. Hotkeys fire when AutoMux is not the focused app — the UI communicates this clearly (e.g., "Binds are system-wide"), and global operation is verified on both macOS and Windows
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+
+- [x] 08-01-PLAN.md — Hotkey data model + modifier bit pinning (UX-11, UX-13)
+- [x] 08-02-PLAN.md — Conflict detection helpers + 9-handler wiring (UX-11, UX-12)
+- [ ] 08-03-PLAN.md — Intent::BindHotkey / Intent::UnbindHotkey + new Windows HOTKEY_BINDINGS
+- [ ] 08-04-PLAN.md — Frontend computeModifiers + hotkey IPC threading
+- [ ] 08-05-PLAN.md — Conflict toast / warning region / first-run global notice
+- [ ] 08-06-PLAN.md — Global hotkey behavior verification on both platforms
 
 ### Phase 9: Parallel Macro Execution
 

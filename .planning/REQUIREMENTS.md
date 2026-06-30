@@ -37,8 +37,8 @@
 
 ### Hotkey System Reliability
 
-- [ ] **UX-11**: Binding a hotkey that is already assigned to another macro shows an error or asks the user to reassign — no silent shadowing of an existing bind
-- [ ] **UX-12**: App prevents or warns when multiple enabled macros inject the same input type simultaneously (e.g., two left-click macros both active) — unpredictable timing multiplication is surfaced, not silently allowed
+- [x] **UX-11**: Binding a hotkey that is already assigned to another macro shows an error or asks the user to reassign — no silent shadowing of an existing bind *(backend: check_trigger_key_conflict wired into AddMacro + SetMacroTriggerKey; explicit Result<(), String> error path via Intent::BindHotkey ships in plan 08-03)*
+- [x] **UX-12**: App prevents or warns when multiple enabled macros inject the same input type simultaneously (e.g., two left-click macros both active) — unpredictable timing multiplication is surfaced, not silently allowed *(backend: AppState.conflicts field recomputed by recompute_conflicts() on 9 state-mutating intent handlers; UI toast/warning region ships in plan 08-05)*
 - [ ] **UX-13**: Hotkey binding supports the full practical key range — not just letters (A-Z) but also number keys (0-9), function keys (F1-F12), and modifier combinations (Cmd/Ctrl/Shift/Option as modifiers on macOS; Ctrl/Alt/Shift/Win on Windows)
 - [ ] **UX-14**: Macros trigger correctly when AutoMux is not the focused application — global hotkey observation is verified on both macOS (CGEventTap HID) and Windows (Win32 global hook), and the UI clearly communicates that binds are system-wide
 
@@ -89,9 +89,9 @@
 | COMPAT-03 | Phase 6 | Complete |
 | COMPAT-04 | Phase 7 | Complete |
 | COMPAT-05 | Phase 7 | Complete |
-| UX-11 | Phase 8 | Pending |
-| UX-12 | Phase 8 | Pending |
-| UX-13 | Phase 8 | Pending |
+| UX-11 | Phase 8 | In Progress (backend complete; full error surface ships 08-03) |
+| UX-12 | Phase 8 | In Progress (backend complete; UI surfaces ship 08-05) |
+| UX-13 | Phase 8 | In Progress (data model + bit pinning complete 08-01; bind IPC ships 08-03) |
 | UX-14 | Phase 8 | Pending |
 | BUILD-01 | Phase 7 | Complete |
 | MEM-01 | Phase 7 | Complete |
