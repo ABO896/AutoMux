@@ -33,7 +33,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 
 - [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 3 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (06-01/06-02 shipped 2026-06-04; 06-03 fixes UAF crash + injection regression surfaced on device) (completed 2026-06-12)
 - [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
-- [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 4/6 plans done; UX-11 frontend plumbing + UX-13 modifier pass-through complete, UX-12/UX-14 UI surfaces pending 08-05)*
+- [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 5/6 plans done; UX-11/UX-12/UX-13/UX-14 user-facing surfaces complete, platform verification pending 08-06)*
 - [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
 - [ ] **Phase 10: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
 
@@ -117,7 +117,7 @@ Plans:
 - [x] 08-02-PLAN.md — Conflict detection helpers + 9-handler wiring (UX-11, UX-12)
 - [x] 08-03-PLAN.md — Intent::BindHotkey / Intent::UnbindHotkey + new Windows HOTKEY_BINDINGS (UX-11, UX-14)
 - [x] 08-04-PLAN.md — Frontend computeModifiers + hotkey IPC threading (UX-11, UX-13)
-- [ ] 08-05-PLAN.md — Conflict toast / warning region / first-run global notice
+- [x] 08-05-PLAN.md — Conflict toast / warning region / first-run global notice (UX-11, UX-12, UX-14)
 - [ ] 08-06-PLAN.md — Global hotkey behavior verification on both platforms
 
 ### Phase 9: Parallel Macro Execution
@@ -160,6 +160,6 @@ Plans:
 | 5. macOS Permissions & Reliability | v1.2.0 | 2/2 | Complete | 2026-06-02 |
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
-| 8. Hotkey Reliability & Conflict Safety | v2.0 | 4/6 | In Progress | — |
+| 8. Hotkey Reliability & Conflict Safety | v2.0 | 5/6 | In Progress | — |
 | 9. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |

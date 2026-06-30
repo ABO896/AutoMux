@@ -37,10 +37,10 @@
 
 ### Hotkey System Reliability
 
-- [x] **UX-11**: Binding a hotkey that is already assigned to another macro shows an error or asks the user to reassign — no silent shadowing of an existing bind *(backend: Intent::BindHotkey + bind_hotkey IPC wired; Result<(), String> error path with conflict message; UI toast ships in plan 08-05)*
-- [x] **UX-12**: App prevents or warns when multiple enabled macros inject the same input type simultaneously (e.g., two left-click macros both active) — unpredictable timing multiplication is surfaced, not silently allowed *(backend: AppState.conflicts field recomputed by recompute_conflicts() on 9 state-mutating intent handlers; UI toast/warning region ships in plan 08-05)*
-- [ ] **UX-13**: Hotkey binding supports the full practical key range — not just letters (A-Z) but also number keys (0-9), function keys (F1-F12), and modifier combinations (Cmd/Ctrl/Shift/Option as modifiers on macOS; Ctrl/Alt/Shift/Win on Windows)
-- [x] **UX-14**: Macros trigger correctly when AutoMux is not the focused application — global hotkey observation is verified on both macOS (CGEventTap HID) and Windows (Win32 global hook), and the UI clearly communicates that binds are system-wide *(backend: Windows HOTKEY_BINDINGS registry + build_mod_mask helper added in plan 08-03; bind_hotkey/unbind_hotkey IPC commands no longer macOS-only; UI first-run banner ships in plan 08-05)*
+- [x] **UX-11**: Binding a hotkey that is already assigned to another macro shows an error or asks the user to reassign — no silent shadowing of an existing bind *(backend: Intent::BindHotkey + bind_hotkey IPC wired; Result<(), String> error path with conflict message; UI ConflictErrorToast ships in plan 08-05 — UX-11 user-facing surface complete)*
+- [x] **UX-12**: App prevents or warns when multiple enabled macros inject the same input type simultaneously (e.g., two left-click macros both active) — unpredictable timing multiplication is surfaced, not silently allowed *(backend: AppState.conflicts field recomputed by recompute_conflicts() on 9 state-mutating intent handlers; UI ConflictWarningRegion ships in plan 08-05 — UX-12 user-facing surface complete)*
+- [ ] **UX-13**: Hotkey binding supports the full practical key range — not just letters (A-Z) but also number keys (0-9), function keys (F1-F12), and modifier combinations (Cmd/Ctrl/Shift/Option as modifiers on macOS; Ctrl/Alt/Shift/Win on Windows) *(data model + bit pinning complete 08-01; frontend computeModifiers ships 08-04; UI ModifierPreviewChip ships 08-05 — UX-13 frontend complete; OS-level modifier matching on macOS is a follow-up)*
+- [x] **UX-14**: Macros trigger correctly when AutoMux is not the focused application — global hotkey observation is verified on both macOS (CGEventTap HID) and Windows (Win32 global hook), and the UI clearly communicates that binds are system-wide *(backend: Windows HOTKEY_BINDINGS registry + build_mod_mask helper added in plan 08-03; bind_hotkey/unbind_hotkey IPC commands no longer macOS-only; UI FirstRunGlobalNotice banner + in-card ↗ Global subtitle ships in plan 08-05 — UX-14 user-facing surfaces complete; platform verification pending 08-06)*
 
 ### Platform Cleanup *(carried from v1.2.0)*
 
@@ -89,10 +89,10 @@
 | COMPAT-03 | Phase 6 | Complete |
 | COMPAT-04 | Phase 7 | Complete |
 | COMPAT-05 | Phase 7 | Complete |
-| UX-11 | Phase 8 | In Progress (backend complete; UI toast ships 08-05) |
-| UX-12 | Phase 8 | In Progress (backend complete; UI surfaces ship 08-05) |
-| UX-13 | Phase 8 | In Progress (data model + bit pinning complete 08-01; frontend computeModifiers ships 08-04) |
-| UX-14 | Phase 8 | In Progress (Windows HOTKEY_BINDINGS + IPC routing complete 08-03; UI first-run banner ships 08-05) |
+| UX-11 | Phase 8 | Complete (UI toast ships 08-05) |
+| UX-12 | Phase 8 | Complete (UI surfaces ship 08-05) |
+| UX-13 | Phase 8 | In Progress (data model + bit pinning complete 08-01; frontend computeModifiers + ModifierPreviewChip ship 08-04/05; OS-level modifier matching on macOS is a follow-up) |
+| UX-14 | Phase 8 | In Progress (Windows HOTKEY_BINDINGS + IPC routing complete 08-03; UI first-run banner + ↗ Global subtitle ship 08-05; platform verification pending 08-06) |
 | BUILD-01 | Phase 7 | Complete |
 | MEM-01 | Phase 7 | Complete |
 | CI-03 | Phase 7 | Complete |
@@ -118,4 +118,4 @@
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-17 — added COMPAT-04/05 (macOS 26 follow-ups) and UX-11/12/13/14 (hotkey reliability); phases renumbered 8→9, 9→10*
+*Last updated: 2026-06-30 — UX-11/UX-12/UX-14 user-facing surfaces complete (plan 08-05: ConflictErrorToast, ConflictWarningRegion, FirstRunGlobalNotice, ↗ Global subtitle, ModifierPreviewChip); UX-13 frontend complete; platform verification pending plan 08-06*
