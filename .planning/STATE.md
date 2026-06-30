@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
 status: executing
-stopped_at: Phase 8 Plan 5 complete
-last_updated: "2026-06-30T21:41:48.000Z"
+stopped_at: Phase 8 Plan 6 complete (verification gate)
+last_updated: "2026-06-30T22:07:24.000Z"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 14
-  completed_plans: 13
-  percent: 93
+  completed_plans: 14
+  percent: 100
 current_phase: 08
 current_phase_name: hotkey-reliability-conflict-safety
 ---
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 08 (hotkey-reliability-conflict-safety) — EXECUTING
-Plan: 5 of 6
-Next: Phase 08 — Hotkey Reliability & Conflict Safety, Plan 08-06 (Global hotkey behavior verification on both platforms)
-Status: Plan 08-05 complete (C-1 toast + C-2 warning region + C-3 first-run banner + C-4 ↗ Global + C-5 modifier chip — all five UI surfaces live)
+Phase: 08 (hotkey-reliability-conflict-safety) — EXECUTING (technically complete)
+Plan: 6 of 6 (verification gate plan complete)
+Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
+Status: Plan 08-06 complete (08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; 1 gate deferred to CI per plan's explicit allowance)
 
 ```
-Progress: [██████████████░░░░░░] 93% (plans 13/14 complete in v2.0)
+Progress: [████████████████████] 100% (plans 14/14 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -42,7 +42,7 @@ Progress: [██████████████░░░░░░] 93% (pl
 | 5 | macOS Permissions & Reliability | (rolled into v1.x) | Complete (prior milestone) |
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
-| 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (5/6 plans done) |
+| 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
 | 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
@@ -78,11 +78,11 @@ Progress: [██████████████░░░░░░] 93% (pl
 
 ## Session Continuity
 
-**Resume file:** /Users/alvaro/AutoClicker/.planning/phases/08-hotkey-reliability-conflict-safety/08-05-SUMMARY.md
+**Resume file:** /Users/alvaro/AutoClicker/.planning/phases/08-hotkey-reliability-conflict-safety/08-06-SUMMARY.md
 
-Last session: 2026-06-30T21:41:48.000Z
-Stopped at: Phase 8 Plan 5 complete (C-1 toast + C-2 warning region + C-3 first-run banner + C-4 ↗ Global + C-5 modifier chip)
-Next: Plan 08-06 (Global hotkey behavior verification on both platforms) — `/gsd-execute-phase 08`
+Last session: 2026-06-30T22:07:24.000Z
+Stopped at: Phase 8 Plan 6 complete (08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; Windows cross-compile deferred to CI)
+Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Next: Plan 08-06 (Global hotkey behavior verification on both platforms) — `/g
 | Phase 08 P03 | 3 min | 3 tasks | 3 files (BindHotkey IPC + Windows HOTKEY_BINDINGS) |
 | Phase 08 P04 | 5 min | 2 tasks (combined) | 1 file (frontend computeModifiers + threading + conflict error wiring) |
 | Phase 08 P05 | 5 min | 2 tasks | 1 file (5 UI surfaces: C-1 toast, C-2 region, C-3 banner, C-4 ↗ Global, C-5 modifier chip) |
+| Phase 08 P06 | 22 min | 4 tasks | 2 files (08-VERIFICATION.md + new profile_backwards_compat test) |
 
 ## Decisions
 
@@ -121,3 +122,9 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase 8 Plan 5]: Oxford-comma list join via inline `formatConflictList` helper plus singular/plural `verb()` helper for the C-2 body — the plan's body template `macroNames().join('" and "')` only reads correctly for exactly 2 macros. For 1 macro the body says `"AFK Farm" both inject ...` (wrong verb + "both" is incorrect); for 3+ macros UI-SPEC C-2 explicitly prescribes the `"A", "B", and "C"` Oxford-comma form. The inline helpers handle all conflict counts grammatically without changing the plan's heading or surrounding JSX. Implemented as plain functions inside the `<For>` body per CONVENTIONS.md (no `createMemo`).
 
 - [Phase 8 Plan 5]: `modifierChips` placed at module level with inline `IS_MACOS` detection — mirrors `computeModifiers` (Plan 08-04). Both are bit-translation helpers that must be callable from anywhere without depending on the `App()` closure. Inline `navigator.userAgent.toLowerCase().includes("mac")` produces the same bit values as the closure-bound version. Semantic order (`Shift → Ctrl → Alt → Cmd/Win`) is hard-coded in the bit→label tuple array and is independent of press order per UI-SPEC C-5.
+
+- [Phase 8 Plan 6]: `cargo test` and `cargo clippy` used the un-namespaced form (no `-p automux-lib`) because the actual package name is `automux` (hyphen-free) with a separate `[lib] name = "automux_lib"`. The plan's hyphenated `-p automux-lib` form errors with `package ID specification 'automux-lib' did not match any packages`. The verification report documents the equivalent invocation under each section's "Notes on command" line.
+
+- [Phase 8 Plan 6]: Added a new `profile_backwards_compat` unit test rather than relying on the manual smoke fallback. The test deserializes a hand-crafted pre-Phase-8 `ProfileData` JSON string (no `trigger_modifiers` on `MacroConfig`, no `conflicts` on `AppState`) and asserts the new fields default to `0` and `[]` respectively. R-5 is now pinned at the unit-test level — the `#[serde(default)]` annotations from Plan 08-01 are proven to work end-to-end for v2.0 users upgrading to Phase 8.
+
+- [Phase 8 Plan 6]: Windows cross-compile gate deferred to CI (same disposition as Plan 08-03) — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust 1.95.0, no `rustup`). The plan's "paste the output of `rustup target list --installed`" requirement is unsatisfiable on this host; the equivalent evidence is the cross-compile error itself + `cargo check --all-targets` clean exit + the bit-constant equivalence across `windows_mod_constants` test, `build_mod_mask` function, and `computeModifiers` helper (all use the same `0x0001`/`0x0002`/`0x0004`/`0x0008` values).
