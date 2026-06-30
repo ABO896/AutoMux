@@ -157,18 +157,18 @@ function App() {
 
   // UX-11: populated when a bind/create IPC returns a conflict error string
   // (built by `check_trigger_key_conflict` in the StateActor). The C-1
-  // ConflictErrorToast (Plan 08-05) renders this — the wiring (signal +
-  // helper) ships in 08-04 so the toast can be added without touching
-  // the call sites again. 8-second auto-dismiss per UI-SPEC C-1.
+  // ConflictErrorToast (Plan 08-05 Task 1) renders this — the wiring
+  // (signal + helper) shipped in 08-04 so the toast can be added without
+  // touching the call sites again. 8-second auto-dismiss per UI-SPEC C-1.
   const [conflictError, setConflictError] = createSignal<{
     key: string;
     macroName: string;
   } | null>(null);
-  // Plan 08-05 C-1 (ConflictErrorToast) will render this signal. The `void`
-  // reference is a no-op runtime read that satisfies the strict
-  // noUnusedLocals setting until the toast is added.
-  void conflictError;
   let _conflictErrorTimer: ReturnType<typeof setTimeout> | null = null;
+  // UX-12 (C-2): session-only dismiss flag for the conflict warning region.
+  // Resets implicitly when state().conflicts.length returns to 0 because
+  // the <Show> predicate re-evaluates. No explicit reset needed.
+  const [conflictsDismissed, setConflictsDismissed] = createSignal(false);
   function showConflictError(key: string, macroName: string) {
     if (_conflictErrorTimer !== null) clearTimeout(_conflictErrorTimer);
     setConflictError({ key, macroName });
@@ -835,6 +835,81 @@ function App() {
               📁 {activeProfile()}
             </span>
           </div>
+
+          {/* ── Conflict Error Toast (UX-11, UI-SPEC C-1) ── */}
+          <Show when={conflictError()}>
+            {(err) => (
+              <div
+                id="conflict-error-toast"
+                class="rounded-lg px-4 py-2.5 text-xs font-medium flex items-center gap-2 transition-all bg-danger/10 text-danger border border-danger/20"
+              >
+                <span>✕</span>
+                <div class="flex-1">
+                  <p class="font-medium">Hotkey already bound</p>
+                  <p class="text-text-dim text-[11px] mt-0.5">
+                    {err().key} is already assigned to "{err().macroName}". Unbind it first or pick a different key.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setConflictError(null)}
+                  class="text-[11px] text-text-muted hover:text-text-main transition-colors duration-200 cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </Show>
+
+          {/* ── Conflict Warning Region (UX-12, UI-SPEC C-2) ── */}
+          <Show when={state()?.conflicts && state()!.conflicts.length > 0 && !conflictsDismissed()}>
+            <div class="flex flex-col gap-3">
+              <For each={state()!.conflicts}>
+                {(conflict) => {
+                  // Plain functions per CONVENTIONS.md (no createMemo).
+                  const macroNames = () =>
+                    conflict.macros
+                      .map((id) => state()?.macros[id]?.name ?? "Unknown")
+                      .filter((n) => n !== "Unknown");
+                  const inputLabel = () =>
+                    "MouseButton" in conflict.input
+                      ? `🖱 ${conflict.input.MouseButton} Click`
+                      : `⌨ Key(${conflict.input.Key})`;
+                  const rateMultiplier = () => `${macroNames().length}×`;
+                  // Oxford-comma join: "A and B" for 2, "A, B, and C" for 3+.
+                  const formatConflictList = (names: string[]): string => {
+                    if (names.length === 0) return "";
+                    if (names.length === 1) return `"${names[0]}"`;
+                    if (names.length === 2) return `"${names[0]}" and "${names[1]}"`;
+                    const allButLast = names.slice(0, -1).map((n) => `"${n}"`).join(", ");
+                    return `${allButLast}, and "${names[names.length - 1]}"`;
+                  };
+                  const verb = () => (macroNames().length === 1 ? "injects" : "inject");
+                  return (
+                    <div
+                      id="conflict-warning-card"
+                      class="bg-warning/10 border border-warning/20 rounded-lg p-3 flex items-center gap-3"
+                    >
+                      <span class="text-warning text-base">⚠</span>
+                      <div class="flex-1">
+                        <p class="text-xs font-medium text-warning">
+                          {macroNames().length} macros are injecting the same input
+                        </p>
+                        <p class="text-[11px] text-text-dim">
+                          {formatConflictList(macroNames())} {verb()} {inputLabel()} — clicks will fire at {rateMultiplier()} rate.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setConflictsDismissed(true)}
+                        class="text-[11px] text-text-muted hover:text-text-main transition-colors duration-200 cursor-pointer"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
 
           {/* ── Auto-Save Error Banner ── */}
           <Show when={saveError()}>
