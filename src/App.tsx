@@ -18,6 +18,10 @@ interface MacroConfig {
   target_app: string | null;
   sequence: { steps: ActionStep[] };
   trigger_key: number | null;
+  // UX-13: Platform-native modifier bitmask paired with trigger_key. Values
+  // are CGEventFlags bits on macOS and MOD_* on Windows — see computeModifiers
+  // in this file for the exact mapping. Mirrors Rust MacroConfig.trigger_modifiers.
+  trigger_modifiers: number;
   trigger_mode: TriggerMode;
 }
 
@@ -34,6 +38,10 @@ interface AppState {
   emergency_stop_active: boolean;
   active_app: string | null;
   engine_active: boolean;
+  // UX-12: derived list of input-event conflicts between currently enabled
+  // macros. Populated by `recompute_conflicts()` after every state-mutating
+  // intent. Mirrors Rust AppState.conflicts: Vec<InputConflict>.
+  conflicts: Array<{ macros: string[]; input: InputEvent }>;
 }
 
 interface ProfileSummary {
@@ -66,6 +74,51 @@ function formatStep(step: ActionStep): string {
   if ("InterleavedInterval" in step)
     return `${formatInputEvent(step.InterleavedInterval.input)} every ${step.InterleavedInterval.interval_ms}ms`;
   return "?";
+}
+
+/**
+ * UX-13: Extract a platform-native modifier bitmask from a KeyboardEvent.
+ *
+ * macOS: CGEventFlags bits (matching what the CGEventTap callback stores
+ *   in `flags.bits()`). Values pinned by `cg_event_flag_constants` test in
+ *   `src-tauri/src/platform/macos/observer.rs` (08-01 Task 2).
+ *
+ *   Shift   = 0x020000
+ *   Control = 0x040000
+ *   Option  = 0x080000
+ *   Command = 0x100000
+ *
+ * Windows: Win32 MOD_* values. Values pinned by `windows_mod_constants`
+ *   test in `src-tauri/src/platform/windows/mod.rs` (08-01 Task 2). The
+ *   Windows `hook_callback` synthesizes this same bitmask from
+ *   `GetAsyncKeyState` via `build_mod_mask()` (08-03 Task 3).
+ *
+ *   MOD_ALT     = 0x0001
+ *   MOD_CONTROL = 0x0002
+ *   MOD_SHIFT   = 0x0004
+ *   MOD_WIN     = 0x0008
+ *
+ * Module-level so the helper is callable from outside the App() closure.
+ * The inline `IS_MACOS` check mirrors the constant declared inside App()
+ * (line 131) — same detection, different scope, identical bit output.
+ */
+function computeModifiers(e: KeyboardEvent): number {
+  const IS_MACOS = navigator.userAgent.toLowerCase().includes("mac");
+  if (IS_MACOS) {
+    let m = 0;
+    if (e.shiftKey) m |= 0x020000;
+    if (e.ctrlKey)  m |= 0x040000;
+    if (e.altKey)   m |= 0x080000;
+    if (e.metaKey)  m |= 0x100000;
+    return m;
+  } else {
+    let m = 0;
+    if (e.shiftKey) m |= 0x0004;
+    if (e.ctrlKey)  m |= 0x0002;
+    if (e.altKey)   m |= 0x0001;
+    if (e.metaKey)  m |= 0x0008; // Win key
+    return m;
+  }
 }
 
 // ── App ─────────────────────────────────────────────────────────
@@ -102,6 +155,29 @@ function App() {
     type: "success" | "error";
   } | null>(null);
 
+  // UX-11: populated when a bind/create IPC returns a conflict error string
+  // (built by `check_trigger_key_conflict` in the StateActor). The C-1
+  // ConflictErrorToast (Plan 08-05) renders this — the wiring (signal +
+  // helper) ships in 08-04 so the toast can be added without touching
+  // the call sites again. 8-second auto-dismiss per UI-SPEC C-1.
+  const [conflictError, setConflictError] = createSignal<{
+    key: string;
+    macroName: string;
+  } | null>(null);
+  // Plan 08-05 C-1 (ConflictErrorToast) will render this signal. The `void`
+  // reference is a no-op runtime read that satisfies the strict
+  // noUnusedLocals setting until the toast is added.
+  void conflictError;
+  let _conflictErrorTimer: ReturnType<typeof setTimeout> | null = null;
+  function showConflictError(key: string, macroName: string) {
+    if (_conflictErrorTimer !== null) clearTimeout(_conflictErrorTimer);
+    setConflictError({ key, macroName });
+    _conflictErrorTimer = setTimeout(() => {
+      setConflictError(null);
+      _conflictErrorTimer = null;
+    }, 8000);
+  }
+
   const [appVersion, setAppVersion] = createSignal<string>("…");
 
   // ── New Macro Form State ──
@@ -112,7 +188,18 @@ function App() {
   const [newMacroTarget, setNewMacroTarget] = createSignal("");
   const [newMacroTriggerMode, setNewMacroTriggerMode] = createSignal<TriggerMode>("Pulse");
   const [newMacroTriggerKeyCode, setNewMacroTriggerKeyCode] = createSignal<number | null>(null);
+  // UX-13: modifier bits captured alongside the new-macro form's trigger key.
+  // Read by handleCreateMacro when building the MacroConfig for add_macro.
+  const [newMacroTriggerModifiers, setNewMacroTriggerModifiers] = createSignal<number>(0);
   const [triggerKeyRecording, setTriggerKeyRecording] = createSignal(false);
+  // UX-13 (C-5): tracks the modifier bits held by the user during key capture.
+  // Set in startCapture's onKeyDown; cleared on commit. The C-5 chip in
+  // Plan 08-05 reads this signal to render the modifier preview row.
+  const [recordingModifiers, setRecordingModifiers] = createSignal<number>(0);
+  // Plan 08-05 C-5 (ModifierPreviewChip) will render this signal. The `void`
+  // reference is a no-op runtime read that satisfies the strict
+  // noUnusedLocals setting until the chip is added.
+  void recordingModifiers;
 
   // ── Process Picker State ──
   const [apps, setApps] = createSignal<RunningApp[]>([]);
@@ -300,6 +387,8 @@ function App() {
     const triggerKey = newMacroTriggerKeyCode();
 
     // WR-05: id is generated by the backend; supply a placeholder that gets overwritten.
+    // UX-13: `trigger_modifiers` carries the platform-native bitmask captured
+    // by computeModifiers during key capture. See PATTERNS.md for the bit map.
     const config: MacroConfig = {
       id: "00000000-0000-0000-0000-000000000000",
       name,
@@ -310,6 +399,7 @@ function App() {
         steps: [{ InterleavedInterval: { input, interval_ms: interval } }],
       },
       trigger_key: triggerKey,
+      trigger_modifiers: newMacroTriggerModifiers(),
       trigger_mode: newMacroTriggerMode(),
     };
 
@@ -322,8 +412,21 @@ function App() {
       setNewMacroTarget("");
       setNewMacroTriggerMode("Pulse");
       setNewMacroTriggerKeyCode(null);
+      setNewMacroTriggerModifiers(0);
       setTriggerKeyRecording(false);
     } catch (e) {
+      // UX-11: surface the conflict error to the C-1 toast (Plan 08-05).
+      // The backend's error format is e.g.:
+      //   'Key F5 is already assigned to "AFK Farm". Unbind it first or pick a different key.'
+      //   'Key (keycode 96) is already assigned to "AFK Farm". ...'
+      // Extract the macro name; if the format doesn't match, fall back to a
+      // generic message — the user can still act on the conflict via the
+      // auto-save banner or the macros list.
+      const msg = String(e);
+      const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
+      const macroName = macroMatch ? macroMatch[1] : "another macro";
+      const keyLabel = triggerKey !== null ? resolveKeyName(triggerKey) : "Key";
+      showConflictError(keyLabel, macroName);
       console.error("Failed to create macro:", e);
     }
   }
@@ -337,29 +440,39 @@ function App() {
   }
 
   // @architect: Single-listener invariant via module-level ref (T-03-08)
-  function startCapture(onCommit: (nativeCode: number) => void) {
+  // UX-13: `onCommit` receives the platform-native (keycode, modifiers) pair
+  // — both must be forwarded to the IPC calls (bind_hotkey, set_macro_trigger_key,
+  // or add_macro) so the backend can do the conflict check.
+  function startCapture(onCommit: (nativeCode: number, modifiers: number) => void) {
     // Remove any prior stale listener before attaching a new one (Pitfall 2)
     if (_keyCaptureListener) {
       document.removeEventListener("keydown", _keyCaptureListener, true);
       _keyCaptureListener = null;
     }
     setTriggerKeyRecording(true);
+    setRecordingModifiers(0);
 
     function onKeyDown(e: KeyboardEvent) {
       e.preventDefault();
       e.stopPropagation();
       if (e.key === "Escape") {
         setTriggerKeyRecording(false);
+        setRecordingModifiers(0);
         document.removeEventListener("keydown", onKeyDown, true);
         _keyCaptureListener = null;
         return;
       }
-      if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+      // UX-13: capture the currently-held modifier bits BEFORE the keycode
+      // lookup. The C-5 chip in Plan 08-05 reads `recordingModifiers()` to
+      // show "⌘" / "Shift" / etc. while the user is still pressing.
+      const mods = computeModifiers(e);
+      setRecordingModifiers(mods);
       // Use e.code as lookup key to avoid F12/ArrowLeft collision — see keymap.ts
       const nativeCode = domKeycodeToNative(e.code);
       if (nativeCode === null) return;
-      onCommit(nativeCode);
+      onCommit(nativeCode, mods);
       setTriggerKeyRecording(false);
+      setRecordingModifiers(0);
       document.removeEventListener("keydown", onKeyDown, true);
       _keyCaptureListener = null;
     }
@@ -368,18 +481,29 @@ function App() {
   }
 
   // @architect: macOS uses unbind+rebind path per Pitfall 3 (T-03-07); Windows uses set_macro_trigger_key
-  async function handleCardSetTriggerKey(id: string, nativeCode: number) {
+  // UX-13: `modifiers` is the platform-native bitmask from computeModifiers,
+  // forwarded to both bind_hotkey (macOS) and set_macro_trigger_key (both).
+  async function handleCardSetTriggerKey(id: string, nativeCode: number, modifiers: number) {
     try {
       if (IS_MACOS) {
         await invoke("unbind_hotkey", { macro_id: id });
-        await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers: 0 });
-        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode });
+        await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
       } else {
-        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode });
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
       }
       setEditingCardId(null);
       setEditingField(null);
     } catch (e) {
+      // UX-11: surface the conflict error to the C-1 toast (Plan 08-05).
+      // Same parsing as handleCreateMacro — extract the conflicting macro
+      // name from the backend's well-known error format. Falls back to a
+      // generic message if the format doesn't match.
+      const msg = String(e);
+      const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
+      const macroName = macroMatch ? macroMatch[1] : "another macro";
+      const keyLabel = resolveKeyName(nativeCode);
+      showConflictError(keyLabel, macroName);
       console.error("Card trigger key update failed:", e);
     }
   }
@@ -852,7 +976,10 @@ function App() {
                         setEditingCardId(null);
                         setEditingField(null);
                       }
-                      startCapture((nativeCode) => setNewMacroTriggerKeyCode(nativeCode));
+                      startCapture((nativeCode, mods) => {
+                        setNewMacroTriggerKeyCode(nativeCode);
+                        setNewMacroTriggerModifiers(mods);
+                      });
                     }}
                   >
                     <span>
@@ -992,7 +1119,7 @@ function App() {
                             onClick={() => {
                               setEditingCardId(macro.id);
                               setEditingField("key");
-                              startCapture((nativeCode) => handleCardSetTriggerKey(macro.id, nativeCode));
+                              startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
                             }}
                           >Set key…</span>
                           <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
@@ -1007,7 +1134,7 @@ function App() {
                                 onClick={() => {
                                   setEditingCardId(macro.id);
                                   setEditingField("key");
-                                  startCapture((nativeCode) => handleCardSetTriggerKey(macro.id, nativeCode));
+                                  startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
                                 }}
                               >
                                 {resolveKeyName(macro.trigger_key!)}
