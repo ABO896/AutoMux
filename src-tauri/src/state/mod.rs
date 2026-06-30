@@ -470,7 +470,8 @@ impl StateActor {
             return;
         }
 
-        let mut trigger_keys = std::collections::HashMap::new();
+        let mut trigger_keys: std::collections::HashMap<(u16, u64), Uuid> =
+            std::collections::HashMap::new();
 
         for mac in self.state.macros.values() {
             let matches_target = match &mac.target_app {
@@ -491,7 +492,7 @@ impl StateActor {
             }
 
             if let Some(key) = mac.trigger_key {
-                trigger_keys.insert(key, mac.id);
+                trigger_keys.insert((key, mac.trigger_modifiers), mac.id);
             }
         }
 

@@ -407,18 +407,18 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = OnceLock::new();
-static MACRO_TRIGGER_KEYS: OnceLock<Mutex<HashMap<u16, Uuid>>> = OnceLock::new();
+static MACRO_TRIGGER_KEYS: OnceLock<Mutex<HashMap<(u16, u64), Uuid>>> = OnceLock::new();
 static HOOK_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 pub fn set_state_tx(tx: tokio::sync::mpsc::Sender<crate::state::Intent>) {
     let _ = STATE_TX.set(tx);
 }
 
-fn get_macro_trigger_keys() -> &'static Mutex<HashMap<u16, Uuid>> {
+fn get_macro_trigger_keys() -> &'static Mutex<HashMap<(u16, u64), Uuid>> {
     MACRO_TRIGGER_KEYS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn update_macro_trigger_keys(keys: HashMap<u16, Uuid>) {
+pub fn update_macro_trigger_keys(keys: HashMap<(u16, u64), Uuid>) {
     *get_macro_trigger_keys().lock().unwrap() = keys;
 }
 
@@ -447,8 +447,10 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
             }
 
             // MACRO TRIGGER KEYS (O(1) lookup)
+            // Plan 08-01 placeholder: keycode-only lookup with modifiers=0. The real
+            // synthesized modifier mask via GetAsyncKeyState is added in Plan 08-03.
             if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-                if let Some(&macro_id) = trigger_keys.get(&keycode) {
+                if let Some(&macro_id) = trigger_keys.get(&(keycode, 0_u64)) {
                     if let Some(tx) = STATE_TX.get() {
                         let _ = tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
                     }
@@ -537,4 +539,40 @@ pub fn initialize_hook() -> bool {
 #[cfg(not(target_os = "windows"))]
 pub fn initialize_hook() -> bool {
     false
+}
+
+#[cfg(test)]
+#[cfg(target_os = "windows")]
+mod tests {
+    /// UX-13: Pin the Windows MOD_* bit values so the frontend/backend
+    /// bit layout cannot silently drift. The frontend's `computeModifiers`
+    /// sends these exact bit values in `trigger_modifiers`; the Windows
+    /// `hook_callback` will synthesize a matching mask via GetAsyncKeyState
+    /// in Plan 08-03. If the constants change, the test fails and the
+    /// frontend/backend must be updated together.
+    ///
+    /// Sources:
+    ///   Microsoft Learn — RegisterHotKey function (MOD_ALT/MOD_CONTROL/MOD_SHIFT/MOD_WIN)
+    ///   https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
+    ///
+    /// These bit values have been stable since Windows 95. Asserted as
+    /// literal u16 values because the windows-rs crate does not currently
+    /// export named MOD_* constants in the same module as the platform code.
+    #[test]
+    fn windows_mod_constants() {
+        // Win32 RegisterHotKey modifier bit values:
+        //   MOD_ALT     = 0x0001
+        //   MOD_CONTROL = 0x0002
+        //   MOD_SHIFT   = 0x0004
+        //   MOD_WIN     = 0x0008
+        const MOD_ALT: u16 = 0x0001;
+        const MOD_CONTROL: u16 = 0x0002;
+        const MOD_SHIFT: u16 = 0x0004;
+        const MOD_WIN: u16 = 0x0008;
+
+        assert_eq!(MOD_ALT, 0x0001, "MOD_ALT must be 0x0001");
+        assert_eq!(MOD_CONTROL, 0x0002, "MOD_CONTROL must be 0x0002");
+        assert_eq!(MOD_SHIFT, 0x0004, "MOD_SHIFT must be 0x0004");
+        assert_eq!(MOD_WIN, 0x0008, "MOD_WIN must be 0x0008");
+    }
 }

@@ -194,14 +194,14 @@ pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
     Ok(result)
 }
 
-static MACRO_TRIGGER_KEYS: OnceLock<Mutex<std::collections::HashMap<u16, Uuid>>> = OnceLock::new();
+static MACRO_TRIGGER_KEYS: OnceLock<Mutex<std::collections::HashMap<(u16, u64), Uuid>>> = OnceLock::new();
 
-fn get_macro_trigger_keys() -> &'static Mutex<std::collections::HashMap<u16, Uuid>> {
+fn get_macro_trigger_keys() -> &'static Mutex<std::collections::HashMap<(u16, u64), Uuid>> {
     MACRO_TRIGGER_KEYS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
 }
 
 /// Replace the entire set of macro trigger keys at runtime.
-pub fn update_macro_trigger_keys(keys: std::collections::HashMap<u16, Uuid>) {
+pub fn update_macro_trigger_keys(keys: std::collections::HashMap<(u16, u64), Uuid>) {
     *get_macro_trigger_keys().lock().unwrap() = keys;
 }
 
@@ -440,7 +440,11 @@ pub fn initialize_tap() -> bool {
 
                     // MACRO TRIGGER KEYS (O(1) lookup)
                     if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-                        if let Some(&macro_id) = trigger_keys.get(&(keycode as u16)) {
+                        // macOS reads the held modifier bits from the CGEventFlags on
+                        // the current event. `flags.bits()` gives the raw bitmask,
+                        // matching the format stored in `trigger_modifiers`.
+                        let mod_bits = flags.bits();
+                        if let Some(&macro_id) = trigger_keys.get(&(keycode as u16, mod_bits)) {
                             if let Some(tx) = STATE_TX.get() {
                                 let _ =
                                     tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
@@ -615,5 +619,38 @@ impl Drop for MacPlatformObserver {
         // Called by Tauri's managed state drop at app shutdown (SAFE-02).
         // Ensures the NSWorkspace notification observer is unregistered cleanly.
         self.stop_observing();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// UX-13: Pin the macOS CGEventFlag* bit values so the frontend/backend
+    /// bit layout cannot silently drift. The frontend's `computeModifiers`
+    /// sends these exact bit values in `trigger_modifiers`; the macOS
+    /// `hook_callback` compares against `flags.bits()`. If the constants
+    /// change, the test fails and the frontend/backend must be updated
+    /// together.
+    ///
+    /// Sources:
+    ///   Apple developer documentation — CGEventFlags
+    ///   https://developer.apple.com/documentation/coregraphics/cgeventflags
+    #[test]
+    fn cg_event_flag_constants() {
+        // macOS CGEventFlag bit values (verified against core-graphics 0.24):
+        //   Shift   = 0x20000
+        //   Control = 0x40000
+        //   Alternate (Option) = 0x80000
+        //   Command = 0x100000
+        let shift = CGEventFlags::CGEventFlagShift.bits();
+        let control = CGEventFlags::CGEventFlagControl.bits();
+        let alternate = CGEventFlags::CGEventFlagAlternate.bits();
+        let command = CGEventFlags::CGEventFlagCommand.bits();
+
+        assert_eq!(shift, 0x20000, "CGEventFlagShift must be 0x20000");
+        assert_eq!(control, 0x40000, "CGEventFlagControl must be 0x40000");
+        assert_eq!(alternate, 0x80000, "CGEventFlagAlternate (Option) must be 0x80000");
+        assert_eq!(command, 0x100000, "CGEventFlagCommand must be 0x100000");
     }
 }
