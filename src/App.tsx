@@ -121,6 +121,36 @@ function computeModifiers(e: KeyboardEvent): number {
   }
 }
 
+/**
+ * UX-13 (C-5): Map a platform-native modifier bitmask to the list of label
+ * strings to render as preview chips. Order is SEMANTIC (Shift → Ctrl → Alt →
+ * Cmd/Win), independent of press order. Bits not present in `bits` are
+ * omitted from the result.
+ *
+ * Bit values mirror computeModifiers above and the Rust constants pinned
+ * by `cg_event_flag_constants` and `windows_mod_constants` tests in 08-01.
+ */
+function modifierChips(bits: number): string[] {
+  const IS_MACOS = navigator.userAgent.toLowerCase().includes("mac");
+  if (IS_MACOS) {
+    const order: Array<[number, string]> = [
+      [0x020000, "Shift"],
+      [0x040000, "Ctrl"],
+      [0x080000, "Option"],
+      [0x100000, "⌘"],
+    ];
+    return order.filter(([bit]) => (bits & bit) === bit).map(([, label]) => label);
+  } else {
+    const order: Array<[number, string]> = [
+      [0x0004, "Shift"],
+      [0x0002, "Ctrl"],
+      [0x0001, "Alt"],
+      [0x0008, "Win"],
+    ];
+    return order.filter(([bit]) => (bits & bit) === bit).map(([, label]) => label);
+  }
+}
+
 // ── App ─────────────────────────────────────────────────────────
 
 type Tab = "dashboard" | "profiles";
@@ -194,12 +224,12 @@ function App() {
   const [triggerKeyRecording, setTriggerKeyRecording] = createSignal(false);
   // UX-13 (C-5): tracks the modifier bits held by the user during key capture.
   // Set in startCapture's onKeyDown; cleared on commit. The C-5 chip in
-  // Plan 08-05 reads this signal to render the modifier preview row.
+  // Plan 08-05 Task 2 reads this signal to render the modifier preview row.
   const [recordingModifiers, setRecordingModifiers] = createSignal<number>(0);
-  // Plan 08-05 C-5 (ModifierPreviewChip) will render this signal. The `void`
-  // reference is a no-op runtime read that satisfies the strict
-  // noUnusedLocals setting until the chip is added.
-  void recordingModifiers;
+  // UX-14 (C-3): first-run banner visibility. Gated by
+  // localStorage.automux.hotkey_global_notice_dismissed !== "1" inside
+  // the initial-fetch createEffect (next to setAppVersion).
+  const [showGlobalNotice, setShowGlobalNotice] = createSignal<boolean>(false);
 
   // ── Process Picker State ──
   const [apps, setApps] = createSignal<RunningApp[]>([]);
@@ -242,6 +272,14 @@ function App() {
         setActiveApp(app);
         setProfiles(profileList);
         setAppVersion(version);
+        // UX-14 (C-3): first-run banner gated by localStorage. The user
+        // dismisses via "Got it" which sets the flag; on the next launch
+        // the banner is gone. Clearing app data brings it back (per
+        // RESEARCH.md R-8: false-positive re-show is cheaper than
+        // false-negative never-show).
+        setShowGlobalNotice(
+          localStorage.getItem("automux.hotkey_global_notice_dismissed") !== "1"
+        );
       } catch (e) {
         if (cancelled) return;
         console.error("Failed to fetch initial state:", e);
@@ -836,6 +874,31 @@ function App() {
             </span>
           </div>
 
+          {/* ── First-Run Global Notice (UX-14, UI-SPEC C-3) ── */}
+          <Show when={showGlobalNotice()}>
+            <div
+              id="first-run-global-notice"
+              class="bg-accent/10 border border-accent/20 rounded-lg p-3 flex items-center gap-3"
+            >
+              <span class="text-accent text-base">🌍</span>
+              <div class="flex-1">
+                <p class="text-xs font-medium text-accent">Binds are system-wide</p>
+                <p class="text-[11px] text-text-dim">
+                  Hotkeys fire even when AutoMux is in the background. You'll need to allow Input Monitoring in System Settings on macOS, or run as Administrator on Windows for them to work.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.setItem("automux.hotkey_global_notice_dismissed", "1");
+                  setShowGlobalNotice(false);
+                }}
+                class="text-[11px] text-text-muted hover:text-text-main transition-colors duration-200 cursor-pointer"
+              >
+                Got it
+              </button>
+            </div>
+          </Show>
+
           {/* ── Conflict Error Toast (UX-11, UI-SPEC C-1) ── */}
           <Show when={conflictError()}>
             {(err) => (
@@ -1035,49 +1098,65 @@ function App() {
                     <option value="Pulse">⏱ Pulse (Interval)</option>
                     <option value="Hold">🔒 Hold (Latched)</option>
                   </select>
-                  <div
-                    class={`rounded-lg px-3 py-2 text-sm w-40 cursor-pointer flex items-center justify-between
-                      ${triggerKeyRecording()
-                        ? "bg-background border border-accent text-accent shadow-[0_0_8px_var(--color-accent-glow)]"
-                        : newMacroTriggerKeyCode() !== null
-                          ? "bg-background border border-border text-text-main"
-                          : "bg-background border border-border text-text-dim"
-                      }`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => {
-                      // Cancel any in-progress card edit before starting form capture
-                      if (editingCardId() !== null) {
-                        setEditingCardId(null);
-                        setEditingField(null);
-                      }
-                      startCapture((nativeCode, mods) => {
-                        setNewMacroTriggerKeyCode(nativeCode);
-                        setNewMacroTriggerModifiers(mods);
-                      });
-                    }}
-                  >
-                    <span>
-                      {triggerKeyRecording()
-                        ? "Press a key…"
-                        : newMacroTriggerKeyCode() !== null
-                          ? resolveKeyName(newMacroTriggerKeyCode()!)
-                          : "Click to set key…"
-                      }
-                    </span>
-                    <Show when={triggerKeyRecording()}>
-                      <span
-                        class="text-text-dim hover:text-text-main ml-2 leading-none"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTriggerKeyRecording(false);
-                          if (_keyCaptureListener) {
-                            document.removeEventListener("keydown", _keyCaptureListener, true);
-                            _keyCaptureListener = null;
-                          }
-                        }}
-                      >✕</span>
+                  <div class="flex flex-col">
+                    {/* UX-13 (C-5): modifier preview chips during capture.
+                        Shows held modifiers in semantic order (Shift → Ctrl →
+                        Alt → Cmd/Win) above the existing capture chip. */}
+                    <Show when={triggerKeyRecording() && recordingModifiers() !== 0}>
+                      <div class="flex items-center gap-1 mb-1">
+                        <For each={modifierChips(recordingModifiers())}>
+                          {(label) => (
+                            <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono text-text-main">
+                              {label}
+                            </span>
+                          )}
+                        </For>
+                      </div>
                     </Show>
+                    <div
+                      class={`rounded-lg px-3 py-2 text-sm w-40 cursor-pointer flex items-center justify-between
+                        ${triggerKeyRecording()
+                          ? "bg-background border border-accent text-accent shadow-[0_0_8px_var(--color-accent-glow)]"
+                          : newMacroTriggerKeyCode() !== null
+                            ? "bg-background border border-border text-text-main"
+                            : "bg-background border border-border text-text-dim"
+                        }`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        // Cancel any in-progress card edit before starting form capture
+                        if (editingCardId() !== null) {
+                          setEditingCardId(null);
+                          setEditingField(null);
+                        }
+                        startCapture((nativeCode, mods) => {
+                          setNewMacroTriggerKeyCode(nativeCode);
+                          setNewMacroTriggerModifiers(mods);
+                        });
+                      }}
+                    >
+                      <span>
+                        {triggerKeyRecording()
+                          ? "Press a key…"
+                          : newMacroTriggerKeyCode() !== null
+                            ? resolveKeyName(newMacroTriggerKeyCode()!)
+                            : "Click to set key…"
+                        }
+                      </span>
+                      <Show when={triggerKeyRecording()}>
+                        <span
+                          class="text-text-dim hover:text-text-main ml-2 leading-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTriggerKeyRecording(false);
+                            if (_keyCaptureListener) {
+                              document.removeEventListener("keydown", _keyCaptureListener, true);
+                              _keyCaptureListener = null;
+                            }
+                          }}
+                        >✕</span>
+                      </Show>
+                    </div>
                   </div>
                 </div>
 
@@ -1198,6 +1277,8 @@ function App() {
                             }}
                           >Set key…</span>
                           <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
+                          {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
+                          <span class="text-[10px] text-text-dim">↗ Global</span>
                         </div>
                       }>
                         <div class="flex items-center gap-1">
@@ -1216,25 +1297,50 @@ function App() {
                               </span>
                             }
                           >
-                            <span class="px-1.5 py-0.5 rounded border border-accent text-[10px] font-mono text-accent shadow-[0_0_4px_var(--color-accent-glow)] flex items-center gap-1">
-                              Press…
-                              <span
-                                class="text-text-dim hover:text-text-main leading-none cursor-pointer"
-                                onClick={() => {
-                                  setEditingCardId(null);
-                                  setEditingField(null);
-                                  if (_keyCaptureListener) {
-                                    document.removeEventListener("keydown", _keyCaptureListener, true);
-                                    _keyCaptureListener = null;
-                                  }
-                                  setTriggerKeyRecording(false);
-                                }}
-                              >✕</span>
-                            </span>
+                            <div class="flex flex-col">
+                              {/* UX-13 (C-5): modifier preview chips during
+                                  card-edit capture — mirrors the new-macro
+                                  form's chip row above. */}
+                              <Show
+                                when={
+                                  triggerKeyRecording() &&
+                                  editingCardId() === macro.id &&
+                                  editingField() === "key" &&
+                                  recordingModifiers() !== 0
+                                }
+                              >
+                                <div class="flex items-center gap-1 mb-1">
+                                  <For each={modifierChips(recordingModifiers())}>
+                                    {(label) => (
+                                      <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono text-text-main">
+                                        {label}
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+                              </Show>
+                              <span class="px-1.5 py-0.5 rounded border border-accent text-[10px] font-mono text-accent shadow-[0_0_4px_var(--color-accent-glow)] flex items-center gap-1">
+                                Press…
+                                <span
+                                  class="text-text-dim hover:text-text-main leading-none cursor-pointer"
+                                  onClick={() => {
+                                    setEditingCardId(null);
+                                    setEditingField(null);
+                                    if (_keyCaptureListener) {
+                                      document.removeEventListener("keydown", _keyCaptureListener, true);
+                                      _keyCaptureListener = null;
+                                    }
+                                    setTriggerKeyRecording(false);
+                                  }}
+                                >✕</span>
+                              </span>
+                            </div>
                           </Show>
                           <span class="text-[10px] text-text-muted">
                             ({macro.trigger_mode})
                           </span>
+                          {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
+                          <span class="text-[10px] text-text-dim">↗ Global</span>
                         </div>
                       </Show>
                     </div>
