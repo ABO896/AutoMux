@@ -65,6 +65,8 @@ Test-by-test verification (every test named in the plan's per-task verification 
 
 Test count: 8 unit tests pass (4 new conflict tests from 08-02, 1 macOS modifier-bit test from 08-01, 3 pre-existing persistence/scheduler tests). The pre-existing count was 4 (cg_event_flag_constants + 3 scheduler/persistence). Phase 8 added 4 (the conflict tests). The Windows `windows_mod_constants` test compiles cleanly on macOS via the cfg-gate and would be included in the count on a Windows host.
 
+**Note on count after Section 4:** Plan 08-06 Task 3 adds a `profile_backwards_compat` test (R-5 backwards compatibility smoke). The full test count after Section 4 is **9** unit tests. The Test Suite section above was captured before the Section 4 test was added; the post-Section-4 output is in Section 4 below.
+
 **Status: ✅ done** — all expected tests pass; the suite is green.
 
 ## 2. Clippy
@@ -206,4 +208,86 @@ The Phase 7 BUILD-01 fix and Phase 8 cfg-gated additions must be verified on a W
 - **Bit constant test:** The `windows_mod_constants` test (08-01) asserts the literal `MOD_ALT=0x0001, MOD_CONTROL=0x0002, MOD_SHIFT=0x0004, MOD_WIN=0x0008` bit values, and the `build_mod_mask()` function in `platform/windows/mod.rs:477-498` uses the same literal `0x0001`/`0x0002`/`0x0004`/`0x0008` values. The frontend's `computeModifiers` (`src/App.tsx`) emits the same bit values in the non-macOS branch (`0x0004`/`0x0002`/`0x0001`/`0x0008`). The three layers are bit-identical on paper; the `cargo build --target x86_64-pc-windows-msvc` gate is the type-check that confirms the cfg-gated Windows code parses and links.
 
 **Status: ⏭️ deferred to CI** — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust, no rustup). Per the plan's explicit allowance and Plan 08-03's disposition, the strict cross-compile gate is verified by CI on `windows-latest` and by the manual Windows device test in Section 6.
+
+## 4. Profile Backwards-Compat (R-5)
+
+### 4.1 Automated Smoke (preferred)
+
+Command: `cargo test -p automux_lib profile_backwards_compat 2>&1 | tail -10`
+
+(Plan references `cargo test -p automux-lib`; the actual package name is `automux` with `[lib] name = "automux_lib"`. Running `cargo test profile_backwards_compat` from `src-tauri/` is the equivalent invocation.)
+
+A new `profile_backwards_compat` unit test was added in `src-tauri/src/state/mod.rs` (Plan 08-06 Task 3 commit `68b0dfe`). The test deserializes a hand-crafted pre-Phase-8 `ProfileData` JSON string (no `trigger_modifiers` on `MacroConfig`, no `conflicts` on `AppState`) and asserts the new fields default to `0` and `[]` respectively while preserving the original `trigger_key` and `sequence` data.
+
+Actual output:
+
+```text
+running 1 test
+test state::tests::profile_backwards_compat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+```
+
+Exit code: `0` — the test passes.
+
+### Test logic
+
+```rust
+// Pre-Phase-8 JSON has no `trigger_modifiers` on MacroConfig.
+let pre_phase_8_json = r#"{
+    "name": "Default",
+    "macros": { "11111111-...": { ..., "trigger_key": 96, ... } },
+    "engine_active": true
+}"#;
+let profile: ProfileData = serde_json::from_str(pre_phase_8_json)?;
+// Asserts:
+//   profile.macros.len() == 1
+//   mac.trigger_key == Some(96) (preserved)
+//   mac.trigger_modifiers == 0 (defaulted from #[serde(default)])
+//   mac.sequence.steps.len() == 1 (preserved)
+
+// And the same for AppState — no `conflicts` key in the JSON.
+let state: AppState = serde_json::from_str(pre_phase_8_appstate_json)?;
+// Asserts:
+//   state.conflicts.is_empty() (defaulted to Vec::new() via #[serde(default)])
+```
+
+### Full suite after adding `profile_backwards_compat`
+
+After adding the new test, the full test count went from **8 → 9**. Output of `cargo test 2>&1 | tail -20`:
+
+```text
+running 9 tests
+test platform::macos::observer::tests::cg_event_flag_constants ... ok
+test state::tests::self_rebind_allowed ... ok
+test state::tests::bind_conflict_rejected ... ok
+test state::tests::conflict_detection_overlap ... ok
+test state::tests::conflict_disappear_on_disable ... ok
+test state::tests::profile_backwards_compat ... ok
+test persistence::tests::large_config_memory_check ... ok
+test scheduler::tests::jitter_audit_10ms_interval ... ok
+test scheduler::tests::afk_farm_stress_test ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+```
+
+All 9 tests pass. The new `profile_backwards_compat` test does not break any prior test.
+
+### 4.2 Manual Smoke (fallback — not required since the automated test passes)
+
+The plan's fallback manual smoke is documented here for reference. **It is not required for Phase 8 completion because the automated test in §4.1 is the primary evidence and it passes.**
+
+Steps (if a human verification is desired in addition to the automated test):
+
+1. `git stash` the current changes (save the Phase 8 work).
+2. `git checkout <pre-Phase-8 commit>` (e.g., the last Phase 7 commit, `e.g., 1eed9d9` or the parent of the Phase 8 work).
+3. `npm run tauri dev` — create a macro with a trigger key (e.g., `F5`), save the default profile (now at `~/Library/Application Support/com.alvaro.automux/profiles/default.json` on macOS or `%APPDATA%\com.alvaro.automux\profiles\default.json` on Windows).
+4. Quit the app.
+5. `git checkout <Phase 8 commit>` and `git stash pop`.
+6. `npm run tauri dev` again.
+7. In the app, load the default profile (the Profiles tab's Load button on the `Default` row).
+8. Verify: no error toast; the macro's trigger key is preserved; `state().conflicts` is `[]` (no spurious conflicts).
+9. Capture a screenshot if useful.
+
+**Status: ✅ done** — the automated `profile_backwards_compat` test passes, proving R-5 (backwards compatibility for v2.0 profiles saved before Phase 8) is satisfied at the unit-test level. The manual smoke is a fallback that is not required for Phase 8 completion.
 
