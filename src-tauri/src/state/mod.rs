@@ -157,6 +157,15 @@ pub enum Intent {
     SetMacroEnabled(Uuid, bool),
     SetMacroTargetApp(Uuid, Option<String>),
     SetMacroTriggerKey(Uuid, Option<u16>, Option<u64>),
+    /// UX-11: Bind a trigger key for an existing macro. The oneshot sender
+    /// carries the conflict result back to the IPC caller — `Ok(())` if the
+    /// slot was free or this macro already owned it, `Err(msg)` otherwise.
+    /// The `u64` is the modifier bitmask in platform-native format
+    /// (CGEventFlags bits on macOS, MOD_* values on Windows).
+    BindHotkey(Uuid, u16, u64, tokio::sync::oneshot::Sender<Result<(), String>>),
+    /// UX-11: Remove a trigger key bind for a specific macro. Cannot fail —
+    /// the absence of a bind is a no-op state. Mirrors `RemoveMacro(Uuid)`.
+    UnbindHotkey(Uuid),
     TriggerEmergencyStop,
     ResetEmergencyStop,
     ActiveAppChanged(Option<String>),
@@ -261,6 +270,57 @@ pub(crate) fn recompute_conflicts(state: &mut AppState) {
             InputConflict { input, macros }
         })
         .collect();
+}
+
+/// UX-11: Build the platform's `HotkeyBinding` Vec from the current macro
+/// set. Mirrors the data path of `reevaluate_all_macros` for the per-binding
+/// registry — the StateActor is the source of truth, the platform static is
+/// a write-only mirror.
+///
+/// Only macros with a `trigger_key` are included (macros with no key don't
+/// participate in the hotkey registry). The returned Vec replaces the
+/// platform's `HOTKEY_BINDINGS` entirely on every bind/unbind (RESEARCH.md
+/// R-4 — keeps the registry simple, replace is cheap for typical configs).
+#[cfg(target_os = "macos")]
+pub(crate) fn build_hotkey_bindings_vec(
+    macros: &HashMap<Uuid, MacroConfig>,
+) -> Vec<crate::platform::macos::observer::HotkeyBinding> {
+    use crate::platform::macos::observer::{HotkeyAction, HotkeyBinding};
+    macros
+        .values()
+        .filter_map(|mac| {
+            mac.trigger_key.map(|key| HotkeyBinding {
+                keycode: key,
+                modifiers: mac.trigger_modifiers,
+                action: HotkeyAction::ToggleMacro(mac.id),
+            })
+        })
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn build_hotkey_bindings_vec(
+    macros: &HashMap<Uuid, MacroConfig>,
+) -> Vec<crate::platform::windows::WindowsHotkeyBinding> {
+    macros
+        .values()
+        .filter_map(|mac| {
+            mac.trigger_key.map(|key| crate::platform::windows::WindowsHotkeyBinding {
+                keycode: key,
+                modifiers: mac.trigger_modifiers,
+                macro_id: mac.id,
+            })
+        })
+        .collect()
+}
+
+/// On non-{macos,windows} hosts the bind registry is a no-op — the host
+/// is unsupported but the StateActor's BindHotkey handler must still compile
+/// and return `Ok(())` so the IPC layer doesn't break. Returns an empty Vec
+/// that the cfg-gated platform dispatch ignores.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub(crate) fn build_hotkey_bindings_vec<T>(_macros: &HashMap<Uuid, MacroConfig>) -> Vec<T> {
+    Vec::new()
 }
 
 impl StateActor {
@@ -476,6 +536,86 @@ impl StateActor {
                 self.reevaluate_all_macros().await;
                 // UX-12: refresh derived `conflicts` after a successful
                 // (or coerced) trigger-key update.
+                self.recompute_conflicts();
+                self.auto_save_default().await;
+            }
+            Intent::BindHotkey(macro_id, keycode, modifiers, reply) => {
+                // UX-11: Conflict pre-check. If a DIFFERENT macro already holds
+                // the (keycode, modifiers) pair, send `Err(msg)` via the
+                // oneshot and DO NOT mutate state. The frontend surfaces the
+                // error as a `ConflictErrorToast` (Plan 08-05). Self-rebind
+                // (same macro, same key+mods) is allowed — falls through
+                // because `check_trigger_key_conflict` returns None for the
+                // self-id match.
+                if let Some(conflicting_id) =
+                    self.check_trigger_key_conflict(macro_id, keycode, modifiers)
+                {
+                    // Look up the conflicting macro's name for the error message.
+                    // Fall back to the id as a hex string if the macro has
+                    // somehow been removed between the check and the lookup
+                    // (race window — defensive only).
+                    let conflicting_name = self
+                        .state
+                        .macros
+                        .get(&conflicting_id)
+                        .map(|m| m.name.clone())
+                        .unwrap_or_else(|| format!("{:?}", conflicting_id));
+                    let msg = format!(
+                        "Key (keycode {}) is already assigned to \"{}\". Unbind it first or pick a different key.",
+                        keycode, conflicting_name
+                    );
+                    let _ = reply.send(Err(msg));
+                    return;
+                }
+                // No conflict — apply the bind. If the macro doesn't exist
+                // (race with RemoveMacro), the bind is a silent no-op;
+                // the frontend gets Ok(()) and the macro simply doesn't get
+                // a hotkey. This matches the "no error on no-op" semantics
+                // the original `bind_hotkey` had on macOS pre-Phase-8.
+                if let Some(mac) = self.state.macros.get_mut(&macro_id) {
+                    mac.trigger_key = Some(keycode);
+                    mac.trigger_modifiers = modifiers;
+                }
+                // Re-build the platform HOTKEY_BINDINGS registry from the
+                // current macro set and replace it wholesale (RESEARCH.md
+                // R-4). The platform statics are write-only mirrors of the
+                // StateActor's view.
+                let bindings = build_hotkey_bindings_vec(&self.state.macros);
+                #[cfg(target_os = "macos")]
+                {
+                    crate::platform::macos::observer::update_hotkey_bindings(bindings);
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    crate::platform::windows::update_hotkey_bindings(bindings);
+                }
+                self.reevaluate_all_macros().await;
+                // UX-12: a fresh bind can introduce/remove input overlap
+                // with other macros — refresh the derived conflict graph.
+                self.recompute_conflicts();
+                self.auto_save_default().await;
+                let _ = reply.send(Ok(()));
+            }
+            Intent::UnbindHotkey(macro_id) => {
+                // UX-11: Clear the trigger on the matching macro (if any),
+                // then rebuild the platform HOTKEY_BINDINGS registry.
+                // Cannot fail — absence of a bind is a no-op state.
+                if let Some(mac) = self.state.macros.get_mut(&macro_id) {
+                    mac.trigger_key = None;
+                    mac.trigger_modifiers = 0;
+                }
+                let bindings = build_hotkey_bindings_vec(&self.state.macros);
+                #[cfg(target_os = "macos")]
+                {
+                    crate::platform::macos::observer::update_hotkey_bindings(bindings);
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    crate::platform::windows::update_hotkey_bindings(bindings);
+                }
+                self.reevaluate_all_macros().await;
+                // UX-12: a removed bind can drop a macro from conflict
+                // groups — refresh the derived field.
                 self.recompute_conflicts();
                 self.auto_save_default().await;
             }
