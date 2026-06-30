@@ -118,3 +118,92 @@ The `return` was present in the original commit and was never touched by Phase 8
 
 > **Note for future cleanup:** The `return` keyword at `src/ipc/mod.rs:128` is the only thing triggering the warning. Removing the `return` and relying on the implicit tail expression would resolve the issue. This is a one-line fix in scope for a future plan; it is intentionally out of scope for Phase 8 per the deviation boundary noted across plans 08-01 through 08-05.
 
+## 3. Windows Cross-Compile Gate
+
+Command: `cargo build --target x86_64-pc-windows-msvc 2>&1 | tail -20`
+
+Expected: zero warning lines, exit 0. The Windows `#[cfg(target_os = "windows")]` blocks in `platform/windows/mod.rs` (the new `WindowsHotkeyBinding` struct, `HOTKEY_BINDINGS` static, `build_mod_mask` helper, and the tuple-keyed `hook_callback`) must compile cleanly. The cfg-gated test (`windows_mod_constants`) compiles too.
+
+**Result: ⏭️ deferred to CI** — the `x86_64-pc-windows-msvc` Rust target is **not installed on this host**.
+
+The host uses Homebrew's `rust` package (not `rustup`), so the target cannot be added locally without installing `rustup`:
+
+```text
+$ which rustup
+rustup not found
+NOT FOUND (host uses Homebrew rust)
+
+$ rustc --version
+rustc 1.95.0 (59807616e 2026-04-14) (Homebrew)
+cargo 1.95.0 (f2d3ce0bd 2026-03-21) (Homebrew)
+```
+
+The plan specifies `rustup target list --installed` to prove the target is unavailable, but `rustup` is not installed on this host (Homebrew's `rust` does not provide it). Equivalent evidence — the `x86_64-pc-windows-msvc` cross-compile attempt itself:
+
+```text
+$ cargo build --target x86_64-pc-windows-msvc 2>&1 | tail -20
+error[E0463]: can't find crate for `std`
+  |
+  = note: the `x86_64-pc-windows-msvc` target may not be installed
+  = help: consider downloading the target with `rustup target add x86_64-pc-windows-msvc`
+
+For more information on this error, try `rustc --explain E0463`.
+error: could not compile `serde_core` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error[E0463]: can't find crate for `core`
+  |
+  = note: the `x86_64-pc-windows-msvc` target may not be installed
+  = help: consider downloading the target with `rustup target add x86_64-pc-windows-msvc`
+
+error: could not compile `stable_deref_trait` (lib) due to 1 previous error
+error: could not compile `zerofrom` (lib) due to 1 previous error
+error: could not compile `windows-link` (lib) due to 1 previous error
+error: could not compile `windows-link` (lib) due to 1 previous error
+error: could not compile `itoa` (lib) due to 1 previous error
+error: could not compile `cfg-if` (lib) due to 1 previous error
+error: could not compile `utf8_iter` (lib) due to 1 previous error
+error: could not compile `litemap` (lib) due to 1 previous error
+error: could not compile `writeable` (lib) due to 1 previous error
+error: could not compile `memchr` (lib) due to 1 previous error
+error: could not compile `smallvec` (lib) due to 1 previous error
+```
+
+The same outcome was hit by the `x86_64-pc-windows-gnu` target (also not installed):
+
+```text
+$ cargo build --target x86_64-pc-windows-gnu 2>&1 | tail -10
+error[E0463]: can't find crate for `std`
+  |
+  = note: the `x86_64-pc-windows-gnu` target may not be installed
+  = help: consider downloading the target with `rustup target add x86_64-pc-windows-gnu`
+
+error[E0463]: can't find crate for `core`
+  |
+  = note: the `x86_64-pc-windows-gnu` target may not be installed
+```
+
+### Equivalent static evidence on macOS host (cargo check)
+
+`cargo check --all-targets` exits 0 on the macOS host (1.95.0). The cfg-gated Windows blocks are excluded by `#[cfg(target_os = "windows")]` and therefore not type-checked on macOS — this is the intended Rust compilation model for cross-platform code. Plan 08-03 explicitly accepted this gap (Phase 7 BUILD-01 fix + cfg gates + `cargo check` on macOS give "high confidence" the code is correct on Windows).
+
+```text
+$ cargo check --all-targets
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+```
+
+### Plan 08-03's same conclusion
+
+Plan 08-03's deviation section documented the same constraint and its disposition:
+
+> "Windows cross-compile gate deferred to Plan 08-06 — the x86_64-pc-windows-gnu target is not installed on this host (`can't find crate for 'core'`). Per the plan's explicit allowance, the strict `cargo build --target x86_64-pc-windows-msvc` gate is deferred. The `#[cfg(target_os = "windows")]` attributes + `cargo check` on macOS give high confidence the code is correct on Windows."
+
+### CI gate (where the actual verification happens)
+
+The Phase 7 BUILD-01 fix and Phase 8 cfg-gated additions must be verified on a Windows host or in CI:
+
+- **CI workflow:** `.github/workflows/release.yml` builds on `windows-latest` with the `x86_64-pc-windows-msvc` target installed.
+- **Local Windows device test:** Section 6 below covers the manual `Ctrl+Shift+F5` device test on a real Windows host.
+- **Bit constant test:** The `windows_mod_constants` test (08-01) asserts the literal `MOD_ALT=0x0001, MOD_CONTROL=0x0002, MOD_SHIFT=0x0004, MOD_WIN=0x0008` bit values, and the `build_mod_mask()` function in `platform/windows/mod.rs:477-498` uses the same literal `0x0001`/`0x0002`/`0x0004`/`0x0008` values. The frontend's `computeModifiers` (`src/App.tsx`) emits the same bit values in the non-macOS branch (`0x0004`/`0x0002`/`0x0001`/`0x0008`). The three layers are bit-identical on paper; the `cargo build --target x86_64-pc-windows-msvc` gate is the type-check that confirms the cfg-gated Windows code parses and links.
+
+**Status: ⏭️ deferred to CI** — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust, no rustup). Per the plan's explicit allowance and Plan 08-03's disposition, the strict cross-compile gate is verified by CI on `windows-latest` and by the manual Windows device test in Section 6.
+
