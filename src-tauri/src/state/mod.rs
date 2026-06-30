@@ -422,6 +422,10 @@ impl StateActor {
                     .scheduler_tx
                     .send(crate::scheduler::SchedulerIntent::StopMacro(id))
                     .await;
+                // UX-12: a removed macro may have been a member of one or
+                // more conflict groups — recompute so the warning disappears
+                // (or shrinks) on the next state-changed event.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
             }
             Intent::SetMacroEnabled(id, enabled) => {
@@ -429,6 +433,9 @@ impl StateActor {
                     mac.enabled = enabled;
                 }
                 self.reevaluate_all_macros().await;
+                // UX-12: toggling enabled can add or remove the macro from
+                // conflict groups.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
             }
             Intent::SetMacroTargetApp(id, target) => {
@@ -436,6 +443,12 @@ impl StateActor {
                     mac.target_app = target;
                 }
                 self.reevaluate_all_macros().await;
+                // UX-12: target-app changes don't change the input graph
+                // (the conflict set is computed on enabled macros regardless
+                // of target), but we recompute for symmetry with the other
+                // mutating intents — keeps the invariant "every state change
+                // triggers a fresh recompute" simple to reason about.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
             }
             Intent::SetMacroTriggerKey(id, trigger_key, trigger_modifiers) => {
@@ -482,16 +495,26 @@ impl StateActor {
                 self.state.emergency_stop_active = false;
                 self.state.engine_active = true;
                 self.reevaluate_all_macros().await;
+                // UX-12: after a reset, the user's enabled flags are restored
+                // (per TriggerEmergencyStop, all macros were disabled). The
+                // conflict field must reflect the new enabled/disabled state.
+                self.recompute_conflicts();
             }
             Intent::ActiveAppChanged(app) => {
                 self.state.active_app = app;
                 self.reevaluate_all_macros().await;
+                // No recompute_conflicts: the conflict graph is computed on
+                // enabled macros regardless of target app. The enabled flags
+                // are unchanged by an app change.
             }
             Intent::ToggleMacroHotkey(id) => {
                 if let Some(mac) = self.state.macros.get_mut(&id) {
                     mac.enabled = !mac.enabled;
                 }
                 self.reevaluate_all_macros().await;
+                // UX-12: a hotkey toggle flips enabled — same recompute
+                // rationale as SetMacroEnabled.
+                self.recompute_conflicts();
                 // WR-01: Persist the toggled enabled state so it survives restart.
                 self.auto_save_default().await;
             }
@@ -511,6 +534,9 @@ impl StateActor {
                     mac.sequence = sequence;
                 }
                 self.reevaluate_all_macros().await;
+                // UX-12: changing the sequence can add/remove the macro's
+                // input from conflict groups.
+                self.recompute_conflicts();
                 self.auto_save_default().await;
             }
             Intent::UpdateStepInterval(id, step_index, interval_ms) => {
@@ -559,6 +585,15 @@ impl StateActor {
                         // that is a one-way ratchet (can enable, never disable). See Pitfall 6.
                         self.state.engine_active = profile.engine_active;
                         self.reevaluate_all_macros().await;
+                        // UX-12: a loaded profile may contain macros whose
+                        // enabled flags create input overlap with the
+                        // previously-loaded set (or with each other). The
+                        // derived `conflicts` field must be recomputed so
+                        // the warning surfaces on the next state-changed
+                        // event. Do NOT add to the Err branch — state is
+                        // unchanged on load failure and the previous
+                        // conflicts value remains correct.
+                        self.recompute_conflicts();
                         let _ = reply.send(Ok(profile));
                     }
                     Err(e) => {
