@@ -24,6 +24,23 @@ use super::{InputProvider, MouseButton, PlatformObserver};
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+/// UX-11/UX-14: A registered global hotkey on Windows — keycode + modifier
+/// mask → macro id. Mirrors the macOS `HotkeyBinding` struct in
+/// `platform/macos/observer.rs:38-43` (which additionally carries a
+/// `HotkeyAction` enum; on Windows the action is always
+/// `ToggleMacro(macro_id)` so we just store the id directly).
+///
+/// The type is named `WindowsHotkeyBinding` (not `HotkeyBinding`) to avoid
+/// collision with the macOS type when both are visible in the StateActor's
+/// cfg-gated `build_hotkey_bindings_vec` helper (state/mod.rs).
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy)]
+pub struct WindowsHotkeyBinding {
+    pub keycode: u16,
+    pub modifiers: u64,
+    pub macro_id: Uuid,
+}
+
 static HELD_INPUTS: OnceLock<Mutex<HashSet<HeldInputKey>>> = OnceLock::new();
 
 fn get_held_inputs() -> &'static Mutex<HashSet<HeldInputKey>> {
@@ -398,7 +415,9 @@ use windows::Win32::UI::Accessibility::{
     SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK,
 };
 #[cfg(target_os = "windows")]
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL, VK_SHIFT};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetAsyncKeyState, VK_CONTROL, VK_SHIFT,
+};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW, TranslateMessage,
@@ -408,6 +427,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = OnceLock::new();
 static MACRO_TRIGGER_KEYS: OnceLock<Mutex<HashMap<(u16, u64), Uuid>>> = OnceLock::new();
+/// UX-11/UX-14: Configurable hotkey bindings registry, mirrored from the
+/// StateActor's `HOTKEY_BINDINGS` on macOS. Populated by the new
+/// `Intent::BindHotkey` StateActor handler (plan 08-03). Closes the
+/// Windows "no configurable hotkeys" gap from CONCERNS.md:150-152.
+static HOTKEY_BINDINGS: OnceLock<Mutex<Vec<WindowsHotkeyBinding>>> = OnceLock::new();
 static HOOK_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 pub fn set_state_tx(tx: tokio::sync::mpsc::Sender<crate::state::Intent>) {
@@ -420,6 +444,57 @@ fn get_macro_trigger_keys() -> &'static Mutex<HashMap<(u16, u64), Uuid>> {
 
 pub fn update_macro_trigger_keys(keys: HashMap<(u16, u64), Uuid>) {
     *get_macro_trigger_keys().lock().unwrap() = keys;
+}
+
+fn get_hotkey_bindings() -> &'static Mutex<Vec<WindowsHotkeyBinding>> {
+    HOTKEY_BINDINGS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// UX-11: Replace the entire set of configurable hotkey bindings at runtime.
+/// Called by the StateActor's `Intent::BindHotkey` handler with the full
+/// `Vec<WindowsHotkeyBinding>` rebuilt from the current `state.macros` —
+/// same pattern as `update_macro_trigger_keys` and the macOS equivalent
+/// `update_hotkey_bindings` in `platform/macos/observer.rs:155-157`.
+pub fn update_hotkey_bindings(bindings: Vec<WindowsHotkeyBinding>) {
+    *get_hotkey_bindings().lock().unwrap() = bindings;
+}
+
+/// UX-13: Synthesize the Windows MOD_* modifier bitmask from the current
+/// async key state. Called at the moment of a keypress in `hook_callback` so
+/// the lookup is matched against the modifier state at that instant (not a
+/// snapshot — the hook fires synchronously with the keypress).
+///
+/// Bit values match the Win32 `RegisterHotKey` `MOD_*` constants (pinned by
+/// the `windows_mod_constants` test below this file):
+///   MOD_ALT     = 0x0001
+///   MOD_CONTROL = 0x0002
+///   MOD_SHIFT   = 0x0004
+///   MOD_WIN     = 0x0008
+///
+/// Left/right variants of the Win key both map to MOD_WIN (0x0008) — there
+/// is no separate L/R bit in the Win32 RegisterHotKey API.
+#[cfg(target_os = "windows")]
+fn build_mod_mask() -> u64 {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        VK_LWIN, VK_MENU, VK_RWIN,
+    };
+    let mut m: u64 = 0;
+    if (unsafe { GetAsyncKeyState(VK_SHIFT.0 as i32) } as u16 & 0x8000) != 0 {
+        m |= 0x0004;
+    }
+    if (unsafe { GetAsyncKeyState(VK_CONTROL.0 as i32) } as u16 & 0x8000) != 0 {
+        m |= 0x0002;
+    }
+    if (unsafe { GetAsyncKeyState(VK_MENU.0 as i32) } as u16 & 0x8000) != 0 {
+        m |= 0x0001;
+    }
+    if (unsafe { GetAsyncKeyState(VK_LWIN.0 as i32) } as u16 & 0x8000) != 0 {
+        m |= 0x0008;
+    }
+    if (unsafe { GetAsyncKeyState(VK_RWIN.0 as i32) } as u16 & 0x8000) != 0 {
+        m |= 0x0008;
+    }
+    m
 }
 
 #[cfg(target_os = "windows")]
@@ -446,13 +521,33 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
                 std::process::exit(1);
             }
 
-            // MACRO TRIGGER KEYS (O(1) lookup)
-            // Plan 08-01 placeholder: keycode-only lookup with modifiers=0. The real
-            // synthesized modifier mask via GetAsyncKeyState is added in Plan 08-03.
+            // MACRO TRIGGER KEYS (O(1) lookup) — tuple-keyed on (keycode, mod_mask).
+            // The mod_mask is synthesized at keypress time via `build_mod_mask()`
+            // so e.g. `Ctrl+Shift+F5` only matches when both modifiers are held.
             if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-                if let Some(&macro_id) = trigger_keys.get(&(keycode, 0_u64)) {
+                let mod_mask = build_mod_mask();
+                if let Some(&macro_id) = trigger_keys.get(&(keycode, mod_mask)) {
                     if let Some(tx) = STATE_TX.get() {
                         let _ = tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
+                    }
+                }
+            }
+
+            // CONFIGURABLE HOTKEYS (per-binding) — populated by Intent::BindHotkey
+            // via the StateActor's `update_hotkey_bindings` (mirrors the macOS
+            // `HOTKEY_BINDINGS` at `platform/macos/observer.rs:420-449`). Same
+            // tuple key so the lookup semantics are bit-identical to the
+            // `MACRO_TRIGGER_KEYS` check above.
+            if let Ok(bindings) = get_hotkey_bindings().try_lock() {
+                let mod_mask = build_mod_mask();
+                for binding in bindings.iter() {
+                    if binding.keycode == keycode && binding.modifiers == mod_mask {
+                        if let Some(tx) = STATE_TX.get() {
+                            let _ = tx.try_send(crate::state::Intent::ToggleMacroHotkey(
+                                binding.macro_id,
+                            ));
+                        }
+                        break;
                     }
                 }
             }
