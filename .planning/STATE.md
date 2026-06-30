@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
 status: executing
-stopped_at: Phase 8 Plan 2 complete
-last_updated: "2026-06-30T21:17:51.000Z"
+stopped_at: Phase 8 Plan 3 complete
+last_updated: "2026-06-30T21:25:41.000Z"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 14
-  completed_plans: 10
-  percent: 71
+  completed_plans: 11
+  percent: 79
 current_phase: 08
 current_phase_name: hotkey-reliability-conflict-safety
 ---
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 08 (hotkey-reliability-conflict-safety) — EXECUTING
-Plan: 2 of 6
-Next: Phase 08 — Hotkey Reliability & Conflict Safety, Plan 08-03
-Status: Plan 08-02 complete (UX-11 + UX-12 backend live)
+Plan: 3 of 6
+Next: Phase 08 — Hotkey Reliability & Conflict Safety, Plan 08-04
+Status: Plan 08-03 complete (UX-11 IPC + UX-14 Windows path live)
 
 ```
-Progress: [██████████░░░░░░░░░░] 71% (plans 10/14 complete in v2.0)
+Progress: [███████████░░░░░░░░░] 79% (plans 11/14 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -42,7 +42,7 @@ Progress: [██████████░░░░░░░░░░] 71% (pl
 | 5 | macOS Permissions & Reliability | (rolled into v1.x) | Complete (prior milestone) |
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
-| 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (2/6 plans done) |
+| 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (3/6 plans done) |
 | 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
@@ -78,11 +78,11 @@ Progress: [██████████░░░░░░░░░░] 71% (pl
 
 ## Session Continuity
 
-**Resume file:** /Users/alvaro/AutoClicker/.planning/phases/08-hotkey-reliability-conflict-safety/08-02-SUMMARY.md
+**Resume file:** /Users/alvaro/AutoClicker/.planning/phases/08-hotkey-reliability-conflict-safety/08-03-SUMMARY.md
 
-Last session: 2026-06-30T21:17:51.000Z
-Stopped at: Phase 8 Plan 2 complete (UX-11 + UX-12 backend live)
-Next: Plan 08-03 (Intent::BindHotkey / Intent::UnbindHotkey + new Windows HOTKEY_BINDINGS) — `/gsd-execute-phase 08`
+Last session: 2026-06-30T21:25:41.000Z
+Stopped at: Phase 8 Plan 3 complete (UX-11 IPC + UX-14 Windows path live)
+Next: Plan 08-04 (Frontend computeModifiers + hotkey IPC threading) — `/gsd-execute-phase 08`
 
 ## Performance Metrics
 
@@ -94,6 +94,7 @@ Next: Plan 08-03 (Intent::BindHotkey / Intent::UnbindHotkey + new Windows HOTKEY
 | Phase 07 P03 | 5min | 2 tasks | 1 files |
 | Phase 08 P01 | 5 min | 3 tasks | 5 files (data model + tuple-keyed registry + bit pinning) |
 | Phase 08 P02 | 5 min | 3 tasks | 2 files (conflict helpers + 9 handler wirings) |
+| Phase 08 P03 | 3 min | 3 tasks | 3 files (BindHotkey IPC + Windows HOTKEY_BINDINGS) |
 
 ## Decisions
 
@@ -104,3 +105,7 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase 8 Plan 2]: Free-function + StateActor-wrapper pattern for `check_trigger_key_conflict` and `recompute_conflicts` — adopted the plan's minimum-surface alternative to the `StateActor::new_for_test` constructor. Unit tests call the free functions directly without a Tauri AppHandle, matching the persistence test style.
 
 - [Phase 8 Plan 2]: Drop-on-conflict in `AddMacro` and `SetMacroTriggerKey` is accepted as interim (T-08-12) — the full `Result<(), String>` error path ships in plan 08-03's `Intent::BindHotkey`. The silent drop is defense-in-depth that keeps the existing IPC flows working until then.
+
+- [Phase 8 Plan 3]: cfg-gated `build_hotkey_bindings_vec` helper with three impls (macOS, Windows, non-supported fallback) — single call site in each `Intent::BindHotkey` / `Intent::UnbindHotkey` handler, type signatures encode the platform split. Avoids a shared `HotkeyBinding` trait abstraction in the platform module while preserving the StateActor-as-source-of-truth invariant. The fallback impl returns `Vec<T>` (generic, empty) so the helper compiles on non-{macos,windows} hosts.
+
+- [Phase 8 Plan 3]: Windows cross-compile gate deferred to Plan 08-06 — the x86_64-pc-windows-gnu target is not installed on this host (`can't find crate for 'core'`). Per the plan's explicit allowance, the strict `cargo build --target x86_64-pc-windows-msvc` gate is deferred. The `#[cfg(target_os = "windows")]` attributes + `cargo check` on macOS give high confidence the code is correct on Windows.
