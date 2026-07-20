@@ -131,7 +131,16 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md — Scheduler parallel-execution tests + action_tx capacity 1024 + debug-only drop counter & IPC (EXEC-01, EXEC-02)
+- [ ] 09-02-PLAN.md — Frontend computeRunningState derivation + per-card firing/waiting/held/combined indicators (EXEC-01, EXEC-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-03-PLAN.md — 09-VERIFICATION.md gate: automated test/clippy gates + 3 manual device tests per platform (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
@@ -161,5 +170,5 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 0/TBD | Not started | — |
+| 9. Parallel Macro Execution | v2.0 | 0/3 | Not started | — |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
