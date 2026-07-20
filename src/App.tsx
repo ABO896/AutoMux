@@ -76,6 +76,36 @@ function formatStep(step: ActionStep): string {
   return "?";
 }
 
+type RunningState = "firing" | "held" | "combined" | "waiting" | "disabled";
+
+/**
+ * EXEC-01/EXEC-02 (D-01–D-04): Pure derivation of a macro's visible running
+ * state. Mirrors the 3 gates in Rust `StateActor::handle_action`
+ * (src-tauri/src/state/mod.rs:373-394) — engine active + not
+ * emergency-stopped; macro enabled; target app matches active app (or is
+ * Global) — plus a 4th SustainedHold/InterleavedInterval distinction so the
+ * card can show held vs firing vs combined. Frontend-only derivation: no
+ * new backend field, no new signal (D-04).
+ */
+function computeRunningState(macro: MacroConfig, state: AppState): RunningState {
+  if (!macro.enabled) return "disabled";
+  if (!state.engine_active || state.emergency_stop_active) return "disabled";
+
+  const matchesTarget =
+    macro.target_app == null || state.active_app === macro.target_app;
+  if (!matchesTarget) return "waiting";
+
+  // Legacy empty-sequence macros fall back to a single interval click
+  // (see src-tauri/src/scheduler/mod.rs:257-270) — treat as "firing".
+  if (macro.sequence.steps.length === 0) return "firing";
+
+  const hasHold = macro.sequence.steps.some((s) => "SustainedHold" in s);
+  const hasInterval = macro.sequence.steps.some((s) => "InterleavedInterval" in s);
+  if (hasHold && hasInterval) return "combined";
+  if (hasHold) return "held";
+  return "firing";
+}
+
 /**
  * UX-13: Extract a platform-native modifier bitmask from a KeyboardEvent.
  *
@@ -1199,13 +1229,32 @@ function App() {
                     <div class="flex items-center justify-between mb-2">
                       <div class="flex items-center gap-2">
                         <div
-                          class={`w-2 h-2 rounded-full ${
-                            macro.enabled
-                              ? "bg-success shadow-[0_0_6px_var(--color-success-glow)]"
-                              : "bg-text-dim"
-                          }`}
+                          class={(() => {
+                            switch (computeRunningState(macro, state()!)) {
+                              case "firing":
+                                return "w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)] animate-pulse";
+                              case "held":
+                                return "w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_var(--color-accent-glow)]";
+                              case "combined":
+                                return "w-2 h-2 rounded-full bg-warning shadow-[0_0_6px_var(--color-warning-glow)] animate-pulse";
+                              case "waiting":
+                                return "w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)]";
+                              default:
+                                return "w-2 h-2 rounded-full bg-text-dim";
+                            }
+                          })()}
                         />
                         <span class="text-sm font-medium">{macro.name}</span>
+                        <Show when={computeRunningState(macro, state()!) === "waiting"}>
+                          <span class="text-[10px] text-text-dim">
+                            Waiting for {macro.target_app}
+                          </span>
+                        </Show>
+                        <Show when={computeRunningState(macro, state()!) === "combined"}>
+                          <span class="text-[10px] text-text-dim">
+                            Active (Hold + Click)
+                          </span>
+                        </Show>
                       </div>
                       <div
                         class="toggle-track"
