@@ -1233,13 +1233,18 @@ function App() {
           >
             <div class="flex flex-col gap-2">
               <For each={macroList()}>
-                {(macro) => (
+                {(macro) => {
+                  // WR-01: compute once per card as a reactive thunk and
+                  // reuse at all three former call sites, so the dot color
+                  // and the inline waiting/combined labels cannot disagree.
+                  const runningState = () => computeRunningState(macro, state()!);
+                  return (
                   <div class="glass-card p-4">
                     <div class="flex items-center justify-between mb-2">
                       <div class="flex items-center gap-2">
                         <div
                           class={(() => {
-                            switch (computeRunningState(macro, state()!)) {
+                            switch (runningState()) {
                               case "firing":
                                 return "w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)] animate-pulse";
                               case "held":
@@ -1254,12 +1259,12 @@ function App() {
                           })()}
                         />
                         <span class="text-sm font-medium">{macro.name}</span>
-                        <Show when={computeRunningState(macro, state()!) === "waiting"}>
+                        <Show when={runningState() === "waiting"}>
                           <span class="text-[10px] text-text-dim">
                             Waiting for {macro.target_app}
                           </span>
                         </Show>
-                        <Show when={computeRunningState(macro, state()!) === "combined"}>
+                        <Show when={runningState() === "combined"}>
                           <span class="text-[10px] text-text-dim">
                             Active (Hold + Click)
                           </span>
@@ -1416,7 +1421,8 @@ function App() {
                       </div>
                     </Show>
                   </div>
-                )}
+                  );
+                }}
               </For>
             </div>
           </Show>
