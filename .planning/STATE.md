@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-07-20T18:34:56.676Z"
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-07-20T18:51:25.045Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 18
+  completed_plans: 18
   percent: 83
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 09 (parallel-macro-execution) — EXECUTING
-Plan: 3 of 3
+Plan: 2 of 4
 Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
 Status: Ready to execute
 
@@ -80,8 +80,8 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-20T17:55:05.614Z
-Stopped at: Completed 09-03-PLAN.md
+Last session: 2026-07-20T18:51:25.039Z
+Stopped at: Completed 09-04-PLAN.md
 Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
 
 ## Performance Metrics
@@ -105,6 +105,7 @@ Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6
 | Phase 09 P01 | 5min | 3 tasks | 3 files |
 | Phase 09 P02 | 8min | 2 tasks | 1 files |
 | Phase 09 P03 | 2min | 2 tasks | 1 files |
+| Phase 09 P04 | 6min | 2 tasks | 1 files |
 
 ## Decisions
 
@@ -139,3 +140,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 2]: Used bg-warning/--color-warning-glow for the 'combined' hold+interval indicator instead of the PATTERNS.md-illustrated bg-info, because no --color-info token exists in src/App.css's @theme block. Followed the plan's explicit fallback instruction to reuse an existing token rather than invent one.
 - [Phase ?]: [Phase 9 Plan 2]: Combined Task 1 (computeRunningState helper) and Task 2 (card rendering wiring) into a single commit — tsconfig's noUnusedLocals strict mode fails tsc for an unused helper if Task 1 is committed alone, same reasoning as Phase 8 Plan 04.
 - [Phase ?]: [Phase 9 Plan 3]: Documented that Phase 9 (via plan 09-01) fully resolved the one pre-existing needless_return clippy warning that Phase 8 had documented as pre-existing-but-accepted — cargo clippy now exits 0 with zero warnings on the macOS host, an improvement over Phase 8's disposition, not just parity with it.
+- [Phase ?]: [Phase 9 Plan 4] CR-01 gap-closure: added trigger_mode === Hold branch to computeRunningState (Approach A, display-only) and folded in WR-01 by computing the running-state once per macro card via a reactive thunk instead of 3 duplicated calls.
