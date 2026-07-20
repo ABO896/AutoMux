@@ -221,6 +221,15 @@ pub async fn get_tcc_identity_status(app_handle: tauri::AppHandle) -> Result<boo
     Ok(crate::persistence::tcc_granted_flag_exists(&app_handle))
 }
 
+/// Debug-only diagnostic: exposes the scheduler's action-channel drop count
+/// for ad-hoc parallel-execution overflow diagnosis (D-09). Not present in
+/// release builds — the counter itself is compiled out via cfg(debug_assertions).
+#[cfg(debug_assertions)]
+#[command]
+pub async fn get_debug_action_drop_count() -> Result<u64, String> {
+    Ok(crate::scheduler::get_action_drop_count())
+}
+
 /// Silent check: returns current Input Monitoring status without prompting.
 ///
 /// Paired with the 3s accessibility poll in App.tsx. Same dual-platform stub

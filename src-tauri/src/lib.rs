@@ -102,6 +102,8 @@ pub fn run() {
             ipc::set_macro_trigger_key,
             ipc::check_input_monitoring,
             ipc::get_tcc_identity_status,
+            #[cfg(debug_assertions)]
+            ipc::get_debug_action_drop_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
