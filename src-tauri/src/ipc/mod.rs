@@ -125,7 +125,7 @@ pub struct RunningApp {
 pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
     #[cfg(target_os = "macos")]
     {
-        return crate::platform::macos::observer::list_running_apps_impl();
+        crate::platform::macos::observer::list_running_apps_impl()
     }
     #[cfg(target_os = "windows")]
     {

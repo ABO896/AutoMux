@@ -5,6 +5,21 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use uuid::Uuid;
 
+/// D-09/D-10/D-11: debug-only diagnostic counter for `action_tx` overflow.
+/// Incremented on every `try_send` failure across the 3 fire sites below.
+/// Relaxed ordering is sufficient — this is a monotonic diagnostic counter,
+/// not a synchronization primitive. Absent entirely from release builds.
+#[cfg(debug_assertions)]
+static ACTION_DROP_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Debug-only accessor for the action-channel drop count, exposed to the
+/// frontend via the `get_debug_action_drop_count` IPC command (D-09).
+/// Not present in release builds.
+#[cfg(debug_assertions)]
+pub fn get_action_drop_count() -> u64 {
+    ACTION_DROP_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 // ── Scheduler Intents ────────────────────────────────────────────
 
 pub enum SchedulerIntent {
@@ -284,11 +299,24 @@ impl Scheduler {
             match step {
                 ActionStep::SustainedHold { input } => {
                     // Fire HoldStart immediately.
-                    let _ = self.action_tx.try_send(ActionReady {
-                        macro_id,
-                        action_type: ActionType::HoldStart(*input),
-                        fired_at: Instant::now(),
-                    });
+                    if self
+                        .action_tx
+                        .try_send(ActionReady {
+                            macro_id,
+                            action_type: ActionType::HoldStart(*input),
+                            fired_at: Instant::now(),
+                        })
+                        .is_err()
+                    {
+                        #[cfg(debug_assertions)]
+                        {
+                            ACTION_DROP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            eprintln!(
+                                "[Scheduler] action_tx full — dropped HoldStart for macro={}",
+                                macro_id
+                            );
+                        }
+                    }
                     holds.push(*input);
                 }
                 ActionStep::InterleavedInterval { input, interval_ms } => {
@@ -340,11 +368,24 @@ impl Scheduler {
     fn release_holds(&mut self, macro_id: &Uuid) {
         if let Some(holds) = self.active_holds.remove(macro_id) {
             for input in holds {
-                let _ = self.action_tx.try_send(ActionReady {
-                    macro_id: *macro_id,
-                    action_type: ActionType::HoldRelease(input),
-                    fired_at: Instant::now(),
-                });
+                if self
+                    .action_tx
+                    .try_send(ActionReady {
+                        macro_id: *macro_id,
+                        action_type: ActionType::HoldRelease(input),
+                        fired_at: Instant::now(),
+                    })
+                    .is_err()
+                {
+                    #[cfg(debug_assertions)]
+                    {
+                        ACTION_DROP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        eprintln!(
+                            "[Scheduler] action_tx full — dropped HoldRelease for macro={}",
+                            macro_id
+                        );
+                    }
+                }
             }
         }
     }
@@ -359,11 +400,27 @@ impl Scheduler {
                     if let Some(task) = self.interval_tasks.get_mut(&step_id) {
                         // Two-Phase: signal the StateActor.
                         // @safety-officer: try_send backpressure — drops on overflow.
-                        let _ = self.action_tx.try_send(ActionReady {
-                            macro_id: step_id.macro_id,
-                            action_type: ActionType::Interval(task.input),
-                            fired_at: Instant::now(),
-                        });
+                        // D-09/D-10: overflow is counted + logged in debug builds
+                        // (see ACTION_DROP_COUNT) so it is diagnosable, not silent.
+                        if self
+                            .action_tx
+                            .try_send(ActionReady {
+                                macro_id: step_id.macro_id,
+                                action_type: ActionType::Interval(task.input),
+                                fired_at: Instant::now(),
+                            })
+                            .is_err()
+                        {
+                            #[cfg(debug_assertions)]
+                            {
+                                ACTION_DROP_COUNT
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                eprintln!(
+                                    "[Scheduler] action_tx full — dropped Interval for macro={}",
+                                    step_id.macro_id
+                                );
+                            }
+                        }
 
                         // Advance and re-insert.
                         task.advance();
@@ -685,13 +742,13 @@ mod tests {
         // 500ms / 50ms = 10 theoretical fires. A serial/blocked implementation
         // would push this toward 0 (starved) — bound tight enough to catch that.
         assert!(
-            a_count >= 5 && a_count <= 16,
+            (5..=16).contains(&a_count),
             "macro A (50ms) expected ~10 fires in [5,16], got {}",
             a_count
         );
         // 500ms / 80ms = 6.25 theoretical fires.
         assert!(
-            b_count >= 3 && b_count <= 11,
+            (3..=11).contains(&b_count),
             "macro B (80ms) expected ~6 fires in [3,11], got {}",
             b_count
         );

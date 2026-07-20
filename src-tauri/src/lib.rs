@@ -23,7 +23,7 @@ pub fn run() {
             let (state_tx, state_rx) = mpsc::channel::<Intent>(100);
             let (sched_tx, sched_rx) = mpsc::channel::<SchedulerIntent>(100);
             // Two-Phase Dispatch channel: Scheduler → StateActor
-            let (action_tx, action_rx) = mpsc::channel::<scheduler::ActionReady>(100);
+            let (action_tx, action_rx) = mpsc::channel::<scheduler::ActionReady>(1024);
 
             // ── Task 5.1: Initialize ProfileManager ──
             let profile_mgr = Arc::new(ProfileManager::from_app_handle(app.handle())?);
