@@ -206,10 +206,10 @@ impl Scheduler {
     async fn handle_intent(&mut self, intent: SchedulerIntent) {
         match intent {
             SchedulerIntent::StartMacro(config) => {
-                self.start_macro(config);
+                self.start_macro(config).await;
             }
             SchedulerIntent::StopMacro(id) => {
-                self.stop_macro(&id);
+                self.stop_macro(&id).await;
             }
             SchedulerIntent::StopAll => {
                 // @safety-officer: CR-02 — use `.await` (not try_send) for HoldRelease
@@ -255,7 +255,7 @@ impl Scheduler {
     /// CR-04: No-ops when the macro is already running with an identical config.
     /// This prevents transient key-up+key-down on sustained-hold macros when
     /// unrelated state changes (e.g. active-app switch) trigger reevaluate_all_macros.
-    fn start_macro(&mut self, config: MacroConfig) {
+    async fn start_macro(&mut self, config: MacroConfig) {
         let macro_id = config.id;
         let new_running = RunningConfig::from_config(&config);
 
@@ -267,7 +267,7 @@ impl Scheduler {
         }
 
         // Clean up any existing state for this macro.
-        self.stop_macro(&macro_id);
+        self.stop_macro(&macro_id).await;
 
         let mut steps = if config.sequence.steps.is_empty() {
             // Legacy fallback: single left-click.
@@ -342,7 +342,7 @@ impl Scheduler {
     }
 
     /// Stop a macro: cancel all its interval timers and release all holds.
-    fn stop_macro(&mut self, macro_id: &Uuid) {
+    async fn stop_macro(&mut self, macro_id: &Uuid) {
         // Remove all interval tasks for this macro.
         let step_ids: Vec<StepId> = self
             .interval_tasks
@@ -358,34 +358,33 @@ impl Scheduler {
         }
 
         // Release all sustained holds.
-        self.release_holds(macro_id);
+        self.release_holds(macro_id).await;
 
         // CR-04: Clear running config so the macro can be restarted fresh.
         self.running_configs.remove(macro_id);
     }
 
     /// Send HoldRelease for all active sustained holds of a macro.
-    fn release_holds(&mut self, macro_id: &Uuid) {
+    ///
+    /// @safety-officer: CR-01 (09-VERIFICATION.md/09-REVIEW.md) — use `.await`
+    /// (not try_send) for HoldRelease messages on the per-macro stop path,
+    /// mirroring StopAll's guarantee (CR-02, above), so delivery is
+    /// guaranteed even when the action channel is near-full. A dropped
+    /// HoldRelease here would mean `active_holds.remove` has already run —
+    /// the scheduler believes the hold is released while the underlying
+    /// key/mouse button is still physically down, with no retry path short
+    /// of a full emergency stop.
+    async fn release_holds(&mut self, macro_id: &Uuid) {
         if let Some(holds) = self.active_holds.remove(macro_id) {
             for input in holds {
-                if self
+                let _ = self
                     .action_tx
-                    .try_send(ActionReady {
+                    .send(ActionReady {
                         macro_id: *macro_id,
                         action_type: ActionType::HoldRelease(input),
                         fired_at: Instant::now(),
                     })
-                    .is_err()
-                {
-                    #[cfg(debug_assertions)]
-                    {
-                        ACTION_DROP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        eprintln!(
-                            "[Scheduler] action_tx full — dropped HoldRelease for macro={}",
-                            macro_id
-                        );
-                    }
-                }
+                    .await;
             }
         }
     }
