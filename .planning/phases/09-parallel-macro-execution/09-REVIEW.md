@@ -1,6 +1,6 @@
 ---
 phase: 09-parallel-macro-execution
-reviewed: 2026-07-20T18:05:57Z
+reviewed: 2026-07-20T18:59:11Z
 depth: standard
 files_reviewed: 4
 files_reviewed_list:
@@ -9,235 +9,195 @@ files_reviewed_list:
   - src-tauri/src/scheduler/mod.rs
   - src/App.tsx
 findings:
-  critical: 1
-  warning: 2
+  critical: 2
+  warning: 4
   info: 3
-  total: 6
+  total: 9
 status: issues_found
 ---
 
 # Phase 09: Code Review Report
 
-**Reviewed:** 2026-07-20T18:05:57Z
+**Reviewed:** 2026-07-20T18:59:11Z
 **Depth:** standard
 **Files Reviewed:** 4
 **Status:** issues_found
 
 ## Summary
 
-This phase (parallel-macro-execution) touches four files across three commits: (1) a debug-only
-`action_tx` overflow diagnostic (counter + IPC command + channel capacity bump 100→1024) in
-`scheduler/mod.rs`/`ipc/mod.rs`/`lib.rs`, (2) two new concurrency-proof scheduler tests, and (3) a
-new frontend `computeRunningState()` derivation in `App.tsx` that renders a per-macro
-firing/held/combined/waiting/disabled indicator.
+This is a full re-review of the phase's current cumulative diff (parallel macro execution: scheduler, IPC surface, app bootstrap, dashboard UI). The prior review's CR-01 (held-indicator mismatch — `computeRunningState` misclassifying Hold-mode macros as "firing") is confirmed fixed: the function now checks `macro.trigger_mode === "Hold"` explicitly and returns `"held"` before ever inspecting the persisted step shape, with a comment explaining why the persisted shape alone is insufficient.
 
-The Rust-side diagnostic work (drop counter, capacity increase, debug-gated IPC command) is sound —
-`cargo check` and `cargo clippy` (both dev and release profiles) are clean, and the cfg-gating is
-correctly wired end-to-end (`lib.rs` registration, `scheduler::get_action_drop_count`,
-`ipc::get_debug_action_drop_count`).
+Two new BLOCKER-level issues were found in this pass, both directly relevant to a "parallel macro execution" phase:
 
-The frontend running-state indicator has a real correctness gap: it derives "held" vs "firing"
-purely from the *persisted* `sequence.steps` shape, but the scheduler only performs the
-Hold-mode→SustainedHold conversion on its own in-memory copy at dispatch time — that conversion is
-never written back to `AppState`/persisted `MacroConfig`. Since the only macro-creation path
-currently wired into the UI (`handleCreateMacro`) always stores a single `InterleavedInterval` step
-regardless of the selected trigger mode, every Hold-mode macro created through the app will be
-misclassified as "firing" instead of "held". This is traced in detail below (CR-01). The two new
-scheduler stress tests are functionally sound but rely on generous-but-still-timing-dependent sleep
-windows that carry a real (if bounded) CI-flakiness risk (WR-02).
+1. The Scheduler's per-macro stop path (`stop_macro` → `release_holds`) uses fire-and-forget `try_send` for `HoldRelease` messages, unlike the emergency `StopAll` path, which was hardened (per the existing CR-02 comment in the same file) to use `.await` for guaranteed delivery. Under the exact channel-saturation conditions this phase is designed to stress (many concurrent macros), disabling/stopping an individual held-mode macro can silently and permanently leave a physical key/mouse button held down, with no retry path short of a full emergency stop.
+2. `App.tsx`'s `handleCardSetTriggerKey` (macOS path) destroys an existing hotkey binding (`unbind_hotkey`) *before* confirming the new one is accepted (`bind_hotkey`). If the new key conflicts with another macro, the old binding is permanently lost even though the user only intended to attempt a change.
+
+Four Warnings and three Info items round out the findings — mostly UX/error-recovery gaps and minor naming/cleanup inconsistencies. No hardcoded secrets, `eval`, `innerHTML`/`dangerouslySetInnerHTML`, or SQL/command-injection patterns were found in any of the four files.
 
 ## Critical Issues
 
-### CR-01: `computeRunningState` never reports "held" for Hold-mode macros created via the app UI
+### CR-01: Per-macro stop can silently leave a physical input stuck down
 
-**File:** `src/App.tsx:90-107` (also implicated: `src/App.tsx:460-472`, `src-tauri/src/scheduler/mod.rs:272-294`, `src-tauri/src/state/mod.rs:448-478`)
+**File:** `src-tauri/src/scheduler/mod.rs:367-391` (via `stop_macro` at 344-365, invoked from `handle_intent`'s `StopMacro` arm at 211-213 and from `start_macro`'s restart path at 270)
 
-**Issue:**
-`computeRunningState` (added this phase, `09-02`) derives the `held` / `combined` / `firing`
-distinction solely from the *stored* `macro.sequence.steps` shape:
+**Issue:** `release_holds()` removes the macro's holds from `active_holds` unconditionally, then attempts to notify the StateActor of each `HoldRelease` via `self.action_tx.try_send(...)`. `try_send` is non-blocking and silently drops on backpressure — the failure is only logged, and only in debug builds, via `ACTION_DROP_COUNT`. Because `active_holds.remove(macro_id)` already happened *before* the send attempt, a dropped message is unrecoverable: the Scheduler no longer believes it owns that hold, so nothing will ever re-attempt the release.
 
-```ts
-// src/App.tsx:102-106
-const hasHold = macro.sequence.steps.some((s) => "SustainedHold" in s);
-const hasInterval = macro.sequence.steps.some((s) => "InterleavedInterval" in s);
-if (hasHold && hasInterval) return "combined";
-if (hasHold) return "held";
-return "firing";
-```
+Contrast this with `SchedulerIntent::StopAll` (lines 214-234), which was explicitly hardened per the CR-02 comment already in this file to use `.await` (guaranteed delivery, blocking until the channel has room) specifically because dropped `HoldRelease` messages leave real, physically-stuck input. The identical reasoning applies to a single macro's normal stop/disable path — under load (many concurrent macros firing intervals is precisely what this phase adds), the 1024-slot `action_tx` channel can legitimately fill up, and a user disabling one held-mode macro (e.g. a sustained right-click macro for an AFK farm) can be left with that mouse button physically down in-game with no on-screen indication anything went wrong. This gap is invisible in release builds — `ACTION_DROP_COUNT` and its logging are both `#[cfg(debug_assertions)]`-only, so there is no diagnostic signal at all for production users hitting this.
 
-But the scheduler performs Hold-mode conversion on a *local, ephemeral* copy of the steps that is
-never written back to persisted state:
+This directly threatens the project's stated Core Value: "A macro that was set up must fire reliably."
+
+**Fix:** Route `release_holds` through the same guaranteed-delivery mechanism as `StopAll`. The simplest correct fix is to make `stop_macro`/`release_holds` `async` and `.await` the send, exactly as `StopAll` already does:
 
 ```rust
-// src-tauri/src/scheduler/mod.rs:287-294
-if config.trigger_mode == crate::state::TriggerMode::Hold {
-    // Force all steps to be SustainedHold when in Hold mode
-    for step in &mut steps {
-        if let ActionStep::InterleavedInterval { input, .. } = step {
-            *step = ActionStep::SustainedHold { input: *input };
+async fn release_holds(&mut self, macro_id: &Uuid) {
+    if let Some(holds) = self.active_holds.remove(macro_id) {
+        for input in holds {
+            // CR-01: guaranteed delivery — matches the StopAll emergency path.
+            // A dropped HoldRelease here means a permanently-stuck physical input.
+            let _ = self.action_tx.send(ActionReady {
+                macro_id: *macro_id,
+                action_type: ActionType::HoldRelease(input),
+                fired_at: Instant::now(),
+            }).await;
         }
     }
 }
 ```
-
-`Intent::AddMacro` (`src-tauri/src/state/mod.rs:448-478`) stores the `MacroConfig` exactly as
-submitted by the frontend (`self.state.macros.insert(new_id, config)`), with no equivalent
-conversion. And the only macro-creation UI path, `handleCreateMacro`, always builds a single
-`InterleavedInterval` step regardless of the chosen trigger mode:
-
-```ts
-// src/App.tsx:460-472
-const config: MacroConfig = {
-  ...
-  sequence: {
-    steps: [{ InterleavedInterval: { input, interval_ms: interval } }],
-  },
-  ...
-  trigger_mode: newMacroTriggerMode(),   // "Hold" is a valid selection here
-};
-```
-
-Net effect: a macro created with Trigger Mode = "Hold" is actually held down continuously at
-runtime (per the scheduler's forced conversion), but `AppState.macros[id].sequence.steps` — the
-only thing `computeRunningState` inspects — still contains an `InterleavedInterval` step, so the
-indicator shows "firing" (green, `animate-pulse`) instead of "held" (accent, static). Since there is
-currently no UI path (`set_macro_sequence` / `update_step_interval` are unused in `App.tsx`) that
-ever produces a genuine `SustainedHold` step, the "held" state this phase's commit message
-advertises ("add per-macro running-state indicator (firing/held/combined/waiting/disabled)") is
-unreachable for any macro created through the product — the entire Hold trigger mode is
-misrepresented. This directly undermines the phase's stated goal (letting a user visually confirm
-"why isn't it firing / is it actually held") for one of only two trigger modes.
-
-**Fix:** Base the derivation on `trigger_mode`, not (or not only) on the raw stored steps — mirror
-the scheduler's actual runtime conversion:
-
-```ts
-function computeRunningState(macro: MacroConfig, state: AppState): RunningState {
-  if (!macro.enabled) return "disabled";
-  if (!state.engine_active || state.emergency_stop_active) return "disabled";
-
-  const matchesTarget =
-    macro.target_app == null || state.active_app === macro.target_app;
-  if (!matchesTarget) return "waiting";
-
-  if (macro.sequence.steps.length === 0) {
-    return macro.trigger_mode === "Hold" ? "held" : "firing";
-  }
-
-  // Mirror scheduler/mod.rs: Hold mode forces every step to SustainedHold at
-  // dispatch time, regardless of what's persisted in sequence.steps.
-  if (macro.trigger_mode === "Hold") return "held";
-
-  const hasHold = macro.sequence.steps.some((s) => "SustainedHold" in s);
-  const hasInterval = macro.sequence.steps.some((s) => "InterleavedInterval" in s);
-  if (hasHold && hasInterval) return "combined";
-  if (hasHold) return "held";
-  return "firing";
-}
-```
-
-(Adjust exact semantics to match whatever the intended UX is for a Hold-mode macro whose stored
-sequence *also* contains an independent `SustainedHold` step from a different input — but the core
-fix is: `trigger_mode === "Hold"` must not be ignored.)
-
-## Warnings
-
-### WR-01: Duplicate `computeRunningState()` invocations per macro card risk logic drift
-
-**File:** `src/App.tsx:1233, 1248, 1253`
-
-**Issue:** Within a single `<For each={macroList()}>` item, `computeRunningState(macro, state()!)`
-is called three separate times with identical arguments — once for the status-dot class (line
-1233), once for the "waiting" label `<Show>` (line 1248), and once for the "combined" label
-`<Show>` (line 1253). Because it's re-derived independently at each call site rather than computed
-once and reused, a future edit to the classification logic (e.g. as part of fixing CR-01) risks
-being applied at one call site and missed at another, producing a UI where the dot color and the
-inline label text disagree.
-
-**Fix:** Compute once per card and reuse:
-
-```tsx
-<For each={macroList()}>
-  {(macro) => {
-    const runningState = () => computeRunningState(macro, state()!);
-    return (
-      <div class="glass-card p-4">
-        ...
-        <div class={/* switch on runningState() */} />
-        ...
-        <Show when={runningState() === "waiting"}>...</Show>
-        <Show when={runningState() === "combined"}>...</Show>
-      </div>
-    );
-  }}
-</For>
-```
-
-### WR-02: New parallel-scheduler stress tests are timing-dependent and can flake under CI load
-
-**File:** `src-tauri/src/scheduler/mod.rs:653-755` (`parallel_two_macros_concurrent`), `src-tauri/src/scheduler/mod.rs:759-869` (`parallel_stop_one_keeps_other`)
-
-**Issue:** Both new tests assert on real wall-clock `tokio::time::sleep` windows (500ms / 200ms /
-300ms) and bound the resulting fire counts with fixed numeric ranges (e.g. `(5..=16)`,
-`(3..=11)`, `a_count <= 10`, `b_count >= 6`). `cargo test` runs the test binary's tests
-concurrently on the OS thread pool by default, and CI runners (especially shared/throttled ones)
-can introduce scheduling delays well beyond what a local dev machine sees. A sufficiently starved
-run could push a macro's fire count outside these bounds even though the scheduler behaved
-correctly, causing an intermittent, non-actionable test failure. This is explicitly a test
-*reliability* concern (not a style nit) since flaky CI tests erode trust in the suite and get
-reflexively re-run or skipped.
-
-**Fix:** Either widen the bounds further with a documented rationale, run these two tests with
-`--test-threads=1` for this module (or `#[serial]`-style isolation) to reduce contention, or assert
-on relative fire-count *ratios* (e.g. `b_count as f64 / a_count as f64` within a ratio window) rather
-than absolute counts tied to a specific wall-clock window, which is more robust to uniform
-system-wide slowdown.
-
-## Info
-
-### IN-01: "firing" and "waiting" states are both rendered in `bg-success` (green), distinguished only by `animate-pulse`
-
-**File:** `src/App.tsx:1234-1241`
-
-**Issue:** The `firing` case and the `waiting` case both resolve to the same `bg-success` color;
-the only visual differentiator is the `animate-pulse` class on `firing`. For a static screenshot,
-a user with `prefers-reduced-motion` enabled, or simply a quick glance, "actively firing" and
-"enabled but target app doesn't match" are indistinguishable — despite being semantically very
-different (one is doing input injection right now, the other is not).
-
-**Fix:** Consider a distinct color (or an icon/hollow-ring treatment) for `waiting` so it doesn't
-read as a healthy/active state at a glance.
-
-### IN-02: "Waiting for {macro.target_app}" shows the raw platform identifier, not a friendly name
-
-**File:** `src/App.tsx:1248-1252`
-
-**Issue:** `macro.target_app` stores the raw bundle ID (macOS, e.g. `com.mojang.minecraft`) or full
-exe path (Windows), per the `RunningApp`/`target_app` field documentation in this same file
-(`src/App.tsx:112-114`). The new "waiting" label surfaces this raw identifier directly to the user
-(`Waiting for {macro.target_app}`) rather than a resolved display name, which is inconsistent with
-how the process picker itself renders `display_name` elsewhere in the same file.
-
-**Fix:** Resolve `macro.target_app` against the last-fetched `apps()` list (matching on
-`identifier`) to show `display_name` when available, falling back to the raw identifier only if no
-match is found.
-
-### IN-03: Debug-only `get_debug_action_drop_count` command has no consumer
-
-**File:** `src-tauri/src/ipc/mod.rs:227-231`, `src-tauri/src/lib.rs:105-106`
-
-**Issue:** The new `get_debug_action_drop_count` IPC command is registered and correctly cfg-gated
-to debug builds, but nothing in `src/App.tsx` (or any other reviewed file) invokes it — it's
-presumably intended to be polled manually via devtools during ad-hoc diagnosis per its doc comment
-("ad-hoc parallel-execution overflow diagnosis (D-09)"). This is not a functional defect, but worth
-flagging so it isn't mistaken for dead code in a future pass — if the intent was for this counter
-to eventually back a visible debug HUD, that wiring is not yet present.
-
-**Fix:** None required if this is intentionally a manual/devtools-only diagnostic; otherwise wire it
-into a debug-build-only UI element.
+(`stop_macro` and its callers — `handle_intent`, `start_macro`'s restart path — would need to become `async`/`.await` this call as well.)
 
 ---
 
-_Reviewed: 2026-07-20T18:05:57Z_
+### CR-02: Hotkey rebind on a card destroys the existing binding before the new one is confirmed
+
+**File:** `src/App.tsx:563-586`
+
+**Issue:**
+```ts
+async function handleCardSetTriggerKey(id: string, nativeCode: number, modifiers: number) {
+    try {
+      if (IS_MACOS) {
+        await invoke("unbind_hotkey", { macro_id: id });
+        await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
+      } else {
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
+      }
+      ...
+```
+On macOS, `unbind_hotkey` runs first. Per its own doc comment in `ipc/mod.rs:95-98`, this "clears the macro's trigger and rebuilds the platform HOTKEY_BINDINGS registry" — i.e. it mutates persisted state immediately. If the subsequent `bind_hotkey` call then fails (the documented conflict-check path, UX-11), the `catch` block only shows a toast (`showConflictError`) — it never re-establishes the macro's previous binding. A user attempting to change an existing hotkey to one that happens to conflict with another macro ends up with **no hotkey at all** on the macro they were editing, instead of keeping the original binding.
+
+**Fix:** Do not destroy the existing binding until the new one is confirmed. Attempt the new bind first, and only clear the old key on success:
+
+```ts
+async function handleCardSetTriggerKey(id: string, nativeCode: number, modifiers: number) {
+    const macro = state()?.macros[id];
+    const hadPrevKey = macro?.trigger_key != null;
+    try {
+      if (IS_MACOS) {
+        // Attempt the new binding first; only clear the old one once accepted.
+        await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
+        if (hadPrevKey) {
+          await invoke("unbind_hotkey", { macro_id: id });
+        }
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
+      } else {
+        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
+      }
+      setEditingCardId(null);
+      setEditingField(null);
+    } catch (e) {
+      // ... existing conflict toast handling ...
+    }
+  }
+```
+(Adjust ordering to whatever the backend's conflict-check actually requires — the essential fix is that the destructive `unbind_hotkey` call must not run unconditionally before the replacement binding is guaranteed to succeed.)
+
+## Warnings
+
+### WR-01: Card trigger-key edit UI gets stuck after a conflict error
+
+**File:** `src/App.tsx:563-586`, `1332-1401`
+
+**Issue:** `handleCardSetTriggerKey`'s `catch` block never resets `editingCardId`/`editingField` (they are only cleared on the success path). The card view (`1348-1401`) shows the "Press…" chip whenever `editingCardId() === macro.id && editingField() === "key"`, regardless of `triggerKeyRecording()`. A failed bind therefore leaves the card frozen showing "Press…" with an active-looking accent border even though key capture has already ended (the `keydown` listener was removed inside `startCapture`'s `onKeyDown` before `onCommit` — i.e. `handleCardSetTriggerKey` — was even invoked). The card is only recoverable if the user notices and clicks the small "✕" inside that chip.
+
+**Fix:** Reset the editing state in the `catch` block too:
+```ts
+} catch (e) {
+  const msg = String(e);
+  const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
+  const macroName = macroMatch ? macroMatch[1] : "another macro";
+  const keyLabel = resolveKeyName(nativeCode);
+  showConflictError(keyLabel, macroName);
+  setEditingCardId(null);
+  setEditingField(null);
+  console.error("Card trigger key update failed:", e);
+}
+```
+
+### WR-02: No client-side validation on macro interval allows invalid values to reach the backend with a misleading error
+
+**File:** `src/App.tsx:453-509` (`handleCreateMacro`)
+
+**Issue:** `const interval = parseInt(newMacroInterval()) || 100;` only guards against `NaN`/`0` (both fall back to 100, since `0` is falsy) but does not reject negative values — `parseInt("-50")` is `-50`, which is truthy, so it is sent straight through in the `add_macro` payload as `interval_ms: -50`. The Rust side declares `MacroConfig.interval_ms: u64`, which cannot deserialize a negative number, so `add_macro` fails with a generic serde error. The `catch` block in `handleCreateMacro` assumes every failure is a hotkey conflict (it regex-matches for `is already assigned to "..."`, falling back to a generic "another macro" message), so the user sees a confusing "hotkey conflict" toast for what is actually an invalid-interval input error.
+
+**Fix:** Clamp/validate before sending (mirroring the scheduler's own `.max(5)` floor):
+```ts
+const parsed = parseInt(newMacroInterval());
+const interval = Number.isFinite(parsed) && parsed >= 5 ? parsed : 100;
+```
+and/or disable the Create button when the interval field holds an invalid value, similar to the existing `disabled={!newMacroName().trim()}` guard.
+
+### WR-03: Toast/message auto-dismiss timers are not cleared on unmount, unlike the rest of the file's cleanup pattern
+
+**File:** `src/App.tsx:241-248` (`_conflictErrorTimer` / `showConflictError`), `616-619` (`showProfileMsg`)
+
+**Issue:** The file is otherwise careful about clearing pending timers on unmount — `clearPending()`/`clearImPending()` are both invoked from the top-level `onCleanup` (lines 380-387), per the documented WR-01/WR-03/WR-08 conventions already in the file. `_conflictErrorTimer` (conflict toast) and the anonymous `setTimeout` inside `showProfileMsg` (profile toast) have no equivalent cleanup — they are only cleared when a new toast supersedes the old one, never on component teardown. If the component unmounts while one of these timers is pending (e.g. during HMR), the timer will still fire and call a signal setter on a torn-down component.
+
+**Fix:** Track both timer handles and clear them in the top-level `onCleanup`:
+```ts
+onCleanup(() => {
+  if (_conflictErrorTimer !== null) clearTimeout(_conflictErrorTimer);
+  if (_profileMsgTimer !== null) clearTimeout(_profileMsgTimer);
+  ...
+});
+```
+
+### WR-04: `delete_profile` / `load_profile` do not sanitize the profile name before handing it to the persistence layer
+
+**File:** `src-tauri/src/ipc/mod.rs:343-369`
+
+**Issue:** `save_profile` explicitly sanitizes the incoming `name` up front (documented under CR-03, lines 301-318) specifically so the on-disk filename always matches the stored name. `delete_profile` (360-369) and `load_profile` (343-355) pass the raw, unsanitized `name` straight through to `profile_mgr.delete_profile(&name)` / `Intent::LoadProfile(name, tx)` with no equivalent guard in this file. `persistence.rs` is out of scope for this review pass, so it's possible `ProfileManager` sanitizes internally before building a filesystem path — but that can't be confirmed here, and the asymmetry with `save_profile`'s explicit, documented sanitization is worth a follow-up check for a path-traversal vector (e.g. a crafted `name` containing `../`).
+
+**Fix:** Apply the same `ProfileManager::sanitize_name` (or equivalent validation) to `name` in `delete_profile`/`load_profile` before it reaches the persistence layer, or confirm and document that `ProfileManager`'s internal methods already do this unconditionally.
+
+## Info
+
+### IN-01: Inconsistent IPC argument naming for the macro identifier
+
+**File:** `src-tauri/src/ipc/mod.rs:80-108`
+
+**Issue:** `bind_hotkey` and `unbind_hotkey` take `macro_id: Uuid`, while every other per-macro command (`remove_macro`, `set_macro_enabled`, `set_macro_target_app`, `set_macro_trigger_key`, `set_macro_sequence`, `update_step_interval`) takes `id: Uuid`. This is a minor but avoidable naming inconsistency across an otherwise uniform IPC surface.
+
+**Fix:** Rename `macro_id` → `id` in `bind_hotkey`/`unbind_hotkey` for consistency (this would also require updating the two `App.tsx` call sites that currently pass `{ macro_id: id, ... }`).
+
+### IN-02: Duplicated platform-detection logic between component scope and module scope
+
+**File:** `src/App.tsx:144-161` (`computeModifiers`), `172-191` (`modifierChips`), `287` (component-scoped `IS_MACOS`)
+
+**Issue:** `computeModifiers`/`modifierChips` are module-level functions that each independently recompute `navigator.userAgent.toLowerCase().includes("mac")`, duplicating the `IS_MACOS` constant already computed inside `App()`. This is called out in the existing code comments as intentional (the helpers need to be callable outside the component closure), but it's still a duplication risk — if the detection method ever changes, three call sites must be updated in lockstep rather than one.
+
+**Fix:** Pass `IS_MACOS` as a parameter into `computeModifiers`/`modifierChips` from the call sites inside `App()`, or hoist a single memoized `isMacOS()` module-level helper that both the component and the free functions call.
+
+### IN-03: `add_macro`'s returned UUID is fetched but never used
+
+**File:** `src/App.tsx:483-484`
+
+**Issue:** `await invoke<string>("add_macro", { config });` discards the backend-generated UUID entirely, relying solely on the subsequent `state-changed` event to populate the real macro ID into `state()`. This is functionally fine today (the event does arrive), but if that event were ever dropped or delayed, the frontend would have no fallback identifier for the macro it just created. Not a bug today, but a fragile implicit dependency worth documenting.
+
+**Fix:** No functional change required; consider a one-line comment noting the reliance on `state-changed` for the new macro to appear, matching the existing WR-04 fallback pattern already used for `handleLoadProfile`'s explicit re-fetch.
+
+---
+
+_Reviewed: 2026-07-20T18:59:11Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
