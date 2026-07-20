@@ -43,7 +43,7 @@ Progress: [████████████████████] 100% (p
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
 | 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
-| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Not started |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Ready to execute (3 plans, 2 waves — planned ahead of Phase 8 device verification) |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
 ## Accumulated Context
