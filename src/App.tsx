@@ -95,6 +95,15 @@ function computeRunningState(macro: MacroConfig, state: AppState): RunningState 
     macro.target_app == null || state.active_app === macro.target_app;
   if (!matchesTarget) return "waiting";
 
+  // CR-01 fix: the scheduler force-converts EVERY step to SustainedHold when
+  // trigger_mode is Hold (src-tauri/src/scheduler/mod.rs:287-294), and the
+  // empty-sequence Hold fallback also yields a SustainedHold
+  // (scheduler/mod.rs:279-281) — so a Hold-mode macro is entirely held at
+  // runtime regardless of what sequence.steps persists. handleCreateMacro
+  // always persists a single InterleavedInterval step (src/App.tsx), so the
+  // persisted step shape alone must not be the sole discriminant here.
+  if (macro.trigger_mode === "Hold") return "held";
+
   // Legacy empty-sequence macros fall back to a single interval click
   // (see src-tauri/src/scheduler/mod.rs:257-270) — treat as "firing".
   if (macro.sequence.steps.length === 0) return "firing";
