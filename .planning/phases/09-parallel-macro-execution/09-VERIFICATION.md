@@ -1,104 +1,118 @@
 ---
-phase: 9
-slug: parallel-macro-execution
-status: in-progress
-nyquist_compliant: true
-created: 2026-07-20
-verified: pending
+phase: 09-parallel-macro-execution
+verified: 2026-07-20T18:30:00Z
+status: gaps_found
+score: 4/7 must-haves verified
+behavior_unverified: 3
+overrides_applied: 0
+gaps:
+  - truth: "A macro whose sequence contains only SustainedHold steps shows a distinct held indicator; a macro with both SustainedHold and InterleavedInterval steps shows a single combined indicator (09-02 D-02)"
+    status: failed
+    reason: "computeRunningState() derives held/combined/firing purely from the persisted macro.sequence.steps shape, but the only currently-wired macro-creation path (handleCreateMacro in src/App.tsx) always stores a single InterleavedInterval step regardless of the selected trigger_mode. The Hold-mode -> SustainedHold conversion happens only ephemerally inside the scheduler (src-tauri/src/scheduler/mod.rs:287-294) at dispatch time and is never written back to persisted AppState (Intent::AddMacro in src-tauri/src/state/mod.rs:448 stores the config exactly as submitted). Net effect: every Hold-mode macro created through the app is injected as a continuous hold at runtime but its card always shows the 'firing' (pulsing green) indicator, never 'held' (accent) — the held/combined branches of computeRunningState are unreachable via the product's only creation path. Independently confirmed by 09-REVIEW.md CR-01 (Critical) and by direct inspection of src/App.tsx:90-107, src/App.tsx:460-472, src-tauri/src/scheduler/mod.rs:274-294, and src-tauri/src/state/mod.rs:448-478 during this verification."
+    artifacts:
+      - path: "src/App.tsx"
+        issue: "computeRunningState() (lines 90-107) does not read macro.trigger_mode; it infers held/firing purely from stored sequence.steps, which never contains SustainedHold for any macro created via the current UI"
+      - path: "src-tauri/src/state/mod.rs"
+        issue: "Intent::AddMacro (line 448) inserts the submitted MacroConfig verbatim with no Hold-mode step-conversion, so the persisted config never matches what the scheduler actually runs for Hold-mode macros"
+    missing:
+      - "computeRunningState must also branch on macro.trigger_mode === \"Hold\" (mirroring the scheduler's runtime conversion at scheduler/mod.rs:287-294), OR the Hold->SustainedHold conversion must be persisted back into AppState at macro-creation/update time so the stored steps reflect what actually runs"
+deferred: []
+behavior_unverified_items:
+  - truth: "On macOS, enabling macro B while macro A is actively firing does not pause, delay, or cancel macro A — both fire concurrently at their configured intervals (ROADMAP SC1)"
+    test: "On a real macOS host with Accessibility + Input Monitoring granted: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A, wait ~1s, enable B; observe both macro cards show a pulsing firing dot simultaneously and neither's click rate changes when the other starts/stops"
+    expected: "Both macros visibly fire concurrently at their own configured rates on real macOS input injection (CGEvent) — this is documented as 09-VERIFICATION.md (plan-09-03 artifact) Section 5, Test T9.1, still unexecuted (checkbox unchecked)"
+    why_human: "Requires a real macOS device with Accessibility/Input Monitoring permissions and live observation of CGEvent injection timing and the per-card UI dots in real time; the scheduler-level unit test (parallel_two_macros_concurrent) proves the platform-agnostic timeline logic but not real-device CGEvent injection behavior"
+  - truth: "On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A (ROADMAP SC2)"
+    test: "On a real Windows host: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A, wait ~1s, enable B; observe both fire concurrently via SendInput"
+    expected: "Documented as 09-VERIFICATION.md Section 6, Test 6.1, still unexecuted (checkbox unchecked)"
+    why_human: "Requires a real Windows device with the Win32 SendInput injection path and Win32 hook observer running live; not exercisable from this (macOS) verification environment"
+  - truth: "Stopping one running macro does not affect any other concurrently running macro (ROADMAP SC3)"
+    test: "On real macOS and Windows hosts: with A and B both firing, disable A; observe B's dot keeps pulsing and B's fire rate is unaffected"
+    expected: "Documented as 09-VERIFICATION.md Sections 5/6, Tests T9.2/6.2, still unexecuted (checkboxes unchecked)"
+    why_human: "Same as above — device-level, real-time observation required; scheduler-level unit test (parallel_stop_one_keeps_other) proves the underlying gating logic but not real-device confirmation"
+human_verification:
+  - test: "Run T9.1-T9.3 on a real macOS host per 09-VERIFICATION.md Section 5 (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning)"
+    expected: "All 3 tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays"
+    why_human: "Real macOS device, live CGEvent injection, live UI observation — cannot be verified by static analysis or from this (non-macOS-GUI) verification session"
+  - test: "Run 6.1-6.3 on a real Windows host per 09-VERIFICATION.md Section 6"
+    expected: "All 3 tests pass via SendInput injection and the Win32 hook observer"
+    why_human: "Requires a real Windows device — not available in this verification environment"
+  - test: "After the CR-01 fix lands, create a Hold-mode macro via the UI, enable it, and confirm its card shows the 'held' (accent, non-pulsing) indicator rather than 'firing' (pulsing green)"
+    expected: "Hold-mode macros are visually distinguishable from Pulse-mode macros on their card"
+    why_human: "Visual confirmation of a UI fix; also gates whether the chosen fix (trigger_mode-based derivation vs. persisting the conversion) produces the intended UX"
 ---
 
-# Phase 9 — Verification Report
+# Phase 9: Parallel Macro Execution Verification Report
 
-> Single source of truth for Phase 9 (Parallel Macro Execution) gate status.
-> The phase is complete when all five sections below are marked `✅ done` in Section 7.
-> Mirrors `08-VERIFICATION.md`'s structure. Sections 3 (Windows cross-compile) and 4 (profile
-> backwards-compat) are intentionally omitted — see D-05 note in Section 7.
+**Phase Goal:** Multiple macros can run simultaneously on both macOS and Windows — triggering a second macro never blocks, queues, or cancels a running one
+**Verified:** 2026-07-20T18:30:00Z
+**Status:** gaps_found
+**Re-verification:** No — initial verification
 
-## 1. Test Suite
+## Goal Achievement
 
-Command: `cd src-tauri && cargo test 2>&1 | tail -40`
+### Observable Truths
 
-Notes on command: Per the same nuance documented in `08-VERIFICATION.md` §1, the package name (per `src-tauri/Cargo.toml`) is `automux` (hyphen-free), with a separate `[lib] name = "automux_lib"` for the library. Running `cargo test` from `src-tauri/` is the equivalent of `cargo test -p automux_lib --lib`.
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | Two macros at different intervals both fire concurrently in the scheduler, neither blocking the other (EXEC-01/EXEC-02, plan 09-01) | ✓ VERIFIED | `cargo test parallel_two_macros_concurrent` passes (independently re-run during this verification, exit 0, 1/1 ok as part of full 11/11 suite). Bounded per-macro_id fire-count ranges at src-tauri/src/scheduler/mod.rs:654-758 prove genuine concurrency, not serialization. |
+| 2 | Stopping one running macro does not affect another concurrently running macro (EXEC-02, plan 09-01) | ✓ VERIFIED | `cargo test parallel_stop_one_keeps_other` passes (re-run during this verification). Bounded fire-count assertion at src-tauri/src/scheduler/mod.rs:760-869 confirms A's shortened window vs B's full window. |
+| 3 | action_tx channel capacity is 1024 (raised from 100) to avoid silent overflow under parallel fire rates | ✓ VERIFIED | `grep 'mpsc::channel::<scheduler::ActionReady>(1024)' src-tauri/src/lib.rs:26` confirmed present; state_tx/sched_tx unchanged at 100. |
+| 4 | Debug-only ACTION_DROP_COUNT increments on every try_send failure at all 3 fire sites, readable via get_action_drop_count() and the get_debug_action_drop_count IPC command, absent from release builds | ✓ VERIFIED | Static declared src-tauri/src/scheduler/mod.rs:13, 3 fetch_add sites at lines 313/382/416-ish (grep confirms 4 occurrences: static+3 sites+accessor), `#[cfg(debug_assertions)]` gates confirmed on the static, accessor, and IPC command (src-tauri/src/ipc/mod.rs:227-231); real accessor call confirmed (`crate::scheduler::get_action_drop_count()`, not a literal). |
+| 5 | Per-macro card shows firing/waiting/held/combined/disabled derived from computeRunningState mirroring the 3 backend injection gates (D-01, plan 09-02) | ✓ VERIFIED (gates D-01 only) | computeRunningState gates (src/App.tsx:90-107) verified line-for-line against StateActor::handle_action gates (src-tauri/src/state/mod.rs:373-394): engine active + not emergency-stopped, macro enabled, target_app match/Global — logic matches. Wired at 3 call sites in the macro card (App.tsx:1233, 1248, 1253); `npx tsc --noEmit` and `npm run build` both pass. |
+| 6 | Held-only macros show a distinct held indicator; hold+interval macros show a combined indicator (D-02, plan 09-02) | ✗ FAILED | computeRunningState never inspects `macro.trigger_mode`; the only wired macro-creation path (handleCreateMacro, App.tsx:460-472) always persists an InterleavedInterval step even when Hold mode is selected. The scheduler's Hold->SustainedHold conversion (scheduler/mod.rs:287-294) is ephemeral and never written back to AppState (state/mod.rs:448 Intent::AddMacro stores the config as submitted). Every Hold-mode macro created via the app shows "firing" instead of "held" — the held/combined branches are unreachable in practice. Independently confirmed by 09-REVIEW.md CR-01 (Critical) and by direct source inspection during this verification. |
+| 7 | ROADMAP SC1/SC2/SC3 — concurrent firing and independent stop hold true on real macOS and Windows devices | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | Scheduler-level unit tests (truths 1-2 above) prove the platform-agnostic scheduling/gating logic that SC1-3 depend on, but the 6 device-level manual tests (T9.1-T9.3, 6.1-6.3) documented in this same file's prior draft (plan-09-03 deliverable) are still unexecuted — all checkboxes in the original Section 5/6 pre-flight and status table were unchecked/pending. No real macOS or Windows device confirmation has been performed. |
 
-Exit code: `0` (all 11 lib tests passed; runtime ~0.56s).
+**Score:** 4/7 truths verified (3 present, behavior-unverified; 1 failed)
 
-Actual output:
+### Required Artifacts
 
-```text
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
-     Running unittests src/lib.rs (target/debug/deps/automux_lib-99852003d73a1d34)
+| Artifact | Expected | Status | Details |
+|----------|----------|--------|---------|
+| `src-tauri/src/scheduler/mod.rs` | 2 new concurrency-proof tests + ACTION_DROP_COUNT counter | ✓ VERIFIED | Both tests present, passing, compiled only under `cfg(test)`. Counter static + 3 fetch_add sites + accessor all present and correctly `#[cfg(debug_assertions)]`-gated. |
+| `src-tauri/src/lib.rs` | action_tx capacity 1024, debug-gated IPC registration | ✓ VERIFIED | Confirmed by direct grep. |
+| `src-tauri/src/ipc/mod.rs` | get_debug_action_drop_count debug-only command | ✓ VERIFIED | Calls the real accessor, correctly cfg-gated, `cargo build --release` compiles clean (command compiled out). |
+| `src/App.tsx` | computeRunningState + RunningState type, wired card rendering | ⚠️ HOLLOW (partial) | Exists, substantive, wired into 3 call sites, builds clean — but the underlying derivation logic has the CR-01 gap (see truth #6). Artifact is present/wired but does not fully deliver its stated D-02 behavior. |
 
-running 11 tests
-test platform::macos::observer::tests::cg_event_flag_constants ... ok
-test state::tests::bind_conflict_rejected ... ok
-test state::tests::conflict_disappear_on_disable ... ok
-test state::tests::conflict_detection_overlap ... ok
-test state::tests::self_rebind_allowed ... ok
-test state::tests::profile_backwards_compat ... ok
-test persistence::tests::large_config_memory_check ... ok
-test scheduler::tests::jitter_audit_10ms_interval ... ok
-test scheduler::tests::parallel_two_macros_concurrent ... ok
-test scheduler::tests::parallel_stop_one_keeps_other ... ok
-test scheduler::tests::afk_farm_stress_test ... ok
+### Key Link Verification
 
-test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+| From | To | Via | Status | Details |
+|------|----|----|--------|---------|
+| `get_debug_action_drop_count` (ipc/mod.rs) | `crate::scheduler::get_action_drop_count()` | direct call | ✓ WIRED | Confirmed — calls the real accessor, not a hardcoded value. |
+| Macro card status dot (App.tsx:1233) | `computeRunningState(macro, state())` | switch statement | ✓ WIRED | Dot no longer branches on `macro.enabled` alone; correctly calls computeRunningState. |
+| `computeRunningState` | `StateActor::handle_action` gates (state/mod.rs:373-394) | logic mirroring | ⚠️ PARTIAL | Gates 1-3 (engine/enabled/target) mirror correctly. The implicit 4th gate — trigger_mode-driven Hold conversion that the scheduler applies at dispatch (scheduler/mod.rs:287-294) — is NOT mirrored, causing the CR-01 gap. |
 
-     Running unittests src/main.rs (target/debug/deps/automux-d61e43d607832aa7)
+### Behavioral Spot-Checks
 
-running 0 tests
+| Behavior | Command | Result | Status |
+|----------|---------|--------|--------|
+| Full lib test suite (re-run independently, not trusted from SUMMARY) | `cd src-tauri && cargo test` | 11 passed; 0 failed (includes both new parallel tests) | ✓ PASS |
+| Clippy clean, no new warnings | `cd src-tauri && cargo clippy --all-targets -- -D warnings` | exit 0, zero warnings | ✓ PASS |
+| Frontend typecheck | `npx tsc --noEmit -p tsconfig.json` | exit 0, no output | ✓ PASS |
+| Frontend production build | `npm run build` | exit 0, bundle built (pre-existing unrelated CSS optimizer warning, not phase-9 code) | ✓ PASS |
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+### Requirements Coverage
 
-   Doc-tests automux_lib
+| Requirement | Source Plan | Description | Status | Evidence |
+|-------------|------------|-------------|--------|----------|
+| EXEC-01 | 09-01, 09-02, 09-03 | Multiple macros can run simultaneously on macOS | ⚠️ PARTIAL | Scheduler-level proof verified (unit tests); on-device macOS confirmation not yet performed; UI-visibility half has the CR-01 gap for Hold-mode macros. REQUIREMENTS.md currently marks this "Complete" — that marking is premature given the unresolved gap and un-executed device tests. |
+| EXEC-02 | 09-01, 09-02, 09-03 | Multiple macros can run simultaneously on Windows | ⚠️ PARTIAL | Same disposition as EXEC-01 — scheduler logic is platform-agnostic and unit-proven, but no Windows-device confirmation has been performed. REQUIREMENTS.md marks this "Complete" — premature for the same reasons. |
 
-running 0 tests
+No orphaned requirements found — REQUIREMENTS.md Phase 9 row maps exactly to EXEC-01/EXEC-02, both declared in plan frontmatter.
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-```
+### Anti-Patterns Found
 
-Test-by-test verification (new Phase 9 tests):
+| File | Line | Pattern | Severity | Impact |
+|------|------|---------|----------|--------|
+| src/App.tsx | 90-107 | Derivation logic gap (CR-01) — held/combined branch unreachable via the only wired UI creation path | 🛑 Blocker | Directly breaks the D-02 must-have of plan 09-02; misrepresents actual macro runtime behavior to the user |
+| src/App.tsx | 1233, 1248, 1253 | `computeRunningState(macro, state()!)` called 3 separate times per card instead of computed once (WR-01 in 09-REVIEW.md) | ⚠️ Warning | Risk of future logic drift between dot color and inline labels; not itself a functional defect today |
+| src-tauri/src/scheduler/mod.rs | 654-869 | Both new parallel tests use real wall-clock `sleep` windows with fixed numeric bounds (WR-02 in 09-REVIEW.md) | ⚠️ Warning | Bounded CI-flakiness risk under a starved/throttled runner; not a correctness defect in the current passing run |
 
-| Test | Plan | Requirement | Result |
-|------|------|-------------|--------|
-| `scheduler::tests::parallel_two_macros_concurrent` | 09-01 | EXEC-01 | ✅ ok — two macros at different intervals (50ms, 80ms) fire concurrently, proven by a bounded per-macro_id fire-count assertion a serialized implementation could not satisfy |
-| `scheduler::tests::parallel_stop_one_keeps_other` | 09-01 | EXEC-02 | ✅ ok — stopping one running macro does not affect a second concurrently running macro |
-
-Full context (pre-existing tests, unchanged and still green): `cg_event_flag_constants`, `bind_conflict_rejected`, `conflict_disappear_on_disable`, `conflict_detection_overlap`, `self_rebind_allowed`, `profile_backwards_compat`, `large_config_memory_check`, `jitter_audit_10ms_interval`, `afk_farm_stress_test` — all 9 carried over from the Phase 8 baseline, all still passing.
-
-**Test-count math:** Phase 8 baseline = 9 tests (macOS host; see `08-VERIFICATION.md` §7). Phase 9 adds 2 new tests (`parallel_two_macros_concurrent`, `parallel_stop_one_keeps_other`). Total on the macOS host = **11**, matching the actual output above. The Windows-only `windows_mod_constants` test (cfg-gated to `#[cfg(windows)]`, added in Phase 8) is not compiled on this macOS host and would add 1 more test on a Windows host (12 there) — this is expected cfg-gating behavior, not a missing test.
-
-**Status: ✅ done** — the suite is green; both new parallel tests are present and passing; the macOS-host total (11) matches the expected baseline+2 math.
-
-## 2. Clippy
-
-Command: `cd src-tauri && cargo clippy --all-targets -- -D warnings 2>&1 | tail -20`
-
-Notes on command: Same package-name nuance as §1 — `cargo clippy --all-targets -- -D warnings` from `src-tauri/` is the correct invocation (no `-p automux-lib`, which does not exist as a package ID).
-
-**Actual result:** clippy exits **0** with **zero warnings** — the compiled output is only the build-status line:
-
-```text
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
-```
-
-### Comparison against the Phase 8 baseline
-
-`08-VERIFICATION.md` §2 documented one pre-existing warning: `needless_return` at `src/ipc/mod.rs:128` (inside the `#[cfg(target_os = "macos")]` branch of `list_running_apps`). Plan 09-01's own deviation log (see `09-01-SUMMARY.md`, "Rule 3 - Blocking" entry) records that this exact warning was fixed as part of Phase 9 Plan 01 — it blocked plan 09-01's own `cargo clippy --all-targets -D warnings` verification gate (unrelated to Phase 9's functional changes, but a compile-blocking pre-existing issue under `-D warnings`). Confirmed by direct read of the current source: `src/ipc/mod.rs:126-129` (the macOS branch) no longer contains a `return` keyword — it now reads as an implicit tail expression:
-
-```rust
-#[cfg(target_os = "macos")]
-{
-    crate::platform::macos::observer::list_running_apps_impl()
-}
-```
-
-Note: the **Windows branch** of the same function (`src/ipc/mod.rs:130-133`, `#[cfg(target_os = "windows")]`) still contains an explicit `return crate::platform::windows::list_running_apps_impl();`. This branch is not compiled on this macOS host (cfg-gated out), so it does not appear in this run's clippy output. It was not touched by Phase 8 or Phase 9 and is out of scope for both phases — flagged here only for completeness, matching the level of detail `08-VERIFICATION.md` §3 used for its own cfg-gated Windows caveats.
-
-**Phase 9 introduced NO new clippy warnings.** In fact, Phase 9 (via plan 09-01) resolved the one pre-existing warning that was carried forward from Phase 8, so the gate is now fully clean (exit 0) rather than "done despite one documented pre-existing warning" as it was in Phase 8.
-
-**Status: ✅ done (no new warnings)** — `cargo clippy --all-targets -- -D warnings` exits 0 with zero warnings on the macOS host; Phase 9 added zero new warnings and additionally cleared the one pre-existing warning inherited from Phase 8.
+No TBD/FIXME/XXX debt markers found in phase-9-modified files.
 
 ## 5. Manual macOS Device Test (EXEC-01)
+
+*Restored verbatim from plan 09-03's original artifact (commit `e1cecde`) — the verifier agent's first pass overwrote this file and dropped the step-by-step procedures. Content below is unchanged from what 09-03 produced.*
 
 These steps must be performed on a real macOS host. `parallel_two_macros_concurrent` and `parallel_stop_one_keeps_other` (§1) cover the scheduler-level proof; the device test confirms the end-to-end behavior with real input injection and the plan-09-02 per-card running-state indicators (pulsing green dot = firing; see D-01/D-02 in `09-CONTEXT.md`).
 
@@ -165,30 +179,35 @@ Pre-flight:
 2. **Expected:** both cards show pulsing firing dots (both actually fire on Windows via `SendInput`) AND the Phase 8 same-input conflict warning region appears.
 3. This is the Windows device-level confirmation that parallel firing and the conflict warning coexist correctly.
 
-## 7. Verification Status
+### Human Verification Required
 
-| Section | Status | Notes |
-|---------|--------|-------|
-| 1. Test Suite | ✅ done | 11/11 lib unit tests pass on macOS host (9 Phase 8 baseline + 2 new: `parallel_two_macros_concurrent`, `parallel_stop_one_keeps_other`). |
-| 2. Clippy | ✅ done (no new warnings) | `cargo clippy --all-targets -- -D warnings` exits 0, zero warnings. Phase 9 introduced no new warnings and cleared the one pre-existing warning carried from Phase 8. |
-| 3. Windows Cross-Compile | N/A — intentionally omitted (D-05) | Phase 9 adds no `#[cfg(target_os = "windows")]`-gated platform-specific code — the drop counter (`ACTION_DROP_COUNT`) is `std::sync::atomic`, platform-agnostic, and the IPC command (`get_debug_action_drop_count`) is not OS-gated. The shared-code test suite + clippy (§1, §2) already cover 100% of Phase 9's new code. Mirroring Phase 8's Windows cross-compile gate here would test nothing Phase 9 actually changed. |
-| 4. Profile Backwards-Compat | N/A — intentionally omitted (D-05) | Phase 9 makes no schema changes to `MacroConfig`, `AppState`, or `ProfileData` — no new `#[serde]` field was added, so there is nothing for a backwards-compat deserialization test to prove. |
-| 5. Manual macOS Device Test | ⬜ pending | **Requires human** — must be run on a real macOS host with Accessibility + Input Monitoring granted. T9.1 (concurrent fire, SC1), T9.2 (stop-one, SC3), T9.3 (same-input concurrent + conflict warning, SC1). |
-| 6. Manual Windows Device Test | ⬜ pending | **Requires human** — must be run on a real Windows host. 6.1 (concurrent fire, SC2), 6.2 (stop-one, SC3), 6.3 (same-input concurrent + conflict warning, SC2). |
+### 1. macOS device tests (T9.1-T9.3)
 
-**§3/§4 omission rationale (D-05):** Per `09-CONTEXT.md` D-05 and this plan's own `<objective>`, Phase 9 mirrors ONLY sections 1, 2, 5, 6, 7 of `08-VERIFICATION.md`. Section 3 (Windows cross-compile) and Section 4 (profile backwards-compat) are deliberately absent, not oversights — Phase 9 has no schema changes to prove backwards-compat for, and no `target_os`-gated code that a cross-compile gate would exercise beyond what the standard `cargo test`/`cargo clippy` runs already cover.
+**Test:** Run the 3 documented macOS manual tests above (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning) on a real macOS host with Accessibility + Input Monitoring granted.
+**Expected:** Both macro cards visibly pulse concurrently at independent rates; disabling one leaves the other unaffected; same-input pair both fire while the Phase 8 conflict warning also displays.
+**Why human:** Requires live CGEvent injection and real-time UI observation on physical/virtual macOS hardware — not exercisable from this verification session.
 
-The phase is **technically complete from an automated-verification standpoint**: both automated gates (Sections 1, 2) are green. Sections 5 and 6 are inherently manual — the executor cannot perform them on a real device. The user (or a human verification step) executes the literal steps in each section and updates Sections 5 and 6 status to `✅ done` when all tests pass on a real device.
+### 2. Windows device tests (6.1-6.3)
 
-**Pre-completion summary (what the executor delivered):**
+**Test:** Run the 3 documented Windows manual tests above on a real Windows host.
+**Expected:** Same concurrent-firing and independent-stop behavior via SendInput.
+**Why human:** Requires a real Windows device.
 
-- All Phase 9 unit tests pass (11/11), including both new parallel-execution proofs.
-- Zero clippy warnings — Phase 9 added none and cleared the one pre-existing warning from Phase 8.
-- §3/§4 intentionally omitted per D-05, with rationale documented above.
-- 3 macOS + 3 Windows manual device tests documented, each mapped to a ROADMAP Phase 9 success criterion (SC1/SC2/SC3).
+### 3. Hold-mode UI fix confirmation (post-CR-01 fix)
 
-**Post-completion checklist for the user:**
+**Test:** After CR-01 is fixed, create a Hold-mode macro via the UI, enable it, and confirm the card shows the "held" (accent, static) dot rather than "firing" (pulsing green).
+**Expected:** Hold-mode macros are visually distinguishable from Pulse-mode macros.
+**Why human:** Visual UX confirmation of the fix.
 
-1. Run T9.1–T9.3 on a real macOS host. Mark Section 5 `✅ done` when all 3 pass.
-2. Run 6.1–6.3 on a real Windows host. Mark Section 6 `✅ done` when all 3 pass.
-3. The phase is fully complete when Sections 1 and 2 are `✅ done` AND Sections 5 and 6 are `✅ done`.
+### Gaps Summary
+
+One Blocker gap: `computeRunningState()`'s D-02 "held indicator" deliverable is unreachable for any macro created through the app's current UI, because Hold-mode macros always persist an `InterleavedInterval` step (handleCreateMacro never applies the scheduler's Hold->SustainedHold conversion), so the card always shows "firing" instead of "held" for Hold-mode macros. This was independently found by the code review (09-REVIEW.md CR-01) and confirmed again directly against source during this verification (src/App.tsx:90-107/460-472, src-tauri/src/scheduler/mod.rs:274-294, src-tauri/src/state/mod.rs:448-478). This does not affect the scheduler's underlying concurrency correctness (09-01), which is unit-proven and independently re-verified as passing (11/11 tests, including both new parallel tests). It does affect the phase's UI-visibility deliverable (09-02's own stated must-have D-02) and therefore the phase is not fully done.
+
+Additionally, three ROADMAP success criteria (SC1, SC2, SC3) require real-device confirmation on macOS and Windows that has not yet been performed — the manual test scripts exist (documented in the prior draft of this file, itself a 09-03 deliverable) but their checkboxes remain unchecked. These are captured as human-verification items and do not block the gaps_found status on their own (they would route to human_needed), but combine with the CR-01 blocker to keep the phase at gaps_found overall.
+
+**Recommended next step:** Route the CR-01 fix through `/gsd-plan-phase --gaps` (or a quick follow-up plan) before closing Phase 9. Consider fixing by making `computeRunningState` also branch on `macro.trigger_mode === "Hold"` (mirroring scheduler/mod.rs:287-294), which is the fix already sketched in 09-REVIEW.md's CR-01 section. After the fix lands, re-run this verification and additionally have a human execute the 6 documented device tests before marking EXEC-01/EXEC-02 fully complete in REQUIREMENTS.md.
+
+---
+
+_Verified: 2026-07-20T18:30:00Z_
+_Verifier: Claude (gsd-verifier)_
