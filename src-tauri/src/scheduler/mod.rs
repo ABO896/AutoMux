@@ -581,4 +581,233 @@ mod tests {
             stddev
         );
     }
+
+    /// D-06a/EXEC-01/EXEC-02: proves two macros at different intervals fire
+    /// CONCURRENTLY — neither blocks or serializes behind the other.
+    ///
+    /// Macro A @ 50ms and macro B @ 80ms are started back-to-back and run for
+    /// 500ms. If the scheduler serialized macros (e.g. processed one macro's
+    /// timeline to completion before starting the other, or somehow only let
+    /// one macro's timers advance), one or both counts would collapse toward
+    /// zero or half their expected value. Bounds below are chosen around the
+    /// theoretical fire count (500/interval) with generous but NOT unbounded
+    /// slack — a serial implementation could not produce two independently
+    /// healthy non-zero counts in the same 500ms wall-clock window.
+    #[tokio::test]
+    async fn parallel_two_macros_concurrent() {
+        let (intent_tx, intent_rx) = mpsc::channel::<SchedulerIntent>(100);
+        let (action_tx, mut action_rx) = mpsc::channel::<ActionReady>(256);
+
+        let scheduler = Scheduler::new(intent_rx, action_tx);
+        let scheduler_handle = tokio::spawn(async move {
+            scheduler.run().await;
+        });
+
+        let macro_a_id = Uuid::new_v4();
+        let macro_b_id = Uuid::new_v4();
+
+        let config_a = MacroConfig {
+            id: macro_a_id,
+            name: "Parallel A".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Pulse,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                    interval_ms: 50,
+                }],
+            },
+        };
+
+        let config_b = MacroConfig {
+            id: macro_b_id,
+            name: "Parallel B".into(),
+            interval_ms: 80,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Pulse,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Right),
+                    interval_ms: 80,
+                }],
+            },
+        };
+
+        // Start both macros back-to-back — no gap between them.
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_a))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_b))
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_a_id))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_b_id))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        drop(intent_tx);
+        let _ = scheduler_handle.await;
+
+        // Accumulate fire counts per macro_id — proves each macro is tracked
+        // independently rather than asserted against a single fixed id.
+        let mut fire_counts: HashMap<Uuid, u32> = HashMap::new();
+        while let Ok(action) = action_rx.try_recv() {
+            if let ActionType::Interval(_) = action.action_type {
+                *fire_counts.entry(action.macro_id).or_insert(0) += 1;
+            }
+        }
+
+        let a_count = *fire_counts.get(&macro_a_id).unwrap_or(&0);
+        let b_count = *fire_counts.get(&macro_b_id).unwrap_or(&0);
+
+        eprintln!(
+            "[Parallel Test] macro_a(50ms) fires={}, macro_b(80ms) fires={}",
+            a_count, b_count
+        );
+
+        // 500ms / 50ms = 10 theoretical fires. A serial/blocked implementation
+        // would push this toward 0 (starved) — bound tight enough to catch that.
+        assert!(
+            a_count >= 5 && a_count <= 16,
+            "macro A (50ms) expected ~10 fires in [5,16], got {}",
+            a_count
+        );
+        // 500ms / 80ms = 6.25 theoretical fires.
+        assert!(
+            b_count >= 3 && b_count <= 11,
+            "macro B (80ms) expected ~6 fires in [3,11], got {}",
+            b_count
+        );
+    }
+
+    /// D-06b: proves stopping one running macro does not affect another
+    /// concurrently running macro.
+    #[tokio::test]
+    async fn parallel_stop_one_keeps_other() {
+        let (intent_tx, intent_rx) = mpsc::channel::<SchedulerIntent>(100);
+        let (action_tx, mut action_rx) = mpsc::channel::<ActionReady>(256);
+
+        let scheduler = Scheduler::new(intent_rx, action_tx);
+        let scheduler_handle = tokio::spawn(async move {
+            scheduler.run().await;
+        });
+
+        let macro_a_id = Uuid::new_v4();
+        let macro_b_id = Uuid::new_v4();
+
+        let config_a = MacroConfig {
+            id: macro_a_id,
+            name: "Stop-One A".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Pulse,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                    interval_ms: 50,
+                }],
+            },
+        };
+
+        let config_b = MacroConfig {
+            id: macro_b_id,
+            name: "Stop-One B".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Pulse,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::InterleavedInterval {
+                    input: InputEvent::MouseButton(MouseButton::Right),
+                    interval_ms: 50,
+                }],
+            },
+        };
+
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_a))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_b))
+            .await
+            .unwrap();
+
+        // Let both run for 200ms, then stop A only.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_a_id))
+            .await
+            .unwrap();
+
+        // Keep B running for another 300ms (500ms total window for B).
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_b_id))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        drop(intent_tx);
+        let _ = scheduler_handle.await;
+
+        let mut fire_counts: HashMap<Uuid, u32> = HashMap::new();
+        while let Ok(action) = action_rx.try_recv() {
+            if let ActionType::Interval(_) = action.action_type {
+                *fire_counts.entry(action.macro_id).or_insert(0) += 1;
+            }
+        }
+
+        let a_count = *fire_counts.get(&macro_a_id).unwrap_or(&0);
+        let b_count = *fire_counts.get(&macro_b_id).unwrap_or(&0);
+
+        eprintln!(
+            "[Stop-One Test] macro_a(stopped@200ms) fires={}, macro_b(ran 500ms) fires={}",
+            a_count, b_count
+        );
+
+        // A ran only ~200ms at 50ms interval (~4 theoretical fires) — bound
+        // generously but tight enough to catch A continuing after its stop.
+        assert!(
+            a_count <= 10,
+            "macro A stopped at 200ms — expected <=10 fires, got {}",
+            a_count
+        );
+        // B ran the full ~500ms window at 50ms interval (~10 theoretical fires)
+        // — must be meaningfully greater than A, proving A's stop did not
+        // affect B.
+        assert!(
+            b_count >= 6,
+            "macro B ran full 500ms window — expected >=6 fires, got {}",
+            b_count
+        );
+        assert!(
+            b_count > a_count,
+            "macro B ({}) should have fired meaningfully more than stopped macro A ({})",
+            b_count,
+            a_count
+        );
+    }
 }
