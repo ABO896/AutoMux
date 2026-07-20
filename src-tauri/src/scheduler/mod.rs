@@ -867,4 +867,80 @@ mod tests {
             a_count
         );
     }
+
+    /// 09-VERIFICATION.md gap (09-REVIEW.md CR-01): proves the per-macro stop
+    /// path (`stop_macro` → `release_holds`) delivers `HoldRelease` even when
+    /// `action_tx` is saturated at stop time, mirroring the guarantee
+    /// `StopAll` already provides (scheduler/mod.rs:214-234).
+    ///
+    /// Uses a capacity-1 action channel: starting the Hold-mode macro fills
+    /// the single slot with `HoldStart`, so `release_holds`'s send is forced
+    /// to contend for the same slot. Draining via `recv().await` (not
+    /// `try_recv`) lets a blocked `.await` send make progress as soon as the
+    /// consumer frees the slot — a `try_recv` drain would not.
+    ///
+    /// RED (pre-fix, `try_send`): hold_releases == 0 — the release is
+    /// dropped by the full channel. GREEN (post-fix, `.await`): hold_releases
+    /// == 1 — delivery is guaranteed.
+    #[tokio::test]
+    async fn stop_macro_release_delivered_under_saturation() {
+        let (intent_tx, intent_rx) = mpsc::channel::<SchedulerIntent>(100);
+        let (action_tx, mut action_rx) = mpsc::channel::<ActionReady>(1);
+
+        let scheduler = Scheduler::new(intent_rx, action_tx);
+        let scheduler_handle = tokio::spawn(async move {
+            scheduler.run().await;
+        });
+
+        let macro_id = Uuid::new_v4();
+        let config = MacroConfig {
+            id: macro_id,
+            name: "Saturation Test".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Hold,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::SustainedHold {
+                    input: InputEvent::MouseButton(MouseButton::Right),
+                }],
+            },
+        };
+
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_id))
+            .await
+            .unwrap();
+
+        // Close the intent channel so the scheduler shuts down once both
+        // intents above are processed.
+        drop(intent_tx);
+
+        // Drain with `recv().await` (yields), NOT `try_recv()` — the fixed
+        // release_holds's guaranteed send only completes once this consumer
+        // frees the single slot.
+        let mut hold_starts = 0u32;
+        let mut hold_releases = 0u32;
+        while let Some(action) = action_rx.recv().await {
+            match action.action_type {
+                ActionType::HoldStart(_) => hold_starts += 1,
+                ActionType::HoldRelease(_) => hold_releases += 1,
+                _ => {}
+            }
+        }
+
+        let _ = scheduler_handle.await;
+
+        assert_eq!(hold_starts, 1, "Exactly one HoldStart expected");
+        assert_eq!(
+            hold_releases, 1,
+            "HoldRelease must be delivered even when action_tx was full at stop time — a dropped release leaves a physically-stuck input"
+        );
+    }
 }
