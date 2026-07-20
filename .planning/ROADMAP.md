@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 3/3 plans executed
+**Plans**: 4 plans (3 executed + 1 gap closure)
 Plans:
 **Wave 1**
 
@@ -141,6 +141,10 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 09-03-PLAN.md — 09-VERIFICATION.md gate: automated test/clippy gates + 3 manual device tests per platform (EXEC-01, EXEC-02)
+
+**Gap Closure** *(from 09-VERIFICATION.md CR-01 blocker)*
+
+- [ ] 09-04-PLAN.md — Fix computeRunningState to show "held" for Hold-mode macros (branch on trigger_mode, mirroring scheduler Hold conversion) + fold in WR-01 compute-once-per-card (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
