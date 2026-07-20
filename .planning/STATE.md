@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
-status: verifying
-stopped_at: Phase 9 context gathered (09-CONTEXT.md + 09-DISCUSSION-LOG.md committed)
-last_updated: "2026-07-02T14:12:01.014Z"
+current_phase: 09
+current_phase_name: parallel-macro-execution
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-07-20T17:45:40.443Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 14
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 15
   percent: 67
-current_phase: 08
-current_phase_name: hotkey-reliability-conflict-safety
 ---
 
 # Project State
@@ -22,17 +22,17 @@ current_phase_name: hotkey-reliability-conflict-safety
 See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 08 — hotkey-reliability-conflict-safety
+**Current focus:** Phase 09 — parallel-macro-execution
 
 ## Current Position
 
-Phase: 08 (hotkey-reliability-conflict-safety) — EXECUTING (technically complete)
-Plan: 6 of 6 (verification gate plan complete)
+Phase: 09 (parallel-macro-execution) — EXECUTING
+Plan: 2 of 3
 Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
-Status: Plan 08-06 complete (08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; 1 gate deferred to CI per plan's explicit allowance)
+Status: Ready to execute
 
 ```
-Progress: [████████████████████] 100% (plans 14/14 complete in v2.0)
+Progress: [█████████░] 88% (plans 14/14 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -78,10 +78,10 @@ Progress: [████████████████████] 100% (p
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/09-parallel-macro-execution/09-CONTEXT.md
+**Resume file:** None
 
-Last session: 2026-07-02T14:12:01.009Z
-Stopped at: Phase 9 context gathered (09-CONTEXT.md + 09-DISCUSSION-LOG.md committed)
+Last session: 2026-07-20T17:45:40.438Z
+Stopped at: Completed 09-01-PLAN.md
 Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
 
 ## Performance Metrics
@@ -98,6 +98,11 @@ Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6
 | Phase 08 P04 | 5 min | 2 tasks (combined) | 1 file (frontend computeModifiers + threading + conflict error wiring) |
 | Phase 08 P05 | 5 min | 2 tasks | 1 file (5 UI surfaces: C-1 toast, C-2 region, C-3 banner, C-4 ↗ Global, C-5 modifier chip) |
 | Phase 08 P06 | 22 min | 4 tasks | 2 files (08-VERIFICATION.md + new profile_backwards_compat test) |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 09 P01 | 5min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -128,3 +133,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase 8 Plan 6]: Added a new `profile_backwards_compat` unit test rather than relying on the manual smoke fallback. The test deserializes a hand-crafted pre-Phase-8 `ProfileData` JSON string (no `trigger_modifiers` on `MacroConfig`, no `conflicts` on `AppState`) and asserts the new fields default to `0` and `[]` respectively. R-5 is now pinned at the unit-test level — the `#[serde(default)]` annotations from Plan 08-01 are proven to work end-to-end for v2.0 users upgrading to Phase 8.
 
 - [Phase 8 Plan 6]: Windows cross-compile gate deferred to CI (same disposition as Plan 08-03) — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust 1.95.0, no `rustup`). The plan's "paste the output of `rustup target list --installed`" requirement is unsatisfiable on this host; the equivalent evidence is the cross-compile error itself + `cargo check --all-targets` clean exit + the bit-constant equivalence across `windows_mod_constants` test, `build_mod_mask` function, and `computeModifiers` helper (all use the same `0x0001`/`0x0002`/`0x0004`/`0x0008` values).
+- [Phase ?]: [Phase 9 Plan 1]: Fixed pre-existing needless_return clippy lint in ipc/mod.rs::list_running_apps (Rule 3 blocking-issue fix) — it blocked the cargo clippy --all-targets -D warnings gate required by this plan's own verification, even though unrelated to Phase 9 changes.

@@ -146,3 +146,7 @@ None - no external service configuration required.
 ---
 *Phase: 09-parallel-macro-execution*
 *Completed: 2026-07-20*
+
+## Self-Check: PASSED
+
+All created/modified files exist on disk (src-tauri/src/scheduler/mod.rs, src-tauri/src/lib.rs, src-tauri/src/ipc/mod.rs, this SUMMARY.md). All 4 commits (aa4a185, 36c3fd5, 29d913e, 2c8a238) verified present in git log.
