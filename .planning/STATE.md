@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-07-20T17:45:40.443Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-07-20T17:49:28.479Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
   percent: 67
 ---
 
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 09 (parallel-macro-execution) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
 Status: Ready to execute
 
 ```
-Progress: [█████████░] 88% (plans 14/14 complete in v2.0)
+Progress: [█████████░] 94% (plans 14/14 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -80,8 +80,8 @@ Progress: [█████████░] 88% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-20T17:45:40.438Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-07-20T17:49:28.473Z
+Stopped at: Completed 09-02-PLAN.md
 Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
 
 ## Performance Metrics
@@ -103,6 +103,7 @@ Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 09 P01 | 5min | 3 tasks | 3 files |
+| Phase 09 P02 | 8min | 2 tasks | 1 files |
 
 ## Decisions
 
@@ -134,3 +135,5 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 
 - [Phase 8 Plan 6]: Windows cross-compile gate deferred to CI (same disposition as Plan 08-03) — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust 1.95.0, no `rustup`). The plan's "paste the output of `rustup target list --installed`" requirement is unsatisfiable on this host; the equivalent evidence is the cross-compile error itself + `cargo check --all-targets` clean exit + the bit-constant equivalence across `windows_mod_constants` test, `build_mod_mask` function, and `computeModifiers` helper (all use the same `0x0001`/`0x0002`/`0x0004`/`0x0008` values).
 - [Phase ?]: [Phase 9 Plan 1]: Fixed pre-existing needless_return clippy lint in ipc/mod.rs::list_running_apps (Rule 3 blocking-issue fix) — it blocked the cargo clippy --all-targets -D warnings gate required by this plan's own verification, even though unrelated to Phase 9 changes.
+- [Phase ?]: [Phase 9 Plan 2]: Used bg-warning/--color-warning-glow for the 'combined' hold+interval indicator instead of the PATTERNS.md-illustrated bg-info, because no --color-info token exists in src/App.css's @theme block. Followed the plan's explicit fallback instruction to reuse an existing token rather than invent one.
+- [Phase ?]: [Phase 9 Plan 2]: Combined Task 1 (computeRunningState helper) and Task 2 (card rendering wiring) into a single commit — tsconfig's noUnusedLocals strict mode fails tsc for an unused helper if Task 1 is committed alone, same reasoning as Phase 8 Plan 04.
