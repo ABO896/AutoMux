@@ -135,3 +135,10 @@ None - no external service configuration required.
 ---
 *Phase: 09-parallel-macro-execution*
 *Completed: 2026-07-21*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/09-parallel-macro-execution/09-06-SUMMARY.md`
+- FOUND: `79d39f8` (test commit)
+- FOUND: `5e37063` (fix commit)
+- FOUND: `b45d6ff` (summary docs commit)
