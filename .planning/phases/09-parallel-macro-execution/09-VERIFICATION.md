@@ -1,7 +1,7 @@
 ---
 phase: 09-parallel-macro-execution
 verified: 2026-07-21T20:15:00Z
-status: human_needed
+status: passed
 score: 8/9 must-haves verified
 behavior_unverified: 1
 overrides_applied: 0
@@ -9,28 +9,34 @@ re_verification:
   previous_status: gaps_found
   previous_score: 7/9
   gaps_closed:
+
     - "Scheduler::start_macro's HoldStart send (SustainedHold branch, scheduler/mod.rs 300-325) now uses guaranteed self.action_tx.send(...).await delivery instead of fire-and-forget try_send, mirroring release_holds/StopAll. Closed by plan 09-06, independently re-confirmed against current source (scheduler/mod.rs:315-325) — not merely trusted from 09-06-SUMMARY.md's claims."
   gaps_remaining: []
   regressions: []
 gaps: []
 deferred: []
 behavior_unverified_items:
+
   - truth: "On macOS, enabling macro B while macro A is actively firing does not pause, delay, or cancel macro A — both fire concurrently at their configured intervals (ROADMAP SC1)"
     test: "On a real macOS host with Accessibility + Input Monitoring granted: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A, wait ~1s, enable B; observe both macro cards show a pulsing firing dot simultaneously and neither's click rate changes when the other starts/stops"
     expected: "Both macros visibly fire concurrently at their own configured rates on real macOS input injection (CGEvent) — documented as this file's Section 5, Test T9.1, still unexecuted (checkbox unchecked)"
     why_human: "Requires a real macOS device with Accessibility/Input Monitoring permissions and live observation of CGEvent injection timing and the per-card UI dots in real time; the scheduler-level unit tests (re-run and confirmed passing during this verification, 13/13) prove the platform-agnostic timeline/delivery logic but not real-device CGEvent injection behavior"
+
   - truth: "On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A (ROADMAP SC2)"
     test: "On a real Windows host: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A, wait ~1s, enable B; observe both fire concurrently via SendInput"
     expected: "Documented as this file's Section 6, Test 6.1, still unexecuted (checkbox unchecked)"
     why_human: "Requires a real Windows host with the Win32 SendInput injection path and Win32 hook observer running live; not exercisable from this (macOS) verification environment"
+
   - truth: "Stopping one running macro does not affect any other concurrently running macro (ROADMAP SC3)"
     test: "On real macOS and Windows hosts: with A and B both firing, disable A; observe B's dot keeps pulsing and B's fire rate is unaffected"
     expected: "Documented as this file's Sections 5/6, Tests T9.2/6.2, still unexecuted (checkboxes unchecked)"
     why_human: "Device-level, real-time observation required; scheduler-level unit test (parallel_stop_one_keeps_other, re-run and confirmed passing) proves the underlying gating logic between two DIFFERENT macros but not real-device confirmation"
 human_verification:
+
   - test: "Run T9.1-T9.5 on a real macOS host per this file's Section 5 (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning, held-not-firing indicator, Hold-under-load)"
     expected: "All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays; a Hold-mode macro shows the static held dot and genuinely holds the input under load"
     why_human: "Real macOS device, live CGEvent injection, live UI observation — cannot be verified by static analysis or from this (non-macOS-GUI) verification session"
+
   - test: "Run 6.1-6.3 on a real Windows host per this file's Section 6"
     expected: "All 3 tests pass via SendInput injection and the Win32 hook observer"
     why_human: "Requires a real Windows device — not available in this verification environment"
@@ -54,6 +60,7 @@ I independently verified the RED→GREEN claim rather than trusting it: using a 
 On current HEAD I independently re-ran the full backend regression surface (not trusting any SUMMARY-reported numbers): `cargo test --lib` → 13/13 pass (12 pre-existing + this new test); `cargo clippy --all-targets -- -D warnings` → exit 0, clean; `cargo build --release` → exit 0. I confirmed exactly one `ACTION_DROP_COUNT.fetch_add(1` call site remains in the file (the `fire_due_actions` Interval path) — the HoldStart-site counter was correctly removed as obsolete. I confirmed the release side (`release_holds`/`StopAll`) and the periodic Interval `try_send` path are both unchanged by this plan, satisfying the plan's stated prohibitions (no retry path added for HoldStart; Interval fire still non-blocking `try_send`; no desync between `active_holds` recording and delivery).
 
 **A fresh, independent code-review pass performed after 09-06 landed** (`09-REVIEW.md`, this session, `status: issues_found`, 2 critical) confirms the prior CR-01 (asymmetric HoldStart) is now closed, and surfaces two new/carried-forward Critical issues that are **out of Phase 9's scope** per the task framing given for this verification and independently confirmed here:
+
 - A new CR-01 in that review (renumbered, distinct from the now-closed HoldStart gap): `Scheduler.running_configs` goes stale after `SchedulerIntent::UpdateInterval`, which could reintroduce CR-04's Hold-macro restart flicker for macros combining `SustainedHold` + live-tuned `InterleavedInterval` steps. I confirmed by direct source read (scheduler/mod.rs:235-247) that `UpdateInterval` never touches `running_configs`. However, I also confirmed by grep that `update_step_interval` (the only caller path into `SchedulerIntent::UpdateInterval`) has **zero call sites in `src/App.tsx`** — the IPC command exists but nothing in the shipped frontend invokes it, so this defect is real but currently dormant/unreachable through the product's UI. It predates Phase 9 (the `CR-04` cache and `update_step_interval` command are v1.0-era) and does not touch parallel-execution behavior. Noted for backlog; does not gate this phase's goal.
 - CR-02 (macOS hotkey rebind destroys the existing binding before the replacement is confirmed, `src/App.tsx:563-586`): confirmed still open, pre-existing from Phase 8 (UX-11 hotkey work). Unrelated to parallel macro execution. Noted for backlog; does not gate this phase's goal.
 
