@@ -297,26 +297,30 @@ impl Scheduler {
 
         for (index, step) in steps.iter().enumerate() {
             match step {
+                // @safety-officer: CR-01 (09-VERIFICATION.md/09-REVIEW.md) — use
+                // `.await` (not try_send) for HoldStart delivery, mirroring
+                // `release_holds` (above) and `StopAll`'s guarantee, so a
+                // Hold-mode macro can never be recorded in `active_holds` as
+                // "held" (and shown as such by the frontend's
+                // computeRunningState) without the HoldStart actually having
+                // been delivered — the phantom-held state this closes.
+                // Accepted trade-off: this `.await` can briefly block the
+                // `run()` select! loop until a channel slot frees, the same
+                // correctness-over-responsiveness stance already taken for
+                // the hold-lifecycle release/stop-all paths. By contrast,
+                // `fire_due_actions`'s periodic Interval fire intentionally
+                // KEEPS `try_send`: a dropped tick self-corrects on the next
+                // interval, so blocking the timer loop there would degrade
+                // every macro's fire fidelity for no correctness benefit.
                 ActionStep::SustainedHold { input } => {
-                    // Fire HoldStart immediately.
-                    if self
+                    let _ = self
                         .action_tx
-                        .try_send(ActionReady {
+                        .send(ActionReady {
                             macro_id,
                             action_type: ActionType::HoldStart(*input),
                             fired_at: Instant::now(),
                         })
-                        .is_err()
-                    {
-                        #[cfg(debug_assertions)]
-                        {
-                            ACTION_DROP_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            eprintln!(
-                                "[Scheduler] action_tx full — dropped HoldStart for macro={}",
-                                macro_id
-                            );
-                        }
-                    }
+                        .await;
                     holds.push(*input);
                 }
                 ActionStep::InterleavedInterval { input, interval_ms } => {
