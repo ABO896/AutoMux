@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 5/5 plans executed
+**Plans**: 6 plans (5 executed; 09-06 gap closure pending)
 Plans:
 **Wave 1**
 
@@ -146,6 +146,7 @@ Plans:
 
 - [x] 09-04-PLAN.md — Fix computeRunningState to show "held" for Hold-mode macros (branch on trigger_mode, mirroring scheduler Hold conversion) + fold in WR-01 compute-once-per-card (EXEC-01, EXEC-02)
 - [x] 09-05-PLAN.md — Harden per-macro stop path (stop_macro/release_holds→async, guaranteed .await HoldRelease delivery mirroring StopAll) so a Hold-mode macro's held input is never left stuck down under action-channel saturation + saturation regression test (EXEC-01, EXEC-02)
+- [ ] 09-06-PLAN.md — Harden the start-side HoldStart send (start_macro→guaranteed .await delivery, mirroring 09-05's release-side fix) so a Hold-mode macro is never recorded as "held" when the HoldStart was dropped under action-channel saturation (CR-01 asymmetric gap) + start-side saturation regression test (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
