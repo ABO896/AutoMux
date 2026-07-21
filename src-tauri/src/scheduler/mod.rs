@@ -942,4 +942,111 @@ mod tests {
             "HoldRelease must be delivered even when action_tx was full at stop time — a dropped release leaves a physically-stuck input"
         );
     }
+
+    /// 09-VERIFICATION.md gap (09-REVIEW.md CR-01): proves `start_macro`'s
+    /// `SustainedHold` branch delivers `HoldStart` even when `action_tx` is
+    /// saturated at start time — the mirror-image of
+    /// `stop_macro_release_delivered_under_saturation` above.
+    ///
+    /// Uses a capacity-1 action channel: starting the first Hold-mode macro
+    /// fills the single slot with its `HoldStart`, so the second macro's
+    /// `HoldStart` send is forced to contend for the same slot. Draining via
+    /// `recv().await` (not `try_recv`) lets a blocked `.await` send make
+    /// progress as soon as the consumer frees the slot — a `try_recv` drain
+    /// would not.
+    ///
+    /// RED (pre-fix, `try_send`): hold_starts == 1 — the second macro's
+    /// HoldStart is dropped by the full channel (phantom-held: active_holds
+    /// records it as held with nothing injected). GREEN (post-fix, `.await`):
+    /// hold_starts == 2 — delivery is guaranteed for both macros.
+    #[tokio::test]
+    async fn start_macro_hold_start_delivered_under_saturation() {
+        let (intent_tx, intent_rx) = mpsc::channel::<SchedulerIntent>(100);
+        let (action_tx, mut action_rx) = mpsc::channel::<ActionReady>(1);
+
+        let scheduler = Scheduler::new(intent_rx, action_tx);
+        let scheduler_handle = tokio::spawn(async move {
+            scheduler.run().await;
+        });
+
+        let macro_x_id = Uuid::new_v4();
+        let macro_y_id = Uuid::new_v4();
+
+        let config_x = MacroConfig {
+            id: macro_x_id,
+            name: "Saturation Test X".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Hold,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::SustainedHold {
+                    input: InputEvent::MouseButton(MouseButton::Right),
+                }],
+            },
+        };
+
+        let config_y = MacroConfig {
+            id: macro_y_id,
+            name: "Saturation Test Y".into(),
+            interval_ms: 50,
+            enabled: true,
+            target_app: None,
+            trigger_key: None,
+            trigger_modifiers: 0,
+            trigger_mode: crate::state::TriggerMode::Hold,
+            sequence: ActionSequence {
+                steps: vec![ActionStep::SustainedHold {
+                    input: InputEvent::MouseButton(MouseButton::Left),
+                }],
+            },
+        };
+
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_x))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StartMacro(config_y))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_x_id))
+            .await
+            .unwrap();
+        intent_tx
+            .send(SchedulerIntent::StopMacro(macro_y_id))
+            .await
+            .unwrap();
+
+        // Close the intent channel so the scheduler shuts down once all
+        // intents above are processed.
+        drop(intent_tx);
+
+        // Drain with `recv().await` (yields), NOT `try_recv()` — the fixed
+        // start_macro's guaranteed send only completes once this consumer
+        // frees the single slot.
+        let mut hold_starts = 0u32;
+        let mut hold_releases = 0u32;
+        while let Some(action) = action_rx.recv().await {
+            match action.action_type {
+                ActionType::HoldStart(_) => hold_starts += 1,
+                ActionType::HoldRelease(_) => hold_releases += 1,
+                _ => {}
+            }
+        }
+
+        let _ = scheduler_handle.await;
+
+        assert_eq!(
+            hold_starts, 2,
+            "Both HoldStarts must be delivered even when action_tx was saturated at start time — a dropped HoldStart leaves active_holds recording a phantom held state"
+        );
+        assert_eq!(
+            hold_releases, 2,
+            "Both HoldReleases must be delivered — no hold should be left recorded-but-unreleased"
+        );
+    }
 }
