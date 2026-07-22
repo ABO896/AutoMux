@@ -566,13 +566,18 @@ function App() {
     document.addEventListener("keydown", onKeyDown, true);
   }
 
-  // @architect: macOS uses unbind+rebind path per Pitfall 3 (T-03-07); Windows uses set_macro_trigger_key
+  // @architect: macOS relies on bind_hotkey's overwrite-on-success /
+  // preserve-on-conflict semantics (09-11 gap-closure) — no pre-unbind.
+  // bind_hotkey overwrites the binding on success and, on a key conflict,
+  // throws the "is already assigned to ..." error WITHOUT mutating state,
+  // so a rejected rebind leaves the macro's previously-working hotkey
+  // intact. Windows uses set_macro_trigger_key, which now (09-11) also
+  // rejects conflicts via an Err reply instead of silently coercing.
   // UX-13: `modifiers` is the platform-native bitmask from computeModifiers,
   // forwarded to both bind_hotkey (macOS) and set_macro_trigger_key (both).
   async function handleCardSetTriggerKey(id: string, nativeCode: number, modifiers: number) {
     try {
       if (IS_MACOS) {
-        await invoke("unbind_hotkey", { macro_id: id });
         await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
         await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
       } else {
