@@ -5,14 +5,14 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed 09-07-PLAN.md
-last_updated: "2026-07-22T14:28:01.477Z"
+stopped_at: Completed 09-08-PLAN.md
+last_updated: "2026-07-22T14:31:25.106Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 22
-  completed_plans: 21
-  percent: 67
+  completed_plans: 22
+  percent: 83
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 09 (parallel-macro-execution) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
 Status: Ready to execute
 
 ```
-Progress: [██████████] 95% (plans 14/14 complete in v2.0)
+Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -80,8 +80,8 @@ Progress: [██████████] 95% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-22T14:28:01.471Z
-Stopped at: Completed 09-07-PLAN.md
+Last session: 2026-07-22T14:31:25.101Z
+Stopped at: Completed 09-08-PLAN.md
 Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
 
 ## Performance Metrics
@@ -109,6 +109,7 @@ Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6
 | Phase 09 P05 | 8min | 2 tasks | 1 files |
 | Phase 09 P06 | 4min | 2 tasks | 1 files |
 | Phase 09 P07 | 20min | 2 tasks | 1 files |
+| Phase 09 P08 | 5min | 2 tasks | 1 files |
 
 ## Decisions
 
@@ -147,3 +148,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 5]: CR-01 gap-closure — converted release_holds/stop_macro/start_macro to async guaranteed .await HoldRelease delivery, mirroring StopAll's existing CR-02 pattern; the two D-09-scoped diagnostic try_send sites (fire_due_actions Interval, start_macro HoldStart) intentionally left untouched.
 - [Phase ?]: [Phase 9 Plan 6] CR-01 final gap-closure: converted start_macro's SustainedHold HoldStart send from try_send to guaranteed .await, mirroring release_holds/StopAll from plan 09-05 — closes the last Blocker-severity asymmetric-HoldStart gap for Phase 9.
 - [Phase ?]: [Phase 9 Plan 7] G-09-1a/G-09-1c gap closure: narrowed CGEventTap event mask to 8 consumed types (removes permanent post-stop responsiveness tax) and hardened NSWorkspace active-app observer (explicit registration-failure logging, userInfo-based active-app reads with frontmostApplication() fallback, debug-instrumented active-app-changed logging). Kept raw msg_send! registration over the typed addObserverForName_object_queue_usingBlock API because the typed method's non-Optional return type cannot represent a registration failure.
+- [Phase ?]: [Phase 9 Plan 8] G-09-1b/G-09-1c gap closure: added handleRemoveMacro handler + per-card delete button (mirrors handleDeleteProfile conventions, no manual state refresh — relies on existing state-changed broadcast), and bound value={macro.target_app ?? ""} on the card-edit target select to fix the uncontrolled-dropdown display bug.

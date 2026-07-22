@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans executed
 Plans:
 **Wave 1**
 
@@ -151,7 +151,7 @@ Plans:
 **Gap Closure** *(from 09-UAT.md — G-09-1a / G-09-1b / G-09-1c)*
 
 - [x] 09-07-PLAN.md — macOS observer fixes: narrow the CGEventTap event mask to consumed types (G-09-1a perf tax) + instrument & harden the NSWorkspace active-app observer, reading the activated bundle id from the notification userInfo (G-09-1c targeting) (EXEC-01, EXEC-02)
-- [ ] 09-08-PLAN.md — Frontend macro management: per-card delete button wired to the existing `remove_macro` IPC (G-09-1b) + controlled card-edit target-app select (G-09-1c secondary UI bug) (EXEC-01, EXEC-02)
+- [x] 09-08-PLAN.md — Frontend macro management: per-card delete button wired to the existing `remove_macro` IPC (G-09-1b) + controlled card-edit target-app select (G-09-1c secondary UI bug) (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
@@ -181,5 +181,5 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 7/8 | In Progress|  |
+| 9. Parallel Macro Execution | v2.0 | 8/8 | In Progress|  |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
