@@ -107,3 +107,11 @@ Both automated gates (`cargo build`, `cargo clippy --all-targets -- -D warnings`
 ---
 *Phase: 09-parallel-macro-execution*
 *Completed: 2026-07-22*
+
+## Self-Check: PASSED
+
+- FOUND: src-tauri/src/platform/macos/observer.rs
+- FOUND: .planning/phases/09-parallel-macro-execution/09-07-SUMMARY.md
+- FOUND: d6dd9b4 (Task 1 commit)
+- FOUND: d1dfca1 (Task 2 commit)
+- FOUND: 9a019e7 (SUMMARY commit)
