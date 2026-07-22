@@ -225,6 +225,53 @@ pub(crate) fn check_trigger_key_conflict(
     None
 }
 
+/// 09-11 gap-closure (Gap 1): pure gate-decision helper consulted by
+/// `StateActor::handle_action` before dispatching input injection.
+///
+/// A `HoldRelease` is an unconditional bypass — it ALWAYS returns `true`,
+/// before Gate 1/2/3 are evaluated. A held key/mouse-button's release is a
+/// guaranteed-delivery cleanup event (see `release_holds` / `StopAll` /
+/// `start_macro`'s `.await` sends): if the macro was disabled, the engine
+/// was toggled off, the active app changed away from the macro's target, or
+/// the macro was removed by a profile load — all AFTER the physical input
+/// went down but BEFORE the release arrives — the release must still fire,
+/// or the input is left stuck down. This bypass is release-only: it MUST
+/// NOT be widened to also skip gating for `Interval` / `HoldStart` (new
+/// input), which stay subject to Gate 1/2/3 exactly as before.
+///
+/// Gate 1: engine must be active and emergency stop must not be engaged.
+/// Gate 2: the macro must still exist and be enabled.
+/// Gate 3: the macro's target app (if any) must match the active app.
+pub(crate) fn action_should_inject(
+    state: &AppState,
+    action_type: &crate::scheduler::ActionType,
+    macro_id: Uuid,
+) -> bool {
+    use crate::scheduler::ActionType;
+
+    // Unconditional release bypass — see doc comment above.
+    if matches!(action_type, ActionType::HoldRelease(_)) {
+        return true;
+    }
+
+    // Gate 1: Engine must be active.
+    if !state.engine_active || state.emergency_stop_active {
+        return false;
+    }
+
+    // Gate 2: Macro must exist and be enabled.
+    let mac = match state.macros.get(&macro_id) {
+        Some(m) if m.enabled => m,
+        _ => return false,
+    };
+
+    // Gate 3: Target app must match (or be Global).
+    match &mac.target_app {
+        Some(target) => state.active_app.as_deref() == Some(target.as_str()),
+        None => true, // "Global"
+    }
+}
+
 /// UX-12: Recompute `state.conflicts` from the current enabled macro set.
 ///
 /// For each enabled macro, expand its sequence with the same legacy fallback
@@ -373,29 +420,26 @@ impl StateActor {
     fn handle_action(&self, action: crate::scheduler::ActionReady) {
         use crate::scheduler::ActionType;
 
-        // Gate 1: Engine must be active
-        if !self.state.engine_active || self.state.emergency_stop_active {
+        // 09-11 gap-closure (Gap 1): consult the pure gate-decision helper.
+        // HoldRelease is an unconditional bypass — a release is a cleanup
+        // event and must never be blocked by gates designed to prevent
+        // unwanted NEW input. New-input actions (Interval / HoldStart)
+        // still go through Gate 1/2/3 exactly as before.
+        if !action_should_inject(&self.state, &action.action_type, action.macro_id) {
             return;
         }
 
-        // Gate 2: Macro must exist and be enabled
-        let mac = match self.state.macros.get(&action.macro_id) {
-            Some(m) if m.enabled => m,
-            _ => return,
-        };
-
-        // Gate 3: Target app must match (or be Global)
-        let matches_target = match &mac.target_app {
-            Some(target) => self.state.active_app.as_deref() == Some(target.as_str()),
-            None => true, // "Global"
-        };
-        if !matches_target {
-            return;
-        }
-
-        // ── All gates passed — dispatch input injection ──
+        // ── Gates passed (or bypassed for a release) — dispatch injection ──
         #[cfg(debug_assertions)]
-        eprintln!("[Action] macro={} {:?}", mac.name, action.action_type);
+        {
+            let macro_name = self
+                .state
+                .macros
+                .get(&action.macro_id)
+                .map(|m| m.name.as_str())
+                .unwrap_or("<removed>");
+            eprintln!("[Action] macro={} {:?}", macro_name, action.action_type);
+        }
 
         match &action.action_type {
             ActionType::Interval(input) => {
@@ -1142,6 +1186,89 @@ mod tests {
             bindings.len(),
             1,
             "a macro with trigger_key = None must contribute zero bindings"
+        );
+    }
+
+    /// 09-11 gap-closure (Gap 1) regression test: `action_should_inject`
+    /// unconditionally bypasses Gate 1/2/3 for `ActionType::HoldRelease`,
+    /// across all four confirmed trigger paths from 09-VERIFICATION.md,
+    /// while a `HoldStart` (new-input) action for the same disabled macro
+    /// stays gated — the bypass is release-only.
+    #[test]
+    fn hold_release_bypasses_gates() {
+        use crate::scheduler::ActionType;
+
+        let input = InputEvent::Key(96);
+        let id = Uuid::new_v4();
+
+        // Trigger path 1: macro just disabled.
+        let mut state = AppState::default();
+        state.macros.insert(
+            id,
+            make_macro(
+                id,
+                "hold-macro",
+                None,
+                0,
+                ActionSequence {
+                    steps: vec![ActionStep::SustainedHold { input }],
+                },
+            ),
+        );
+        // make_macro defaults enabled to false — this IS the disabled case.
+        assert!(
+            action_should_inject(&state, &ActionType::HoldRelease(input), id),
+            "HoldRelease must bypass Gate 2 (disabled macro)"
+        );
+
+        // Trigger path 2: engine off (macro re-enabled).
+        state.macros.get_mut(&id).unwrap().enabled = true;
+        state.engine_active = false;
+        assert!(
+            action_should_inject(&state, &ActionType::HoldRelease(input), id),
+            "HoldRelease must bypass Gate 1 (engine off)"
+        );
+
+        // Trigger path 3: target-app mismatch.
+        state.engine_active = true;
+        state.macros.get_mut(&id).unwrap().target_app = Some("com.other.app".to_string());
+        state.active_app = Some("com.different.app".to_string());
+        assert!(
+            action_should_inject(&state, &ActionType::HoldRelease(input), id),
+            "HoldRelease must bypass Gate 3 (target-app mismatch)"
+        );
+
+        // Trigger path 4: profile load cleared the macro entirely.
+        let mut empty_state = AppState::default();
+        empty_state.engine_active = true;
+        assert!(
+            !empty_state.macros.contains_key(&id),
+            "sanity: macro must be absent for this case"
+        );
+        assert!(
+            action_should_inject(&empty_state, &ActionType::HoldRelease(input), id),
+            "HoldRelease must bypass Gate 2 (macro absent — profile load cleared it)"
+        );
+
+        // Negative case: the bypass is release-only. A HoldStart (new-input)
+        // action for the same present-but-disabled macro must stay gated.
+        let mut gated_state = AppState::default();
+        gated_state.macros.insert(
+            id,
+            make_macro(
+                id,
+                "hold-macro",
+                None,
+                0,
+                ActionSequence {
+                    steps: vec![ActionStep::SustainedHold { input }],
+                },
+            ),
+        );
+        // enabled defaults to false via make_macro — Gate 2 must reject.
+        assert!(
+            !action_should_inject(&gated_state, &ActionType::HoldStart(input), id),
+            "HoldStart must remain gated — the bypass must not leak into new-input dispatch"
         );
     }
 }
