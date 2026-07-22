@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 11 plans (10 executed; 09-11 gap-closure pending)
+**Plans**: 11/11 plans executed
 Plans:
 **Wave 1**
 
@@ -163,7 +163,7 @@ Plans:
 
 **Gap Closure** *(from 09-VERIFICATION.md re-verify — HoldRelease gating stuck-input + hotkey rebind data loss)*
 
-- [ ] 09-11-PLAN.md — Add an unconditional HoldRelease bypass in handle_action so a Hold-mode macro's held input is always released on disable / engine-off / active-app-switch / profile-load (Gap 1); reject conflicting hotkey rebinds without destroying the old binding — drop the macOS pre-unbind and give Intent::SetMacroTriggerKey a Result-carrying oneshot on Windows so the conflict toast surfaces (Gap 2) + 2 regression tests (EXEC-01, EXEC-02)
+- [x] 09-11-PLAN.md — Add an unconditional HoldRelease bypass in handle_action so a Hold-mode macro's held input is always released on disable / engine-off / active-app-switch / profile-load (Gap 1); reject conflicting hotkey rebinds without destroying the old binding — drop the macOS pre-unbind and give Intent::SetMacroTriggerKey a Result-carrying oneshot on Windows so the conflict toast surfaces (Gap 2) + 2 regression tests (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
@@ -193,5 +193,5 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 10/11 | In Progress|  |
+| 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |

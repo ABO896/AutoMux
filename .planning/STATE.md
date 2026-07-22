@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed 09-10-PLAN.md (CR-01 gap closure, final plan of Phase 9)
-last_updated: "2026-07-22T17:08:08.285Z"
+stopped_at: "Completed 09-11-PLAN.md (gap-closure: HoldRelease bypass + hotkey rebind rollback safety)"
+last_updated: "2026-07-22T18:11:41.371Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 24
-  completed_plans: 24
+  total_plans: 25
+  completed_plans: 25
   percent: 83
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — 10/10 plans executed, re-verification found 2 new Blocker gaps, gap-closure plan 09-11 now created and verified
-Plan: 11 of 11 planned (09-11 not yet executed); ready to execute
+Phase: 09 (parallel-macro-execution) — EXECUTING
+Plan: 2 of 11
 Next: `/gsd-plan-phase 09 --gaps` created `09-11-PLAN.md` (commit f77de11) closing both Blocker gaps from 09-VERIFICATION.md: (1) an unconditional HoldRelease bypass in StateActor::handle_action so a guaranteed-delivery release is never dropped by Gate 1/2/3 regardless of engine/enabled/target-app state; (2) hotkey-rebind rollback safety on both platforms (macOS: drop the pre-unbind in handleCardSetTriggerKey; Windows: Intent::SetMacroTriggerKey now replies Err on conflict via a Result-carrying oneshot instead of silently coercing to None/0). gsd-plan-checker independently re-verified the plan against source and returned VERIFICATION PASSED. Run `/gsd-execute-phase 09` to execute 09-11, then re-verify. EXEC-01/EXEC-02 remain reverted from Complete in REQUIREMENTS.md pending this closure. Separately, on-device human verification (T9.8 macOS + Windows tests 6.1-6.3) remains outstanding and unaffected by this gap-closure.
-Status: Planned (gap-closure plan ready) — not yet phase-complete
+Status: Ready to execute
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
@@ -82,8 +82,8 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-22T20:00:00.000Z
-Stopped at: Planned gap-closure plan 09-11-PLAN.md (commit f77de11) — gsd-planner + gsd-plan-checker both completed, checker returned VERIFICATION PASSED
+Last session: 2026-07-22T18:11:41.363Z
+Stopped at: Completed 09-11-PLAN.md (gap-closure: HoldRelease bypass + hotkey rebind rollback safety)
 Next: Run `/gsd-execute-phase 09` to execute 09-11-PLAN.md (HoldRelease bypass in handle_action + hotkey-rebind rollback safety on both platforms), then re-verify the phase. Full detail in 09-VERIFICATION.md, 09-REVIEW.md, and 09-11-PLAN.md. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9. Phase 10 (UI redesign) should wait until Phase 9's Blocker gaps are closed.
 
 ## Performance Metrics
@@ -114,6 +114,7 @@ Next: Run `/gsd-execute-phase 09` to execute 09-11-PLAN.md (HoldRelease bypass i
 | Phase 09 P08 | 5min | 2 tasks | 1 files |
 | Phase 09 P09 | 10min | 2 tasks | 2 files |
 | Phase 09 P10 | 5min | 3 tasks | 4 files |
+| Phase 09 P11 | 10min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -155,3 +156,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 8] G-09-1b/G-09-1c gap closure: added handleRemoveMacro handler + per-card delete button (mirrors handleDeleteProfile conventions, no manual state refresh — relies on existing state-changed broadcast), and bound value={macro.target_app ?? ""} on the card-edit target select to fix the uncontrolled-dropdown display bug.
 - [Phase ?]: Phase 9 Plan 9: Chose backend rename_all direction over frontend camelCase rename for the IPC argument-casing sweep, since the frontend already sends snake_case keys verbatim; closed 09-VERIFICATION.md gaps #10/#11.
 - [Phase ?]: [Phase 9 Plan 10] CR-01 final closure: consolidated to single HOTKEY_BINDINGS registry on both platforms (refreshed unconditionally from reevaluate_all_macros, before the engine-active early-return); deleted the redundant MACRO_TRIGGER_KEYS registry and its per-platform keydown/hook lookup block entirely, closing the dual-registry double-dispatch self-cancel bug symmetrically on macOS and Windows.
+- [Phase ?]: [Phase 9 Plan 11] Gap-closure: action_should_inject free fn gives HoldRelease an unconditional Gate 1/2/3 bypass in handle_action (stuck-input fix); resolve_trigger_key_update + Result-carrying SetMacroTriggerKey oneshot rejects conflicting Windows rebinds instead of silently coercing to None/0; macOS handleCardSetTriggerKey no longer pre-unbinds before bind_hotkey, relying on its overwrite-on-success/preserve-on-conflict semantics. Closes both Blocker gaps from 09-VERIFICATION.md.
