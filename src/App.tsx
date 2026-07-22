@@ -1322,6 +1322,7 @@ function App() {
                         >
                           <select
                             class="flex-1 min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/50 transition-colors text-text-main cursor-pointer"
+                            value={macro.target_app ?? ""}
                             onFocus={handlePickerFocus}
                             onChange={(e) => handleCardSetTargetApp(macro.id, e.currentTarget.value || null)}
                             onKeyDown={(e) => {
