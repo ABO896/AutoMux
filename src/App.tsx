@@ -581,16 +581,22 @@ function App() {
       setEditingCardId(null);
       setEditingField(null);
     } catch (e) {
-      // UX-11: surface the conflict error to the C-1 toast (Plan 08-05).
-      // Same parsing as handleCreateMacro — extract the conflicting macro
-      // name from the backend's well-known error format. Falls back to a
-      // generic message if the format doesn't match.
+      // UX-11: surface the conflict error to the C-1 toast (Plan 08-05) —
+      // but only for a genuine conflict. 09-VERIFICATION gap #11: a
+      // non-conflict IPC failure (e.g. a stale macro_id) must not be
+      // mislabeled as "hotkey already bound".
       const msg = String(e);
       const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
-      const macroName = macroMatch ? macroMatch[1] : "another macro";
-      const keyLabel = resolveKeyName(nativeCode);
-      showConflictError(keyLabel, macroName);
-      console.error("Card trigger key update failed:", e);
+      if (macroMatch) {
+        const keyLabel = resolveKeyName(nativeCode);
+        showConflictError(keyLabel, macroMatch[1]);
+      } else {
+        console.error("Card trigger key update failed:", e);
+      }
+      // Reset the card-edit UI state on failure too, so a failed edit
+      // doesn't leave the card frozen showing the "Press…" capture chip.
+      setEditingCardId(null);
+      setEditingField(null);
     }
   }
 
