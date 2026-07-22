@@ -516,6 +516,15 @@ function App() {
     }
   }
 
+  async function handleRemoveMacro(id: string, name: string) {
+    if (!window.confirm(`Delete macro "${name}"?`)) return;
+    try {
+      await invoke("remove_macro", { id });
+    } catch (e) {
+      console.error("Remove macro failed:", e);
+    }
+  }
+
   // @architect: Single-listener invariant via module-level ref (T-03-08)
   // UX-13: `onCommit` receives the platform-native (keycode, modifiers) pair
   // — both must be forwarded to the IPC calls (bind_hotkey, set_macro_trigger_key,
@@ -1270,15 +1279,25 @@ function App() {
                           </span>
                         </Show>
                       </div>
-                      <div
-                        class="toggle-track"
-                        data-active={macro.enabled}
-                        onClick={() =>
-                          handleToggleMacro(macro.id, macro.enabled)
-                        }
-                        style={{ transform: "scale(0.8)" }}
-                      >
-                        <div class="toggle-thumb" />
+                      <div class="flex items-center gap-1.5">
+                        <div
+                          class="toggle-track"
+                          data-active={macro.enabled}
+                          onClick={() =>
+                            handleToggleMacro(macro.id, macro.enabled)
+                          }
+                          style={{ transform: "scale(0.8)" }}
+                        >
+                          <div class="toggle-thumb" />
+                        </div>
+                        <button
+                          onClick={() => handleRemoveMacro(macro.id, macro.name)}
+                          class="px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors cursor-pointer
+                                 bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20"
+                          title="Delete macro"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
 
