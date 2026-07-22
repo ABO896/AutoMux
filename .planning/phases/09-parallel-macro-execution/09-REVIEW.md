@@ -2,18 +2,20 @@
 phase: 09-parallel-macro-execution
 reviewed: 2026-07-22T00:00:00Z
 depth: standard
-files_reviewed: 5
+files_reviewed: 7
 files_reviewed_list:
   - src-tauri/src/ipc/mod.rs
   - src-tauri/src/lib.rs
   - src-tauri/src/platform/macos/observer.rs
+  - src-tauri/src/platform/windows/mod.rs
   - src-tauri/src/scheduler/mod.rs
+  - src-tauri/src/state/mod.rs
   - src/App.tsx
 findings:
-  critical: 1
+  critical: 2
   warning: 5
-  info: 5
-  total: 11
+  info: 6
+  total: 13
 status: issues_found
 ---
 
@@ -21,293 +23,334 @@ status: issues_found
 
 **Reviewed:** 2026-07-22T00:00:00Z
 **Depth:** standard
-**Files Reviewed:** 5
+**Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-This is a fresh adversarial pass over the same five files (not a diff against the prior
-09-REVIEW.md). The IPC argument-casing issues the prior review flagged appear to have been
-fixed in the codebase as currently checked out: `bind_hotkey`, `unbind_hotkey`,
-`set_macro_target_app`, and `set_macro_trigger_key` all use
-`#[command(rename_all = "snake_case")]` and the `App.tsx` call sites pass matching
-snake_case keys (`macro_id`, `target_app`, `trigger_key`), so that class of bug was not
-re-verified as still open here.
+This is a fresh full-phase review of all 7 files as they stand after plan 09-10 (CR-01
+hotkey double-dispatch consolidation). Note: this supersedes the prior `09-REVIEW.md` in
+this directory, which reviewed 5 files pre-09-10 and found a dual-registry
+(`HOTKEY_BINDINGS` + `MACRO_TRIGGER_KEYS`) double-dispatch bug. That specific bug is
+confirmed fixed here — the current `observer.rs`/`windows/mod.rs` each maintain exactly one
+`HOTKEY_BINDINGS` registry, `build_hotkey_bindings_vec` is the sole builder, and the
+regression test `hotkey_registry_has_single_binding_per_trigger_macro`
+(`state/mod.rs:1110-1146`) correctly pins the "one binding per trigger macro" invariant.
 
-The scheduler (`scheduler/mod.rs`) is solid: the two-phase dispatch, the no-op restart
-guard (`RunningConfig`), and the guaranteed-delivery `.await` sends on the hold lifecycle
-are correctly implemented and are backed by real concurrency tests (`afk_farm_stress_test`,
-`parallel_two_macros_concurrent`, the two saturation tests).
+However, tracing the two-phase dispatch path (Scheduler → `action_tx` →
+`StateActor::handle_action`) specifically for **releases** (as opposed to new-input starts)
+surfaces a new, serious gap: the same three gates that correctly govern whether *new* input
+should be injected (engine active, macro enabled, target-app match) are also applied,
+unconditionally, to `HoldRelease` actions. Because several state mutations (disable macro,
+toggle engine off, switch active app away from a macro's target, load/switch profile) flip
+the very state the gates check *before* the scheduler's guaranteed-delivery `HoldRelease`
+message is actually processed, the release is silently swallowed by the gate and the
+physical key/mouse button injected by the earlier `HoldStart` is left stuck down. This
+directly undermines the CR-01/CR-02 "guaranteed delivery" fixes documented in
+`scheduler/mod.rs` — channel delivery of the release is guaranteed, but injection of the
+release is not.
 
-The most serious finding in this pass is in the macOS hotkey path: a single keypress for a
-macro's trigger key can be dispatched **twice** to the StateActor
-(`Intent::ToggleMacroHotkey`) because the CGEventTap callback checks two
-independently-populated registries (`HOTKEY_BINDINGS` and `MACRO_TRIGGER_KEYS`) that both
-end up containing an entry for the same macro once the frontend's per-card "Set key…" flow
-runs on macOS. Since `ToggleMacroHotkey` flips `mac.enabled`, two dispatches cancel each
-other out — the hotkey silently does nothing. This directly undermines the project's
-stated core value ("a macro that was set up must fire reliably") and was traced across
-`observer.rs`, `state/mod.rs`, and `App.tsx`.
+A second, unrelated but similarly serious issue was found in the hotkey rebind flow
+spanning `App.tsx` and `state/mod.rs`: attempting to rebind an existing macro's card hotkey
+to a key already used by another macro destroys the macro's previously-working binding with
+no rollback, and on Windows this happens completely silently (no error surfaced to the user
+at all).
 
-Several lower-severity reliability and consistency issues were also found, mostly around
-error surfacing, timer cleanup consistency in the frontend, and a few dead-code / hygiene
-items on the Rust side.
+Several smaller warnings and dead-code findings are listed below.
 
 ## Critical Issues
 
-### CR-01: macOS hotkey toggle can silently no-op — dual registry double-dispatch
+### CR-01: `HoldRelease` actions are gated identically to new-input actions — held inputs can get stuck
 
-**File:** `src-tauri/src/platform/macos/observer.rs:418-451` (cross-referenced with
-`src-tauri/src/state/mod.rs:542-598, 786-789` and `src/App.tsx:572-601`)
+**File:** `src-tauri/src/state/mod.rs:373-413`
 
-**Issue:**
-The CGEventTap keydown handler checks two independent hotkey registries for
-every keypress:
+**Issue:** `StateActor::handle_action` applies the same three gates to every `ActionType`:
 
 ```rust
-// CONFIGURABLE HOTKEYS — checked AFTER emergency stop
-if let Ok(bindings) = get_hotkey_bindings().try_lock() {
-    for binding in bindings.iter() {
-        if binding.matches(keycode as u16, flags) {
-            ... tx.try_send(Intent::ToggleMacroHotkey(*id)) ...
-        }
-    }
-}
-
-// MACRO TRIGGER KEYS (O(1) lookup)
-if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-    if let Some(&macro_id) = trigger_keys.get(&(keycode as u16, mod_bits)) {
-        tx.try_send(Intent::ToggleMacroHotkey(macro_id));
+fn handle_action(&self, action: crate::scheduler::ActionReady) {
+    // Gate 1: Engine must be active
+    if !self.state.engine_active || self.state.emergency_stop_active { return; }
+    // Gate 2: Macro must exist and be enabled
+    let mac = match self.state.macros.get(&action.macro_id) {
+        Some(m) if m.enabled => m,
+        _ => return,
+    };
+    // Gate 3: Target app must match (or be Global)
+    ...
+    match &action.action_type {
+        ActionType::Interval(input) => { ... }
+        ActionType::HoldStart(input) => { ... }
+        ActionType::HoldRelease(input) => { self.inject_input(input, false); }
     }
 }
 ```
 
-`HOTKEY_BINDINGS` is rebuilt from **every** macro with a `trigger_key` set,
-whenever `bind_hotkey`/`unbind_hotkey` fires (`build_hotkey_bindings_vec`,
-`state/mod.rs:285-299`, called from `Intent::BindHotkey`/`Intent::UnbindHotkey`,
-`state/mod.rs:583, 607`). `MACRO_TRIGGER_KEYS` is rebuilt from every macro with a
-`trigger_key` set inside `reevaluate_all_macros()`, which is called
-unconditionally on macOS too (`state/mod.rs:786-787`,
-`#[cfg(target_os = "macos")] crate::platform::macos::observer::update_macro_trigger_keys(...)`)
-after essentially every mutating intent (`AddMacro`, `SetMacroTriggerKey`,
-`BindHotkey`, `UnbindHotkey`, `ToggleMacroHotkey`, …).
+The Scheduler's `stop_macro`/`release_holds`/`StopAll` paths were hardened (CR-01/CR-02,
+`scheduler/mod.rs:214-234, 300-325, 371-394`) to use `.await` sends instead of `try_send`
+specifically so `HoldRelease` messages can never be dropped by channel backpressure. But
+channel delivery is not the same as injection: by the time the `HoldRelease` action reaches
+`handle_action`, the very state mutation that triggered the stop has usually already
+applied, so the gates reject it:
 
-The frontend's card-based trigger-key editor calls **both** paths for macOS in
-a single user action (`App.tsx:572-580`):
+- **Disable a Hold-mode macro:** `Intent::SetMacroEnabled(id, false)` (`state/mod.rs:491-500`)
+  sets `mac.enabled = false` *before* `reevaluate_all_macros()` sends `StopMacro`. When the
+  resulting `HoldRelease` arrives, Gate 2's `Some(m) if m.enabled => m, _ => return` discards
+  it because `enabled` is already `false`.
+- **Toggle engine off:** `Intent::ToggleEngineHotkey` (`state/mod.rs:661-671`) sets
+  `self.state.engine_active = false` *before* sending `SchedulerIntent::StopAll`. Gate 1
+  (`!self.state.engine_active`) discards every `HoldRelease` produced by the
+  guaranteed-delivery `StopAll` release loop.
+- **Switch away from target app:** `Intent::ActiveAppChanged` (`state/mod.rs:643-649`) sets
+  `self.state.active_app = app` *before* `reevaluate_all_macros()` stops the now-out-of-target
+  macro. Gate 3 discards the resulting `HoldRelease` because `active_app` no longer matches
+  `target_app`. This is the most likely real-world trigger (e.g. alt-tabbing away from a game
+  while a Hold-mode right-click macro is engaged for an AFK farm — exactly the scenario the
+  stress tests exercise).
+- **Load/switch profile:** `Intent::LoadProfile` (`state/mod.rs:706-751`) calls
+  `self.state.macros.clear()` *before* sending `StopAll`. Gate 2 discards the `HoldRelease`
+  for the old macro id because it no longer exists in `state.macros` at all.
+
+In every one of these paths the physical input injected by the earlier `HoldStart`
+(`self.input_provider.inject_mouse_button_raw(btn, true)` / `inject_key(keycode, true)`) is
+never followed by the corresponding "up" injection. The only recovery path left is the
+hardcoded Emergency Stop hotkey, which bypasses this gate system entirely via
+`self.input_provider.flush_held_inputs()` (`state/mod.rs:632`) — a normal disable/engine-toggle
+/app-switch/profile-load does not call this.
+
+**Fix:** `HoldRelease` is a cleanup event, not a new-input request — it should never be
+blocked by the gates that exist to prevent unwanted new input:
+
+```rust
+fn handle_action(&self, action: crate::scheduler::ActionReady) {
+    use crate::scheduler::ActionType;
+
+    // A release must always be honored — a dropped release leaves a
+    // physically stuck input with no cleanup path short of Emergency Stop.
+    if let ActionType::HoldRelease(input) = &action.action_type {
+        self.inject_input(input, false);
+        return;
+    }
+
+    // Gate 1: Engine must be active
+    if !self.state.engine_active || self.state.emergency_stop_active {
+        return;
+    }
+    // ... existing Gate 2 / Gate 3 / Interval / HoldStart handling unchanged
+}
+```
+
+### CR-02: Conflicting hotkey rebind silently destroys the macro's previously-working trigger key
+
+**File:** `src/App.tsx:572-601`, `src-tauri/src/state/mod.rs:514-541`
+
+**Issue:** Rebinding an existing macro's hotkey from its card has no rollback on failure, on
+either platform:
+
+- **macOS** (`App.tsx:574-577`): `handleCardSetTriggerKey` first calls `unbind_hotkey`
+  (unconditionally clearing the macro's current trigger key), *then* `bind_hotkey` with the
+  new key. If the new key conflicts with another macro, `bind_hotkey` rejects with
+  `Err(msg)` — but the `unbind_hotkey` call has already succeeded, so the macro is left with
+  **no** hotkey at all. The user only sees a "Hotkey already bound" toast; nothing indicates
+  their previously-working binding was just deleted. There is also no reason for the
+  `unbind_hotkey` step to exist at all — `Intent::BindHotkey` (`state/mod.rs:575-578`)
+  already overwrites `mac.trigger_key`/`trigger_modifiers` unconditionally on success, so
+  calling `bind_hotkey` alone (without unbinding first) would both fix the data-loss bug and
+  remove an unnecessary round trip.
+- **Windows** (`App.tsx:579`, `state/mod.rs:514-541`): the card path calls
+  `set_macro_trigger_key` directly, which maps to `Intent::SetMacroTriggerKey`. On conflict
+  this handler silently coerces `new_key`/`new_mods` to `None`/`0` and applies that
+  (`state/mod.rs:522-531`) — no `Result`/oneshot error path exists for this intent, so
+  `ipc::set_macro_trigger_key` always returns `Ok(())` (`ipc/mod.rs:291-295`). The net effect
+  is identical to the macOS case (previously-working key is destroyed) but *without even a
+  toast* — the user gets zero feedback that their rebind attempt failed.
+
+**Fix:** For macOS, drop the leading `unbind_hotkey` call entirely and rely on `bind_hotkey`
+alone (it already overwrites in place on success and returns `Err` untouched on conflict, so
+the old binding survives a failed rebind):
 
 ```ts
 if (IS_MACOS) {
-  await invoke("unbind_hotkey", { macro_id: id });
   await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
+} else {
   await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
 }
 ```
 
-After this sequence, the macro's `(keycode, modifiers)` pair is registered in
-**both** `HOTKEY_BINDINGS` (via `bind_hotkey`) and `MACRO_TRIGGER_KEYS` (via
-`set_macro_trigger_key` → `reevaluate_all_macros`). Worse, `bind_hotkey`'s
-`build_hotkey_bindings_vec` rebuilds `HOTKEY_BINDINGS` from **all** macros with a
-trigger key, so the very first time the user sets any macro's key via this
-card UI, every other macro that already has a trigger key (e.g. one set via the
-"New Macro" form, which only ever populates `MACRO_TRIGGER_KEYS`) also becomes
-double-registered from that point forward.
-
-Once double-registered, a single keydown causes two
-`Intent::ToggleMacroHotkey(macro_id)` sends. The handler
-(`state/mod.rs:650-660`) does `mac.enabled = !mac.enabled;` — two flips is a
-net no-op. The user presses the hotkey and the macro visibly does not toggle,
-with no error surfaced anywhere.
-
-This also contradicts the doc comment on `set_macro_trigger_key`
-(`ipc/mod.rs:140-143`): *"macOS: the CGEventTap observes keycode via
-HOTKEY_BINDINGS (managed separately by bind_hotkey)"* — implying
-`MACRO_TRIGGER_KEYS` should be a Windows-only path, but the `#[cfg(target_os =
-"macos")]` call in `reevaluate_all_macros()` populates it on macOS anyway, and
-the macOS tap callback consumes it anyway.
-
-**Fix:** Pick one source of truth for macOS. Two viable directions:
-1. Keep `MACRO_TRIGGER_KEYS` as the single macOS+Windows registry: remove the
-   macOS-specific "CONFIGURABLE HOTKEYS" `HOTKEY_BINDINGS` lookup block from the
-   tap callback (`observer.rs:418-437`) entirely — `bind_hotkey`/`unbind_hotkey`
-   would then only need to run the conflict-check reply, not maintain a second
-   registry consumed on macOS.
-2. Keep `HOTKEY_BINDINGS` as the single macOS registry: make `AddMacro` and
-   `SetMacroTriggerKey` also call `build_hotkey_bindings_vec` +
-   `update_hotkey_bindings` on macOS, and remove the
-   `#[cfg(target_os = "macos")]` branch at `state/mod.rs:786-787` so
-   `update_macro_trigger_keys` is only ever called for Windows.
-
-Either way, `App.tsx:574-577` should also be simplified to call only the single
-remaining IPC path instead of three IPC round-trips per key-set action.
+For Windows, give `Intent::SetMacroTriggerKey` the same `Result`-carrying oneshot pattern
+`Intent::BindHotkey` already uses, so a conflict is rejected (old binding preserved) and
+surfaced to the same conflict toast instead of being silently coerced to `None`.
 
 ## Warnings
 
-### WR-01: Trigger-key conflict on macro creation is silently dropped with no user feedback
+### WR-01: Cross-platform hotkey modifier-matching asymmetry
 
-**File:** `src-tauri/src/state/mod.rs:453-467` (cross-referenced with `src/App.tsx:483-508`)
+**File:** `src-tauri/src/platform/macos/observer.rs:48-52` vs
+`src-tauri/src/platform/windows/mod.rs:524-536`
 
-**Issue:** `Intent::AddMacro`'s conflict pre-check silently clears
-`config.trigger_key`/`trigger_modifiers` to `None`/`0` when the requested key
-collides with an existing macro — it never returns an error. `add_macro`'s
-`Result<Uuid, String>` can therefore never carry the
-`"is already assigned to \"...\""` message. Yet `App.tsx`'s
-`handleCreateMacro` catch block (lines 494-508) is written specifically to
-parse that message out of a caught error and show a `ConflictErrorToast`. In
-practice, a user who creates a new macro with a trigger key that collides with
-an existing one gets a macro created successfully with the trigger silently
-removed — no toast, no console warning, nothing indicates the key was dropped.
+**Issue:** macOS matches a hotkey binding with a bitwise subset check — extra, unrelated
+modifiers held at the same time are ignored:
 
-**Fix:** Either (a) have `AddMacro` return `Err(conflict_message)` like
-`BindHotkey` does and require the frontend to retry without the key /
-surface the toast, or (b) have the `AddMacro` reply include whether the
-trigger was dropped so the frontend can show `showConflictError` immediately
-after a successful `add_macro` call instead of only in the `catch` branch.
+```rust
+fn matches(&self, keycode: u16, flags: CGEventFlags) -> bool {
+    keycode == self.keycode && (flags.bits() & self.modifiers) == self.modifiers
+}
+```
 
-### WR-02: CGEventTap thread has no panic guard — `TAP_INITIALIZED` can get stuck `true` forever
+Windows requires an exact bitmask match:
 
-**File:** `src-tauri/src/platform/macos/observer.rs:244-496`
+```rust
+if binding.keycode == keycode && binding.modifiers == mod_mask {
+```
 
-**Issue:** `initialize_tap()` sets `TAP_INITIALIZED = true` (line 242) *before*
-spawning the thread, and only resets it back to `false` inside specific
-success/failure branches at the end of the closure (lines 283-284, 476-477,
-482-483, 490-491). If the spawned thread panics anywhere in between — e.g. a
-`.lock().unwrap()` on an already-poisoned mutex, which can itself only happen
-after some other panic, but once it does, every subsequent `.lock().unwrap()`
-call in this file panics too — the thread dies without ever resetting
-`TAP_INITIALIZED`/`TAP_STARTING`. From that point on, `initialize_tap()`'s fast
-path (`if TAP_INITIALIZED.load(...) { return true; }`) reports the tap as
-initialized even though no thread is running and no input is being observed —
-the 3-second `check_accessibility` poll (`ipc/mod.rs:200-215`) that is
-supposed to recover the tap can never re-arm it, and this is silent (no user
-visible signal).
+A macro bound to `Shift+F5` will fire on macOS even if the user is also holding `Ctrl`
+(extra bits ignored), but will **not** fire on Windows under the same physical key
+combination (`mod_mask` includes the extra `Ctrl` bit, breaking exact equality). The same
+configured hotkey behaves differently across the two supported platforms.
 
-**Fix:** Wrap the closure body in `std::panic::catch_unwind`, or use a
-`scopeguard`-style RAII guard that resets both flags on drop (covering the
-panic path as well as the normal-return paths), so a single panic cannot
-permanently disable tap recovery.
+**Fix:** Pick one semantics and apply it on both platforms — most likely the exact-match
+(Windows) behavior is the intended one (avoids accidental cross-triggering), so change the
+macOS `matches()` to `flags.bits() == self.modifiers` (after masking off any non-modifier
+bits CGEventFlags may carry), or explicitly document/test the intentional asymmetry if it's
+a deliberate platform difference.
 
-### WR-03: `try_lock()` on hotkey registries can silently drop a keypress under contention
+### WR-02: Redundant hotkey-registry rebuild in `BindHotkey`/`UnbindHotkey` handlers
 
-**File:** `src-tauri/src/platform/macos/observer.rs:418, 440`
+**File:** `src-tauri/src/state/mod.rs:579-592, 607-616, 758-772`
 
-**Issue:** Both the `HOTKEY_BINDINGS` and `MACRO_TRIGGER_KEYS` lookups in the
-tap callback use `try_lock()` and simply skip dispatch if the lock is held
-(e.g., mid-update from `update_hotkey_bindings`/`update_macro_trigger_keys`
-being called from the StateActor task). There is no retry, queuing, or
-logging when this happens — a keypress that lands exactly during a registry
-rebuild is silently swallowed with no diagnostic trace, unlike the
-`try_send` overflow path in the scheduler which is at least counted in debug
-builds (`scheduler/mod.rs:417-425`).
+**Issue:** `Intent::BindHotkey` and `Intent::UnbindHotkey` both explicitly call
+`build_hotkey_bindings_vec(&self.state.macros)` and `update_hotkey_bindings(...)` (lines
+583-591 / 607-615), then immediately call `self.reevaluate_all_macros().await` (line 592 /
+616), which — per the CR-01 gap-closure comment at line 758 — *unconditionally* performs the
+exact same rebuild again at the top of its body (lines 764-772). Every bind/unbind now
+rebuilds and replaces the platform registry twice for no behavioral difference (the second
+replace is idempotent with the first).
 
-**Fix:** At minimum, log (debug-only) when `try_lock()` fails here, mirroring
-the `ACTION_DROP_COUNT` diagnostic pattern already used in
-`scheduler/mod.rs`, so a dropped keypress is diagnosable rather than
-invisible.
+**Fix:** Since `reevaluate_all_macros` is documented as "the sole registry-refresh site,"
+remove the now-redundant explicit rebuild block from the `BindHotkey`/`UnbindHotkey`
+handlers and rely solely on the call to `reevaluate_all_macros()`.
 
-### WR-04: Frontend timer cleanup is inconsistent — some timers leak past unmount
+### WR-03: macOS card hotkey-rebind issues 3 redundant IPC round trips (and 3 auto-saves) for one logical change
 
-**File:** `src/App.tsx:236-248, 380-387, 419-425, 631-634`
+**File:** `src/App.tsx:572-601`
 
-**Issue:** The component's `onCleanup` (lines 380-387) only calls
-`clearPending()` (the Accessibility 30s timeout). It does **not** call
-`clearImPending()` (the Input Monitoring 30s timeout, defined at lines
-419-425) and does not clear `_conflictErrorTimer` (set in `showConflictError`,
-lines 241-248) or the profile-message 3s timeout created inline in
-`showProfileMsg` (line 633). These timers will still fire after the component
-is torn down (e.g. HMR remount), calling stale signal setters. The pattern
-established for `_pendingTimeoutId` (comment: "onCleanup → clearPending()
-path handles teardown") was not applied consistently to the other three
-timers.
+**Issue:** Beyond the data-loss bug in CR-02, the macOS branch of
+`handleCardSetTriggerKey` performs three sequential `invoke()` calls (`unbind_hotkey`,
+`bind_hotkey`, `set_macro_trigger_key`) for what is logically a single field update. Each of
+the three corresponding `Intent` handlers ends with `self.auto_save_default().await`
+(`state/mod.rs:596, 620, 540`), so a single hotkey rebind on macOS triggers three separate
+profile-JSON disk writes.
 
-**Fix:** Add `clearImPending()` to the existing `onCleanup`, and track/clear
-`_conflictErrorTimer` and the profile-message timeout the same way.
+**Fix:** Once CR-02's fix removes the leading `unbind_hotkey` call, also drop the trailing
+`set_macro_trigger_key` call — `bind_hotkey`'s `Intent::BindHotkey` handler already persists
+`trigger_key`/`trigger_modifiers` on the macro (`state/mod.rs:575-578`), making that third
+call fully redundant.
 
-### WR-05: Inconsistent error surfacing — several handlers fail silently to the user
+### WR-04: `delete_profile`/`load_profile` forward unsanitized profile names while `save_profile` sanitizes first
 
-**File:** `src/App.tsx:445-451, 511-517, 519-526, 619-627`
+**File:** `src-tauri/src/ipc/mod.rs:344-370`
 
-**Issue:** `handleToggleEngine`, `handleToggleMacro`, `handleRemoveMacro`, and
-`handleCardSetTargetApp` all catch IPC errors with only `console.error(...)` —
-there is no toast, banner, or any user-visible signal that the action failed.
-By contrast, profile actions (`handleSaveProfile`/`handleLoadProfile`/
-`handleDeleteProfile`) and the trigger-key flow (`handleCardSetTriggerKey`)
-do surface failures via `showProfileMsg`/`showConflictError`. A user who
-clicks "Delete" on a macro and has the backend call fail (e.g. channel
-closed) sees the macro still present with no explanation.
+**Issue:** `save_profile` explicitly calls `ProfileManager::sanitize_name(&name)` before use,
+with a comment (`CR-03`) explaining why: so the stored name always matches the on-disk
+filename stem. `load_profile` and `delete_profile`, by contrast, forward the raw `name`
+parameter straight to `profile_mgr.load_profile(&name)` / `profile_mgr.delete_profile(&name)`
+with no local sanitization. `persistence.rs` is out of this review's file set, so it's not
+verified here whether those methods sanitize internally — but the asymmetry in the one file
+that is in scope is itself a maintainability/defense-in-depth gap: a reader cannot tell from
+`ipc/mod.rs` alone whether `load_profile("../../../Library/Preferences/foo")` is safe.
 
-**Fix:** Route these handlers through a shared error-toast mechanism (or at
-minimum reuse `showProfileMsg`-style feedback) instead of `console.error`
-alone, so failures are visible in the UI.
+**Fix:** Either apply `ProfileManager::sanitize_name` consistently to all three commands in
+`ipc/mod.rs`, or add a comment at `load_profile`/`delete_profile` pointing to where
+`persistence.rs` performs the equivalent sanitization, so the trust boundary is explicit and
+auditable from this file.
+
+### WR-05: Unused `uuid::Uuid` import on non-Windows targets
+
+**File:** `src-tauri/src/platform/windows/mod.rs:409` (used only by the
+`#[cfg(target_os = "windows")]`-gated struct at lines 36-42)
+
+**Issue:** `use uuid::Uuid;` at line 409 is not itself `cfg`-gated, but its only consumer in
+this file, `WindowsHotkeyBinding { ..., macro_id: Uuid }`, is gated behind
+`#[cfg(target_os = "windows")]`. On any non-Windows compilation of this module (e.g.
+macOS/Linux dev builds or CI matrix checks that compile all platform modules), this produces
+an `unused_imports` warning.
+
+**Fix:** Gate the import: `#[cfg(target_os = "windows")] use uuid::Uuid;`.
 
 ## Info
 
-### IN-01: Dead code — two macOS observer functions are never called
+### IN-01: Dead `HotkeyAction::ToggleEngine` variant
 
-**File:** `src-tauri/src/platform/macos/observer.rs:167-173, 211-214`
+**File:** `src-tauri/src/platform/macos/observer.rs:34-38, 415-417`
 
-**Issue:** `remove_hotkey_bindings_for(macro_id: &Uuid)` and
-`is_tap_initialized()` are `pub fn` but have no callers anywhere in the
-codebase (verified via repo-wide grep). They are either leftover from a prior
-design or intended for a caller that was never wired up.
+**Issue:** `HotkeyAction::ToggleEngine` and its `match` arm in the tap callback are never
+reachable — `build_hotkey_bindings_vec` (`state/mod.rs:284-299`) only ever constructs
+`HotkeyAction::ToggleMacro(mac.id)`. There is no code path anywhere in the reviewed files
+that lets a user bind a hotkey to the global engine toggle; `toggle_engine` is only invoked
+via the dashboard button (`App.tsx:445-451`).
 
-**Fix:** Remove if truly unused, or wire them in where intended (e.g.
-`is_tap_initialized` seems like a natural fit for a status IPC command).
+**Fix:** Either wire up a UI/IPC path to actually register a `ToggleEngine` binding, or
+remove the dead variant/arm until that feature exists.
 
-### IN-02: `get_active_app` fetches the entire `AppState` for one field
+### IN-02: Unused `add_hotkey_binding` / `remove_hotkey_bindings_for` functions
 
-**File:** `src-tauri/src/ipc/mod.rs:64-73`
+**File:** `src-tauri/src/platform/macos/observer.rs:163-173`
 
-**Issue:** `get_active_app` round-trips a full `Intent::GetState` (which
-clones/serializes the entire macro registry) just to read
-`app_state.active_app`. `get_state` is already called separately by the
-frontend on the same initial-fetch `Promise.all` (`App.tsx:297-305`), so this
-is a redundant larger payload for a single string field.
+**Issue:** Both public functions are unused within the reviewed file set — every registry
+mutation goes through the wholesale `update_hotkey_bindings` replace (matching the "replace
+is cheap" design noted at `state/mod.rs:283`). No caller of either function exists in
+`ipc/mod.rs`, `lib.rs`, or `state/mod.rs`.
 
-**Fix:** Consider a dedicated lightweight `Intent::GetActiveApp` if this
-command is called frequently, or drop it in favor of reading `active_app`
-off the existing `get_state`/`state-changed` payload the frontend already
-has.
+**Fix:** Remove if genuinely superseded, or note where they're still used if that's outside
+this file set.
 
-### IN-03: Magic number for the emergency-stop keycode
+### IN-03: `Intent::ResetEmergencyStop` has no caller
 
-**File:** `src-tauri/src/platform/macos/observer.rs:340`
+**File:** `src-tauri/src/state/mod.rs:170, 634-642`
 
-**Issue:** `if keycode == 12 && has_cmd && has_shift` hardcodes macOS keycode
-12 (the `Q` key) with no named constant, unlike the `CGEventFlags` bit values
-above it which are documented and pinned by a unit test.
+**Issue:** No IPC command or platform hotkey handler in the reviewed files ever constructs
+`Intent::ResetEmergencyStop`. Combined with both platform emergency-stop paths
+(`observer.rs:401`, `windows/mod.rs:514`) calling `process::exit(1)` unconditionally right
+after flushing held inputs, there is currently no reachable in-process path that would ever
+need this reset — the process is already gone by the time any "resume" UI could act.
 
-**Fix:** Extract to a named constant, e.g.
-`const EMERGENCY_STOP_KEYCODE: i64 = 12; // 'Q'`.
+**Fix:** Either this is intentionally vestigial (in which case a comment explaining the
+intended future use would help) or it can be removed.
 
-### IN-04: `set_macro_sequence` / `update_step_interval` IPC commands have no frontend caller
+### IN-04: Dead frontend `loading` signal
 
-**File:** `src-tauri/src/ipc/mod.rs:268-294` (cross-referenced with `src/App.tsx`)
+**File:** `src/App.tsx:214`
 
-**Issue:** Both commands are registered in `lib.rs`'s `invoke_handler!` and
-implemented, but a repo-wide search of `src/App.tsx` shows neither
-`set_macro_sequence` nor `update_step_interval` is invoked from the UI. Either
-this is intentionally forward-looking API surface, or it's dead surface that
-should be documented as such.
+**Issue:** `const [, setLoading] = createSignal(true);` discards the getter.
+`setLoading(false)` is called in the initial-fetch effect's `finally` block
+(`App.tsx:326`), but the `loading` value is never read anywhere in the render tree — there
+is no loading spinner or gate on it.
 
-**Fix:** No action required if intentionally unused for now; otherwise wire
-up or remove.
+**Fix:** Either wire the getter into the UI (e.g. a loading state before the first
+`get_state` resolves) or remove the signal.
 
-### IN-05: `App()` is a single ~900-line function mixing all concerns
+### IN-05: `windows/mod.rs` mixes two apparent source groupings in one file
 
-**File:** `src/App.tsx:200-1594`
+**File:** `src-tauri/src/platform/windows/mod.rs:1-25` and `:407-425`
 
-**Issue:** The entire application — signal declarations, effects, ~20 event
-handlers, and the full JSX tree for both tabs — lives in one function body.
-This is high cyclomatic complexity and makes the file hard to navigate and
-review (this review itself had to scan the whole file to trace a handful of
-handlers). CLAUDE.md's conventions describe `App.tsx` as "Single `App.tsx`
-component with all UI" by design, so this may be an accepted project
-convention rather than an oversight — flagged for awareness, not as a
-required fix.
+**Issue:** A second block of `use` statements (`AtomicBool`, `OnceLock`, `Uuid`, Win32
+hook/accessibility imports) appears at line 407, well after several struct/impl definitions,
+rather than being consolidated with the imports at the top of the file. This reads as if two
+previously-separate files (input-injection code and hotkey/hook code) were concatenated
+without merging their preludes.
 
-**Fix (optional):** Consider extracting the dashboard macro-card renderer and
-the profiles-tab list into local sub-components/functions to reduce the
-single function's size, if maintainability becomes a pain point.
+**Fix:** Consolidate all `use` statements at the top of the file for readability/greppability.
+
+### IN-06: Repeated `navigator.userAgent` mac-detection
+
+**File:** `src/App.tsx:145, 173, 287`
+
+**Issue:** `computeModifiers`, `modifierChips`, and the component-scoped `IS_MACOS` constant
+each independently recompute `navigator.userAgent.toLowerCase().includes("mac")`. The
+module-level docstring at line 141-142 already acknowledges this duplication ("same
+detection, different scope, identical bit output") but doesn't eliminate it.
+
+**Fix:** Hoist a single module-level `const IS_MACOS = ...` and reference it from all three
+sites.
 
 ---
 
