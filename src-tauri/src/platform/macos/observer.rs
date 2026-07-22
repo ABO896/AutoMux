@@ -252,11 +252,6 @@ pub fn initialize_tap() -> bool {
                 CGEventType::RightMouseUp,
                 CGEventType::OtherMouseDown,
                 CGEventType::OtherMouseUp,
-                CGEventType::MouseMoved,
-                CGEventType::LeftMouseDragged,
-                CGEventType::RightMouseDragged,
-                CGEventType::OtherMouseDragged,
-                CGEventType::ScrollWheel,
             ],
             move |_tap_proxy, event_type, event| {
                 // Option B (D-1): When the OS disables the tap (TapDisabledByTimeout or
