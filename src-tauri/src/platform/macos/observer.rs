@@ -15,7 +15,10 @@ use std::thread;
 use block2::RcBlock;
 use objc2::msg_send;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace, NSWorkspaceDidActivateApplicationNotification};
+use objc2_app_kit::{
+    NSApplicationActivationPolicy, NSRunningApplication, NSWorkspace, NSWorkspaceApplicationKey,
+    NSWorkspaceDidActivateApplicationNotification,
+};
 use objc2_foundation::{NSNotification, NSObject};
 use uuid::Uuid;
 
@@ -524,11 +527,27 @@ impl PlatformObserver for MacPlatformObserver {
         let center = workspace.notificationCenter();
         let notif_name = unsafe { NSWorkspaceDidActivateApplicationNotification };
 
-        let handler = RcBlock::new(|_notification: NonNull<NSNotification>| {
-            let ws = NSWorkspace::sharedWorkspace();
-            if let Some(app) = ws.frontmostApplication() {
+        let handler = RcBlock::new(|notification_ptr: NonNull<NSNotification>| {
+            // G-09-1c: read the activated app directly from the notification's own
+            // userInfo payload — this is the app that just activated and is not
+            // subject to the re-query race that frontmostApplication() has. Fall
+            // back to frontmostApplication() only if the userInfo lookup yields
+            // nothing (e.g. an unexpected notification shape).
+            let notification = unsafe { notification_ptr.as_ref() };
+            let app_from_payload = notification.userInfo().and_then(|info| {
+                let key = unsafe { NSWorkspaceApplicationKey };
+                info.objectForKey(key)
+                    .and_then(|obj| obj.downcast::<NSRunningApplication>().ok())
+            });
+            let app =
+                app_from_payload.or_else(|| NSWorkspace::sharedWorkspace().frontmostApplication());
+
+            if let Some(app) = app {
                 if let Some(bundle_id) = app.bundleIdentifier() {
                     let id_string = bundle_id.to_string();
+                    #[cfg(debug_assertions)]
+                    eprintln!("[Observer] active-app changed -> {:?}", id_string);
+
                     let mut active_app = get_active_app_state().lock().unwrap();
                     *active_app = Some(id_string.clone());
                     drop(active_app); // Release lock before sending
@@ -543,15 +562,11 @@ impl PlatformObserver for MacPlatformObserver {
             }
         });
 
+        // G-09-1c: registered via a raw msg_send! (rather than the typed
+        // addObserverForName_object_queue_usingBlock) specifically so a nil
+        // return is observable here as None — a failed registration is logged
+        // below instead of being silently swallowed.
         let observer: Option<Retained<NSObject>> = unsafe {
-            // Using a normal msg_send! and transmuting back to Retained as per modern objc2
-            // but we can just use msg_send! that returns a pointer if msg_send_id! is deprecated.
-            // Actually msg_send! might return Retained directly in newer objc2 if the selector matches init/new/copy/mutableCopy,
-            // but for addObserverForName we should use msg_send! and it returns *mut NSObject.
-            // Since observer_test4 compiled with msg_send!, let's use it properly.
-            // Wait, msg_send! returns Retained in 0.4+ if we use msg_send_id!.
-            // In 0.5/0.6 it's just msg_send!.
-            // Let's use msg_send! directly and type hint it to return Option<Retained<NSObject>>
             let ret: *mut NSObject = msg_send![
                 &center,
                 addObserverForName: notif_name,
@@ -564,6 +579,10 @@ impl PlatformObserver for MacPlatformObserver {
 
         if let Some(obs) = observer {
             self._observer_token = Some(Retained::into_raw(obs) as usize);
+        } else {
+            eprintln!(
+                "[Observer] NSWorkspace active-app observer registration FAILED — app-scoped macros will not re-evaluate on app switch"
+            );
         }
 
         // Initialize current active app
