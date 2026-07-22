@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — 10/10 plans executed, re-verification found 2 new Blocker gaps
-Plan: 10 of 10 (complete); gap-closure plan needed before phase can be marked Complete
-Next: Post-09-10 code review + re-verification (09-REVIEW.md, 09-VERIFICATION.md) confirmed CR-01 (hotkey double-dispatch) is fixed, but found 2 NEW Critical/Blocker bugs directly touching the Core Value: (1) HoldRelease actions in StateActor::handle_action are gated identically to new-input actions, so disabling a Hold-mode macro / toggling engine off / switching active app away / loading a profile can silently drop a guaranteed-delivery release and leave a physical input stuck down; (2) rebinding a macro's hotkey to a conflicting key destroys the old working binding with no rollback on both platforms (silent on Windows). Run `/gsd-plan-phase 09 --gaps` to plan the fix (09-11), then `/gsd-execute-phase 09 --gaps-only`. EXEC-01/EXEC-02 reverted from Complete in REQUIREMENTS.md pending this closure. Separately, on-device human verification (T9.8 macOS + Windows tests 6.1-6.3) remains outstanding and unaffected by this gap-closure.
-Status: Gaps found (gaps_found) — not yet phase-complete
+Phase: 09 (parallel-macro-execution) — 10/10 plans executed, re-verification found 2 new Blocker gaps, gap-closure plan 09-11 now created and verified
+Plan: 11 of 11 planned (09-11 not yet executed); ready to execute
+Next: `/gsd-plan-phase 09 --gaps` created `09-11-PLAN.md` (commit f77de11) closing both Blocker gaps from 09-VERIFICATION.md: (1) an unconditional HoldRelease bypass in StateActor::handle_action so a guaranteed-delivery release is never dropped by Gate 1/2/3 regardless of engine/enabled/target-app state; (2) hotkey-rebind rollback safety on both platforms (macOS: drop the pre-unbind in handleCardSetTriggerKey; Windows: Intent::SetMacroTriggerKey now replies Err on conflict via a Result-carrying oneshot instead of silently coercing to None/0). gsd-plan-checker independently re-verified the plan against source and returned VERIFICATION PASSED. Run `/gsd-execute-phase 09` to execute 09-11, then re-verify. EXEC-01/EXEC-02 remain reverted from Complete in REQUIREMENTS.md pending this closure. Separately, on-device human verification (T9.8 macOS + Windows tests 6.1-6.3) remains outstanding and unaffected by this gap-closure.
+Status: Planned (gap-closure plan ready) — not yet phase-complete
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
@@ -83,8 +83,8 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 **Resume file:** None
 
 Last session: 2026-07-22T20:00:00.000Z
-Stopped at: Executed 09-10-PLAN.md, ran post-execution code review + phase re-verification — gaps_found (2 new Blocker-severity bugs, CR-01 hotkey fix confirmed clean)
-Next: Run `/gsd-plan-phase 09 --gaps` to create a gap-closure plan for: (1) HoldRelease actions gated identically to new-input actions in StateActor::handle_action (stuck-input risk on disable/engine-toggle/app-switch/profile-load), (2) hotkey-rebind-on-conflict destroys the old working binding with no rollback on both platforms. Then `/gsd-execute-phase 09 --gaps-only`. Full detail in 09-VERIFICATION.md and 09-REVIEW.md. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9. Phase 10 (UI redesign) should wait until Phase 9's Blocker gaps are closed.
+Stopped at: Planned gap-closure plan 09-11-PLAN.md (commit f77de11) — gsd-planner + gsd-plan-checker both completed, checker returned VERIFICATION PASSED
+Next: Run `/gsd-execute-phase 09` to execute 09-11-PLAN.md (HoldRelease bypass in handle_action + hotkey-rebind rollback safety on both platforms), then re-verify the phase. Full detail in 09-VERIFICATION.md, 09-REVIEW.md, and 09-11-PLAN.md. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9. Phase 10 (UI redesign) should wait until Phase 9's Blocker gaps are closed.
 
 ## Performance Metrics
 
