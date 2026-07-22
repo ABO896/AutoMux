@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — 10/10 plans executed
-Plan: 10 of 10 (complete)
-Next: Phase 9 code work is done; on-device human verification (T9.8 macOS single-keypress toggle + Windows physical-device tests 6.1-6.3) remains outstanding before the phase can be marked fully Complete. Phase 10 (UI redesign) may begin once outstanding human-verification items are addressed or explicitly accepted as deferred.
-Status: All 10 plans executed; awaiting human device verification
+Phase: 09 (parallel-macro-execution) — 10/10 plans executed, re-verification found 2 new Blocker gaps
+Plan: 10 of 10 (complete); gap-closure plan needed before phase can be marked Complete
+Next: Post-09-10 code review + re-verification (09-REVIEW.md, 09-VERIFICATION.md) confirmed CR-01 (hotkey double-dispatch) is fixed, but found 2 NEW Critical/Blocker bugs directly touching the Core Value: (1) HoldRelease actions in StateActor::handle_action are gated identically to new-input actions, so disabling a Hold-mode macro / toggling engine off / switching active app away / loading a profile can silently drop a guaranteed-delivery release and leave a physical input stuck down; (2) rebinding a macro's hotkey to a conflicting key destroys the old working binding with no rollback on both platforms (silent on Windows). Run `/gsd-plan-phase 09 --gaps` to plan the fix (09-11), then `/gsd-execute-phase 09 --gaps-only`. EXEC-01/EXEC-02 reverted from Complete in REQUIREMENTS.md pending this closure. Separately, on-device human verification (T9.8 macOS + Windows tests 6.1-6.3) remains outstanding and unaffected by this gap-closure.
+Status: Gaps found (gaps_found) — not yet phase-complete
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
@@ -45,7 +45,7 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
 | 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
-| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | In Progress (10/10 plans done; CR-01 hotkey double-dispatch gap closed at source level in 09-10; awaiting on-device human verification — T9.8 macOS + Windows tests 6.1-6.3) |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | In Progress (10/10 plans done; CR-01 hotkey double-dispatch gap closed and confirmed at source level; re-verification found 2 NEW Blocker gaps — HoldRelease gating stuck-input risk, hotkey-rebind data loss — gap-closure plan needed; EXEC-01/EXEC-02 reverted from Complete) |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
 ## Accumulated Context
@@ -82,9 +82,9 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-22T17:07:55.584Z
-Stopped at: Completed 09-10-PLAN.md (CR-01 gap closure, final plan of Phase 9)
-Next: Phase 9 is fully executed (10/10 plans); CR-01 is closed at the source level on both platforms. Remaining before Phase 9 can be marked Complete: on-device human verification of T9.8 (macOS single-keypress toggle) and Windows physical-device tests 6.1-6.3. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9's progress. Phase 10 (UI redesign) may begin once outstanding human-verification items are addressed or explicitly accepted as deferred.
+Last session: 2026-07-22T20:00:00.000Z
+Stopped at: Executed 09-10-PLAN.md, ran post-execution code review + phase re-verification — gaps_found (2 new Blocker-severity bugs, CR-01 hotkey fix confirmed clean)
+Next: Run `/gsd-plan-phase 09 --gaps` to create a gap-closure plan for: (1) HoldRelease actions gated identically to new-input actions in StateActor::handle_action (stuck-input risk on disable/engine-toggle/app-switch/profile-load), (2) hotkey-rebind-on-conflict destroys the old working binding with no rollback on both platforms. Then `/gsd-execute-phase 09 --gaps-only`. Full detail in 09-VERIFICATION.md and 09-REVIEW.md. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9. Phase 10 (UI redesign) should wait until Phase 9's Blocker gaps are closed.
 
 ## Performance Metrics
 
