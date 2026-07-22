@@ -138,8 +138,9 @@ pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
 }
 
 /// Update the trigger key for an existing macro.
-/// macOS: the CGEventTap observes keycode via HOTKEY_BINDINGS (managed separately by bind_hotkey).
-/// Windows: trigger key is propagated to MACRO_TRIGGER_KEYS via reevaluate_all_macros in StateActor.
+/// Both macOS and Windows observe the macro's trigger key via the single
+/// `HOTKEY_BINDINGS` registry, rebuilt in `reevaluate_all_macros` on every
+/// trigger_key mutation (CR-01 gap-closure, plan 09-10).
 /// `modifiers`: platform-native bitmask (CGEventFlags on macOS, MOD_* on Windows).
 #[command(rename_all = "snake_case")]
 pub async fn set_macro_trigger_key(

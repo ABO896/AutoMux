@@ -404,7 +404,6 @@ pub fn check_input_permissions() -> bool {
 pub fn check_input_permissions() -> bool {
     true
 }
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use uuid::Uuid;
@@ -426,11 +425,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 static STATE_TX: OnceLock<tokio::sync::mpsc::Sender<crate::state::Intent>> = OnceLock::new();
-static MACRO_TRIGGER_KEYS: OnceLock<Mutex<HashMap<(u16, u64), Uuid>>> = OnceLock::new();
 /// UX-11/UX-14: Configurable hotkey bindings registry, mirrored from the
-/// StateActor's `HOTKEY_BINDINGS` on macOS. Populated by the new
-/// `Intent::BindHotkey` StateActor handler (plan 08-03). Closes the
-/// Windows "no configurable hotkeys" gap from CONCERNS.md:150-152.
+/// StateActor's `HOTKEY_BINDINGS` on macOS. Populated by the
+/// `Intent::BindHotkey` StateActor handler (plan 08-03) and, since the
+/// CR-01 gap-closure (plan 09-10), refreshed unconditionally from
+/// `reevaluate_all_macros` on every trigger_key mutation. This is the
+/// sole hotkey registry consulted on Windows (single source of truth).
 static HOTKEY_BINDINGS: OnceLock<Mutex<Vec<WindowsHotkeyBinding>>> = OnceLock::new();
 static HOOK_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
@@ -438,23 +438,16 @@ pub fn set_state_tx(tx: tokio::sync::mpsc::Sender<crate::state::Intent>) {
     let _ = STATE_TX.set(tx);
 }
 
-fn get_macro_trigger_keys() -> &'static Mutex<HashMap<(u16, u64), Uuid>> {
-    MACRO_TRIGGER_KEYS.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-pub fn update_macro_trigger_keys(keys: HashMap<(u16, u64), Uuid>) {
-    *get_macro_trigger_keys().lock().unwrap() = keys;
-}
-
 fn get_hotkey_bindings() -> &'static Mutex<Vec<WindowsHotkeyBinding>> {
     HOTKEY_BINDINGS.get_or_init(|| Mutex::new(Vec::new()))
 }
 
 /// UX-11: Replace the entire set of configurable hotkey bindings at runtime.
-/// Called by the StateActor's `Intent::BindHotkey` handler with the full
+/// Called by the StateActor's `Intent::BindHotkey` handler and by
+/// `reevaluate_all_macros` (CR-01 gap-closure, plan 09-10) with the full
 /// `Vec<WindowsHotkeyBinding>` rebuilt from the current `state.macros` —
-/// same pattern as `update_macro_trigger_keys` and the macOS equivalent
-/// `update_hotkey_bindings` in `platform/macos/observer.rs:155-157`.
+/// same pattern as the macOS equivalent `update_hotkey_bindings` in
+/// `platform/macos/observer.rs`.
 pub fn update_hotkey_bindings(bindings: Vec<WindowsHotkeyBinding>) {
     *get_hotkey_bindings().lock().unwrap() = bindings;
 }
@@ -521,23 +514,13 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
                 std::process::exit(1);
             }
 
-            // MACRO TRIGGER KEYS (O(1) lookup) — tuple-keyed on (keycode, mod_mask).
-            // The mod_mask is synthesized at keypress time via `build_mod_mask()`
-            // so e.g. `Ctrl+Shift+F5` only matches when both modifiers are held.
-            if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-                let mod_mask = build_mod_mask();
-                if let Some(&macro_id) = trigger_keys.get(&(keycode, mod_mask)) {
-                    if let Some(tx) = STATE_TX.get() {
-                        let _ = tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
-                    }
-                }
-            }
-
-            // CONFIGURABLE HOTKEYS (per-binding) — populated by Intent::BindHotkey
-            // via the StateActor's `update_hotkey_bindings` (mirrors the macOS
-            // `HOTKEY_BINDINGS` at `platform/macos/observer.rs:420-449`). Same
-            // tuple key so the lookup semantics are bit-identical to the
-            // `MACRO_TRIGGER_KEYS` check above.
+            // CONFIGURABLE HOTKEYS (per-binding) — single source of truth
+            // (CR-01 gap-closure, plan 09-10). Populated by Intent::BindHotkey
+            // and by reevaluate_all_macros via the StateActor's
+            // `update_hotkey_bindings` (mirrors the macOS `HOTKEY_BINDINGS` at
+            // `platform/macos/observer.rs`). The mod_mask is synthesized at
+            // keypress time via `build_mod_mask()` so e.g. `Ctrl+Shift+F5`
+            // only matches when both modifiers are held.
             if let Ok(bindings) = get_hotkey_bindings().try_lock() {
                 let mod_mask = build_mod_mask();
                 for binding in bindings.iter() {

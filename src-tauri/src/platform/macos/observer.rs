@@ -197,17 +197,6 @@ pub fn list_running_apps_impl() -> Result<Vec<crate::ipc::RunningApp>, String> {
     Ok(result)
 }
 
-static MACRO_TRIGGER_KEYS: OnceLock<Mutex<std::collections::HashMap<(u16, u64), Uuid>>> = OnceLock::new();
-
-fn get_macro_trigger_keys() -> &'static Mutex<std::collections::HashMap<(u16, u64), Uuid>> {
-    MACRO_TRIGGER_KEYS.get_or_init(|| Mutex::new(std::collections::HashMap::new()))
-}
-
-/// Replace the entire set of macro trigger keys at runtime.
-pub fn update_macro_trigger_keys(keys: std::collections::HashMap<(u16, u64), Uuid>) {
-    *get_macro_trigger_keys().lock().unwrap() = keys;
-}
-
 /// Returns whether the CGEventTap has been initialized.
 pub fn is_tap_initialized() -> bool {
     TAP_INITIALIZED.load(Ordering::SeqCst)
@@ -436,19 +425,6 @@ pub fn initialize_tap() -> bool {
                         }
                     }
 
-                    // MACRO TRIGGER KEYS (O(1) lookup)
-                    if let Ok(trigger_keys) = get_macro_trigger_keys().try_lock() {
-                        // macOS reads the held modifier bits from the CGEventFlags on
-                        // the current event. `flags.bits()` gives the raw bitmask,
-                        // matching the format stored in `trigger_modifiers`.
-                        let mod_bits = flags.bits();
-                        if let Some(&macro_id) = trigger_keys.get(&(keycode as u16, mod_bits)) {
-                            if let Some(tx) = STATE_TX.get() {
-                                let _ =
-                                    tx.try_send(crate::state::Intent::ToggleMacroHotkey(macro_id));
-                            }
-                        }
-                    }
                 }
 
                 Some(event.clone())
