@@ -1106,4 +1106,42 @@ mod tests {
             "conflicts must default to [] when absent from the JSON"
         );
     }
+
+    /// CR-01 regression test: `build_hotkey_bindings_vec` — the sole
+    /// registry-build function feeding `HOTKEY_BINDINGS` (the single source
+    /// of truth after the 09-10 gap-closure) — emits exactly ONE binding per
+    /// macro that has a `trigger_key`, and zero for a macro with none. This
+    /// pins the data-level invariant behind the fix: no duplicate
+    /// registration, so one keypress can only ever match one binding.
+    #[test]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    fn hotkey_registry_has_single_binding_per_trigger_macro() {
+        let mut state = AppState::default();
+        let id_a = Uuid::new_v4();
+        state.macros.insert(
+            id_a,
+            make_macro(id_a, "alpha", Some(96), 0, ActionSequence::default()),
+        );
+
+        let bindings = build_hotkey_bindings_vec(&state.macros);
+        assert_eq!(
+            bindings.len(),
+            1,
+            "a single trigger-key macro must produce exactly one hotkey binding"
+        );
+
+        // A second macro with no trigger_key must NOT register.
+        let id_b = Uuid::new_v4();
+        state.macros.insert(
+            id_b,
+            make_macro(id_b, "beta", None, 0, ActionSequence::default()),
+        );
+
+        let bindings = build_hotkey_bindings_vec(&state.macros);
+        assert_eq!(
+            bindings.len(),
+            1,
+            "a macro with trigger_key = None must contribute zero bindings"
+        );
+    }
 }
