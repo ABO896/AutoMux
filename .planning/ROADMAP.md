@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 9/9 plans executed
+**Plans**: 9/10 plans executed (09-10 planned — CR-01 gap closure)
 Plans:
 **Wave 1**
 
@@ -156,6 +156,10 @@ Plans:
 **Gap Closure** *(from 09-VERIFICATION.md gaps #10/#11 — IPC argument-casing)*
 
 - [x] 09-09-PLAN.md — Add `rename_all = "snake_case"` to the 5 IPC commands with underscore params (set_macro_target_app, bind_hotkey, unbind_hotkey, set_macro_trigger_key, update_step_interval) so card-edit target-app and hotkey changes actually persist; fix handleCardSetTriggerKey catch-block error misclassification (EXEC-01, EXEC-02)
+
+**Gap Closure** *(from 09-VERIFICATION.md CR-01 — dual hotkey-registry double-dispatch)*
+
+- [ ] 09-10-PLAN.md — Consolidate to a single hotkey registry (keep HOTKEY_BINDINGS, remove the redundant MACRO_TRIGGER_KEYS on both platforms; refresh via reevaluate_all_macros) so a card-edit-assigned hotkey dispatches ToggleMacroHotkey exactly once per keypress instead of twice (self-cancelling no-op); fix applied symmetrically to Windows (identical latent defect) + single-registry regression test (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
