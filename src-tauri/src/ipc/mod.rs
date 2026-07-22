@@ -39,7 +39,7 @@ pub async fn set_macro_enabled(
         .map_err(|e| e.to_string())
 }
 
-#[command]
+#[command(rename_all = "snake_case")]
 pub async fn set_macro_target_app(
     state: State<'_, StateManager>,
     id: Uuid,
@@ -77,7 +77,7 @@ pub async fn get_active_app(state: State<'_, StateManager>) -> Result<Option<Str
 /// The oneshot sender carries the conflict result back to the frontend.
 /// `keycode` and `modifiers` are platform-native (CGKeyCode + CGEventFlags
 /// bits on macOS, VK + MOD_* on Windows).
-#[command]
+#[command(rename_all = "snake_case")]
 pub async fn bind_hotkey(
     state: State<'_, StateManager>,
     macro_id: Uuid,
@@ -96,7 +96,7 @@ pub async fn bind_hotkey(
 /// UX-11/UX-14: Now enabled on Windows too (was macOS-only — see
 /// CONCERNS.md:150-152). The StateActor's UnbindHotkey handler clears the
 /// macro's trigger and rebuilds the platform HOTKEY_BINDINGS registry.
-#[command]
+#[command(rename_all = "snake_case")]
 pub async fn unbind_hotkey(
     state: State<'_, StateManager>,
     macro_id: Uuid,
@@ -141,7 +141,7 @@ pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
 /// macOS: the CGEventTap observes keycode via HOTKEY_BINDINGS (managed separately by bind_hotkey).
 /// Windows: trigger key is propagated to MACRO_TRIGGER_KEYS via reevaluate_all_macros in StateActor.
 /// `modifiers`: platform-native bitmask (CGEventFlags on macOS, MOD_* on Windows).
-#[command]
+#[command(rename_all = "snake_case")]
 pub async fn set_macro_trigger_key(
     state: State<'_, StateManager>,
     id: Uuid,
@@ -280,7 +280,7 @@ pub async fn set_macro_sequence(
 /// Update the interval for a specific step within a running macro.
 /// Allows the frontend to live-tune timing without restarting the macro.
 /// `step_index` is 0-based and maps to the ActionSequence step order.
-#[command]
+#[command(rename_all = "snake_case")]
 pub async fn update_step_interval(
     state: State<'_, StateManager>,
     id: Uuid,
