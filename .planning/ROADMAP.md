@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 9 plans (8 executed; 09-09 planned — gap closure from 09-VERIFICATION.md)
+**Plans**: 9/9 plans executed
 Plans:
 **Wave 1**
 
@@ -155,7 +155,7 @@ Plans:
 
 **Gap Closure** *(from 09-VERIFICATION.md gaps #10/#11 — IPC argument-casing)*
 
-- [ ] 09-09-PLAN.md — Add `rename_all = "snake_case"` to the 5 IPC commands with underscore params (set_macro_target_app, bind_hotkey, unbind_hotkey, set_macro_trigger_key, update_step_interval) so card-edit target-app and hotkey changes actually persist; fix handleCardSetTriggerKey catch-block error misclassification (EXEC-01, EXEC-02)
+- [x] 09-09-PLAN.md — Add `rename_all = "snake_case"` to the 5 IPC commands with underscore params (set_macro_target_app, bind_hotkey, unbind_hotkey, set_macro_trigger_key, update_step_interval) so card-edit target-app and hotkey changes actually persist; fix handleCardSetTriggerKey catch-block error misclassification (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
@@ -185,5 +185,5 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 8/8 | In Progress|  |
+| 9. Parallel Macro Execution | v2.0 | 9/9 | In Progress|  |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
