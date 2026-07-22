@@ -131,7 +131,7 @@ Plans:
   2. On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A
   3. Stopping one running macro does not affect any other concurrently running macro
 
-**Plans**: 9/10 plans executed (09-10 planned — CR-01 gap closure)
+**Plans**: 10/10 plans executed
 Plans:
 **Wave 1**
 
@@ -159,7 +159,7 @@ Plans:
 
 **Gap Closure** *(from 09-VERIFICATION.md CR-01 — dual hotkey-registry double-dispatch)*
 
-- [ ] 09-10-PLAN.md — Consolidate to a single hotkey registry (keep HOTKEY_BINDINGS, remove the redundant MACRO_TRIGGER_KEYS on both platforms; refresh via reevaluate_all_macros) so a card-edit-assigned hotkey dispatches ToggleMacroHotkey exactly once per keypress instead of twice (self-cancelling no-op); fix applied symmetrically to Windows (identical latent defect) + single-registry regression test (EXEC-01, EXEC-02)
+- [x] 09-10-PLAN.md — Consolidate to a single hotkey registry (keep HOTKEY_BINDINGS, remove the redundant MACRO_TRIGGER_KEYS on both platforms; refresh via reevaluate_all_macros) so a card-edit-assigned hotkey dispatches ToggleMacroHotkey exactly once per keypress instead of twice (self-cancelling no-op); fix applied symmetrically to Windows (identical latent defect) + single-registry regression test (EXEC-01, EXEC-02)
 
 ### Phase 10: UI Redesign & Macro Management
 
@@ -189,5 +189,5 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 9/9 | In Progress|  |
+| 9. Parallel Macro Execution | v2.0 | 10/10 | In Progress|  |
 | 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |

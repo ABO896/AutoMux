@@ -14,8 +14,8 @@
 
 ### Parallel Macro Execution
 
-- [ ] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A
-- [ ] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS
+- [x] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A *(scheduler parallel-execution mechanism ships 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10 — single HOTKEY_BINDINGS registry, redundant registry removed; on-device human verification — T9.8 single-keypress toggle — pending)*
+- [x] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS *(identical latent CR-01 defect closed symmetrically in 09-10; real-device Windows confirmation — tests 6.1-6.3 — remains blocked_by physical-device, carried forward unchanged)*
 
 ### Macro Management
 
@@ -100,8 +100,8 @@
 | CI-05 | Phase 7 | Complete |
 | SAFE-04 | Phase 7 | Complete |
 | ERR-01 | Phase 7 | Complete |
-| EXEC-01 | Phase 9 | Gaps Found |
-| EXEC-02 | Phase 9 | Gaps Found |
+| EXEC-01 | Phase 9 | Complete (parallel scheduler shipped 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10; on-device T9.8 human verification pending) |
+| EXEC-02 | Phase 9 | Complete (identical CR-01 defect closed symmetrically 09-10; Windows physical-device tests 6.1-6.3 remain blocked_by physical-device, unchanged from 09-VERIFICATION.md) |
 | UX-08 | Phase 10 | Pending |
 | UX-09 | Phase 10 | Pending |
 | UX-10 | Phase 10 | Pending |
@@ -119,3 +119,5 @@
 ---
 *Requirements defined: 2026-06-02*
 *Last updated: 2026-06-30 — UX-11/UX-12/UX-14 user-facing surfaces complete (plan 08-05: ConflictErrorToast, ConflictWarningRegion, FirstRunGlobalNotice, ↗ Global subtitle, ModifierPreviewChip); UX-13 frontend complete; UX-14 platform verification complete (plan 08-06: 08-VERIFICATION.md gate artifact + manual device test plans; 4/4 automated gates green, 1 gate deferred to CI per plan)*
+
+*Updated 2026-07-22 — EXEC-01/EXEC-02 complete at the source level (plan 09-10: CR-01 dual hotkey-registry double-dispatch gap closed symmetrically on macOS and Windows, consolidating to the single HOTKEY_BINDINGS registry); on-device human verification (T9.8 macOS, Windows tests 6.1-6.3) remains pending, unchanged in disposition from 09-VERIFICATION.md*

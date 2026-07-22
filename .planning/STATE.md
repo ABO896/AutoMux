@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed 09-09-PLAN.md
-last_updated: "2026-07-22T15:38:18.816Z"
+stopped_at: Completed 09-10-PLAN.md (CR-01 gap closure, final plan of Phase 9)
+last_updated: "2026-07-22T17:08:08.285Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
+  total_plans: 24
+  completed_plans: 24
   percent: 83
 ---
 
@@ -26,10 +26,12 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — EXECUTING
-Plan: 2 of 9
-Next: Phase 8 manual device verification (Sections 5 + 6 of 08-VERIFICATION.md) — human execution on real macOS + Windows hosts; once marked done, Phase 9 (Parallel Macro Execution) can start
-Status: Ready to execute
+Phase: 09 (parallel-macro-execution) — 10/10 plans executed
+Plan: 10 of 10 (complete)
+Next: Phase 9 code work is done; on-device human verification (T9.8 macOS single-keypress toggle + Windows physical-device tests 6.1-6.3) remains outstanding before the phase can be marked fully Complete. Phase 10 (UI redesign) may begin once outstanding human-verification items are addressed or explicitly accepted as deferred.
+Status: All 10 plans executed; awaiting human device verification
+
+Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
 ```
 Progress: [██████████] 100% (plans 14/14 complete in v2.0)
@@ -43,7 +45,7 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
 | 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
-| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Ready to execute (3 plans, 2 waves — planned ahead of Phase 8 device verification) |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | In Progress (10/10 plans done; CR-01 hotkey double-dispatch gap closed at source level in 09-10; awaiting on-device human verification — T9.8 macOS + Windows tests 6.1-6.3) |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
 
 ## Accumulated Context
@@ -80,9 +82,9 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-22T15:38:18.809Z
-Stopped at: Completed 09-09-PLAN.md
-Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6.1–6.5 on Windows, then mark Sections 5+6 of 08-VERIFICATION.md as done); once those pass, Phase 9 (Parallel Macro Execution) can start.
+Last session: 2026-07-22T17:07:55.584Z
+Stopped at: Completed 09-10-PLAN.md (CR-01 gap closure, final plan of Phase 9)
+Next: Phase 9 is fully executed (10/10 plans); CR-01 is closed at the source level on both platforms. Remaining before Phase 9 can be marked Complete: on-device human verification of T9.8 (macOS single-keypress toggle) and Windows physical-device tests 6.1-6.3. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9's progress. Phase 10 (UI redesign) may begin once outstanding human-verification items are addressed or explicitly accepted as deferred.
 
 ## Performance Metrics
 
@@ -111,6 +113,7 @@ Next: Phase 8 manual device verification (run Tests 5.1–5.6 on macOS + Tests 6
 | Phase 09 P07 | 20min | 2 tasks | 1 files |
 | Phase 09 P08 | 5min | 2 tasks | 1 files |
 | Phase 09 P09 | 10min | 2 tasks | 2 files |
+| Phase 09 P10 | 5min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -151,3 +154,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 7] G-09-1a/G-09-1c gap closure: narrowed CGEventTap event mask to 8 consumed types (removes permanent post-stop responsiveness tax) and hardened NSWorkspace active-app observer (explicit registration-failure logging, userInfo-based active-app reads with frontmostApplication() fallback, debug-instrumented active-app-changed logging). Kept raw msg_send! registration over the typed addObserverForName_object_queue_usingBlock API because the typed method's non-Optional return type cannot represent a registration failure.
 - [Phase ?]: [Phase 9 Plan 8] G-09-1b/G-09-1c gap closure: added handleRemoveMacro handler + per-card delete button (mirrors handleDeleteProfile conventions, no manual state refresh — relies on existing state-changed broadcast), and bound value={macro.target_app ?? ""} on the card-edit target select to fix the uncontrolled-dropdown display bug.
 - [Phase ?]: Phase 9 Plan 9: Chose backend rename_all direction over frontend camelCase rename for the IPC argument-casing sweep, since the frontend already sends snake_case keys verbatim; closed 09-VERIFICATION.md gaps #10/#11.
+- [Phase ?]: [Phase 9 Plan 10] CR-01 final closure: consolidated to single HOTKEY_BINDINGS registry on both platforms (refreshed unconditionally from reevaluate_all_macros, before the engine-active early-return); deleted the redundant MACRO_TRIGGER_KEYS registry and its per-platform keydown/hook lookup block entirely, closing the dual-registry double-dispatch self-cancel bug symmetrically on macOS and Windows.
