@@ -156,7 +156,18 @@ pub enum Intent {
     RemoveMacro(Uuid),
     SetMacroEnabled(Uuid, bool),
     SetMacroTargetApp(Uuid, Option<String>),
-    SetMacroTriggerKey(Uuid, Option<u16>, Option<u64>),
+    /// 09-11 gap-closure (Gap 2 / Windows): the oneshot sender carries the
+    /// conflict result back to the IPC caller — `Ok(())` if the key was
+    /// free (or a clear / self-rebind), `Err(msg)` if a DIFFERENT macro
+    /// already owns the requested (keycode, modifiers) pair. On `Err` the
+    /// existing binding is left untouched (no silent coerce-to-None/0).
+    /// Mirrors `BindHotkey`'s reply pattern.
+    SetMacroTriggerKey(
+        Uuid,
+        Option<u16>,
+        Option<u64>,
+        tokio::sync::oneshot::Sender<Result<(), String>>,
+    ),
     /// UX-11: Bind a trigger key for an existing macro. The oneshot sender
     /// carries the conflict result back to the IPC caller — `Ok(())` if the
     /// slot was free or this macro already owned it, `Err(msg)` otherwise.
@@ -200,6 +211,31 @@ pub struct StateActor {
     input_provider: crate::platform::macos::MacInputProvider,
     #[cfg(target_os = "windows")]
     input_provider: crate::platform::windows::WindowsInputProvider,
+}
+
+/// 09-11 gap-closure (Gap 2 / Windows): resolve a `SetMacroTriggerKey`
+/// request into either the values to apply or the conflicting macro's id.
+///
+/// - `trigger_key = Some(key)`: runs the same conflict check `BindHotkey`
+///   uses. A DIFFERENT macro holding `(key, modifiers)` yields
+///   `Err(conflicting_id)` — the caller MUST NOT mutate state on `Err`.
+/// - `trigger_key = None` (a clear): always `Ok((None, mods))` — clearing
+///   a binding is never a conflict.
+/// - Self-rebind (the request's `id` already owns the key): `check_trigger_key_conflict`
+///   returns `None` for the self-id match, so this resolves to `Ok`.
+pub(crate) fn resolve_trigger_key_update(
+    state: &AppState,
+    id: Uuid,
+    trigger_key: Option<u16>,
+    trigger_modifiers: Option<u64>,
+) -> Result<(Option<u16>, u64), Uuid> {
+    let new_mods = trigger_modifiers.unwrap_or(0);
+    if let Some(key) = trigger_key {
+        if let Some(conflicting_id) = check_trigger_key_conflict(state, id, key, new_mods) {
+            return Err(conflicting_id);
+        }
+    }
+    Ok((trigger_key, new_mods))
 }
 
 /// UX-11: Return the existing macro_id that holds the given (keycode, modifiers)
@@ -555,33 +591,47 @@ impl StateActor {
                 self.recompute_conflicts();
                 self.auto_save_default().await;
             }
-            Intent::SetMacroTriggerKey(id, trigger_key, trigger_modifiers) => {
-                // UX-11: Same pre-check as AddMacro. If a DIFFERENT macro
-                // already holds the requested (keycode, modifiers) pair, drop
-                // the trigger (set to None / 0) on the existing macro instead
-                // of applying the change. Self-rebind (same id) is allowed
-                // and falls through to the apply branch — `check_trigger_key_conflict`
-                // returns None for self_id matches, so the conflict branch
-                // is not entered. See T-08-08 / T-08-12 in 08-02-PLAN.md.
-                let mut new_key = trigger_key;
-                let mut new_mods = trigger_modifiers.unwrap_or(0);
-                if let Some(key) = new_key {
-                    if let Some(_conflicting_id) =
-                        self.check_trigger_key_conflict(id, key, new_mods)
-                    {
-                        new_key = None;
-                        new_mods = 0;
+            Intent::SetMacroTriggerKey(id, trigger_key, trigger_modifiers, reply) => {
+                // 09-11 gap-closure (Gap 2 / Windows): reject-on-conflict via
+                // a Result-carrying oneshot, mirroring `Intent::BindHotkey`.
+                // The old behavior silently coerced a conflicting key to
+                // None/0 with no reply — this destroyed a working binding
+                // with zero user feedback. `resolve_trigger_key_update`
+                // returns `Err(conflicting_id)` on a genuine conflict; on
+                // `Err` we send the conflict message and RETURN WITHOUT
+                // mutating any macro, preserving the existing binding.
+                match resolve_trigger_key_update(&self.state, id, trigger_key, trigger_modifiers)
+                {
+                    Err(conflicting_id) => {
+                        // Defensive fallback (mirrors BindHotkey): the
+                        // conflicting macro could theoretically have been
+                        // removed between the check and this lookup.
+                        let conflicting_name = self
+                            .state
+                            .macros
+                            .get(&conflicting_id)
+                            .map(|m| m.name.clone())
+                            .unwrap_or_else(|| format!("{:?}", conflicting_id));
+                        let msg = format!(
+                            "Key (keycode {}) is already assigned to \"{}\". Unbind it first or pick a different key.",
+                            trigger_key.unwrap_or_default(),
+                            conflicting_name
+                        );
+                        let _ = reply.send(Err(msg));
+                    }
+                    Ok((new_key, new_mods)) => {
+                        if let Some(mac) = self.state.macros.get_mut(&id) {
+                            mac.trigger_key = new_key;
+                            mac.trigger_modifiers = new_mods;
+                        }
+                        self.reevaluate_all_macros().await;
+                        // UX-12: refresh derived `conflicts` after a
+                        // successful trigger-key update.
+                        self.recompute_conflicts();
+                        self.auto_save_default().await;
+                        let _ = reply.send(Ok(()));
                     }
                 }
-                if let Some(mac) = self.state.macros.get_mut(&id) {
-                    mac.trigger_key = new_key;
-                    mac.trigger_modifiers = new_mods;
-                }
-                self.reevaluate_all_macros().await;
-                // UX-12: refresh derived `conflicts` after a successful
-                // (or coerced) trigger-key update.
-                self.recompute_conflicts();
-                self.auto_save_default().await;
             }
             Intent::BindHotkey(macro_id, keycode, modifiers, reply) => {
                 // UX-11: Conflict pre-check. If a DIFFERENT macro already holds
@@ -970,6 +1020,50 @@ mod tests {
         );
         // Different keycode → no conflict.
         assert_eq!(check_trigger_key_conflict(&state, id_a, 97, 0), None);
+    }
+
+    /// 09-11 gap-closure (Gap 2 / Windows) regression test:
+    /// `resolve_trigger_key_update` rejects a genuine conflict with
+    /// `Err(conflicting_id)` instead of the old silent coerce-to-None/0
+    /// behavior, while still allowing a free key, a clear, and a
+    /// self-rebind.
+    #[test]
+    fn set_trigger_key_rejects_conflict_without_coercion() {
+        let mut state = AppState::default();
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+        state.macros.insert(
+            id_a,
+            make_macro(id_a, "alpha", Some(96), 0, ActionSequence::default()),
+        );
+        state.macros.insert(
+            id_b,
+            make_macro(id_b, "beta", None, 0, ActionSequence::default()),
+        );
+
+        // B requesting A's key (96) is a genuine conflict — rejected, not coerced.
+        assert_eq!(
+            resolve_trigger_key_update(&state, id_b, Some(96), Some(0)),
+            Err(id_a)
+        );
+
+        // A free keycode (97) for B is allowed.
+        assert_eq!(
+            resolve_trigger_key_update(&state, id_b, Some(97), Some(0)),
+            Ok((Some(97), 0))
+        );
+
+        // Clearing the key is always allowed, never a conflict.
+        assert_eq!(
+            resolve_trigger_key_update(&state, id_b, None, Some(0)),
+            Ok((None, 0))
+        );
+
+        // Self-rebind (A requesting its own key) is not a conflict.
+        assert_eq!(
+            resolve_trigger_key_update(&state, id_a, Some(96), Some(0)),
+            Ok((Some(96), 0))
+        );
     }
 
     /// UX-12: Two enabled macros sharing the same `InputEvent` appear in

@@ -142,6 +142,9 @@ pub async fn list_running_apps() -> Result<Vec<RunningApp>, String> {
 /// `HOTKEY_BINDINGS` registry, rebuilt in `reevaluate_all_macros` on every
 /// trigger_key mutation (CR-01 gap-closure, plan 09-10).
 /// `modifiers`: platform-native bitmask (CGEventFlags on macOS, MOD_* on Windows).
+/// 09-11 gap-closure (Gap 2 / Windows): now rejects a conflicting rebind via
+/// a `Result`-carrying oneshot reply — mirrors `bind_hotkey` — instead of
+/// silently coercing the conflicting key to None/0 with an always-Ok reply.
 #[command(rename_all = "snake_case")]
 pub async fn set_macro_trigger_key(
     state: State<'_, StateManager>,
@@ -149,10 +152,12 @@ pub async fn set_macro_trigger_key(
     trigger_key: Option<u16>,
     modifiers: Option<u64>,
 ) -> Result<(), String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
     state
-        .send_intent(Intent::SetMacroTriggerKey(id, trigger_key, modifiers))
+        .send_intent(Intent::SetMacroTriggerKey(id, trigger_key, modifiers, tx))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    rx.await.map_err(|e| e.to_string())?
 }
 
 /// Toggle the global engine on/off.
