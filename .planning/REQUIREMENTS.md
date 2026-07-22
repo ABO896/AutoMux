@@ -14,8 +14,8 @@
 
 ### Parallel Macro Execution
 
-- [x] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A
-- [x] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS
+- [ ] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A
+- [ ] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS
 
 ### Macro Management
 
@@ -100,8 +100,8 @@
 | CI-05 | Phase 7 | Complete |
 | SAFE-04 | Phase 7 | Complete |
 | ERR-01 | Phase 7 | Complete |
-| EXEC-01 | Phase 9 | Complete |
-| EXEC-02 | Phase 9 | Complete |
+| EXEC-01 | Phase 9 | Gaps Found |
+| EXEC-02 | Phase 9 | Gaps Found |
 | UX-08 | Phase 10 | Pending |
 | UX-09 | Phase 10 | Pending |
 | UX-10 | Phase 10 | Pending |
