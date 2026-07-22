@@ -14,8 +14,8 @@
 
 ### Parallel Macro Execution
 
-- [x] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A *(scheduler parallel-execution mechanism ships 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10 — single HOTKEY_BINDINGS registry, redundant registry removed; on-device human verification — T9.8 single-keypress toggle — pending)*
-- [x] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS *(identical latent CR-01 defect closed symmetrically in 09-10; real-device Windows confirmation — tests 6.1-6.3 — remains blocked_by physical-device, carried forward unchanged)*
+- [ ] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A *(scheduler parallel-execution mechanism ships 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10 — single HOTKEY_BINDINGS registry, redundant registry removed; on-device human verification — T9.8 single-keypress toggle — pending)*
+- [ ] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS *(identical latent CR-01 defect closed symmetrically in 09-10; real-device Windows confirmation — tests 6.1-6.3 — remains blocked_by physical-device, carried forward unchanged)*
 
 ### Macro Management
 
