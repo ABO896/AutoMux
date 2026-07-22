@@ -753,12 +753,27 @@ impl StateActor {
     }
 
     async fn reevaluate_all_macros(&self) {
+        // CR-01 fix: HOTKEY_BINDINGS is the single source of truth for hotkey
+        // dispatch (the richer, action-typed Phase-8 registry). Refresh it here,
+        // unconditionally and BEFORE the engine-active early-return below, so it
+        // stays current on every trigger_key mutation (AddMacro, SetMacroTriggerKey,
+        // BindHotkey, UnbindHotkey, LoadProfile, RemoveMacro all call this method)
+        // independent of engine on/off state. This is the sole registry-refresh
+        // site for comprehensive coverage — the second, redundant registry that
+        // used to be populated below is removed entirely.
+        let bindings = build_hotkey_bindings_vec(&self.state.macros);
+        #[cfg(target_os = "macos")]
+        {
+            crate::platform::macos::observer::update_hotkey_bindings(bindings);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            crate::platform::windows::update_hotkey_bindings(bindings);
+        }
+
         if self.state.emergency_stop_active || !self.state.engine_active {
             return;
         }
-
-        let mut trigger_keys: std::collections::HashMap<(u16, u64), Uuid> =
-            std::collections::HashMap::new();
 
         for mac in self.state.macros.values() {
             let matches_target = match &mac.target_app {
@@ -777,16 +792,7 @@ impl StateActor {
                     .send(crate::scheduler::SchedulerIntent::StopMacro(mac.id))
                     .await;
             }
-
-            if let Some(key) = mac.trigger_key {
-                trigger_keys.insert((key, mac.trigger_modifiers), mac.id);
-            }
         }
-
-        #[cfg(target_os = "macos")]
-        crate::platform::macos::observer::update_macro_trigger_keys(trigger_keys.clone());
-        #[cfg(target_os = "windows")]
-        crate::platform::windows::update_macro_trigger_keys(trigger_keys);
     }
 
     /// UX-11 wrapper: delegates to the free function so intent handlers can
