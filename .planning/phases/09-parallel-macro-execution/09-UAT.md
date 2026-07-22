@@ -1,16 +1,34 @@
 ---
-status: diagnosed
+status: testing
 phase: 09-parallel-macro-execution
 source: [09-VERIFICATION.md]
 started: 2026-07-21T20:15:00Z
-updated: 2026-07-22T10:45:00Z
+updated: 2026-07-22T21:30:00Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 3
+name: Run T9.1-T9.7 on a real macOS host (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning, held-not-firing indicator, Hold-under-load, responsiveness-after-stop, creation-time targeting)
+expected: |
+  All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other.
+awaiting: user response
 
-## Tests
+## Round 2 Tests (pending — from 2026-07-22 09-VERIFICATION.md re-verification pass)
+
+### 3. macOS device tests (T9.1-T9.7, superset of round-1 T9.1-T9.5 — round 1's perf/delete/targeting gaps are now fixed, retest as part of this pass)
+expected: All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays; a Hold-mode macro shows the static held dot and genuinely holds the input under load; responsiveness returns to baseline after all macros stop (G-09-1a fix); app-targeted macro fires when its target app is focused (G-09-1c fix).
+result: [pending]
+
+### 4. Windows device tests (6.1-6.3)
+expected: All 3 tests pass via SendInput injection and the Win32 hook observer — same concurrent-firing and independent-stop behavior as macOS. Never actually executed on any verification pass for this phase.
+result: [pending]
+
+### 5. (Recommended, not gating) Device-level confirmation of the 09-11 gap-closure fixes
+expected: Held input releases when a Hold-mode macro is disabled / engine toggled off / active app switched / different profile loaded; a rejected hotkey rebind never destroys the original hotkey on either platform, and the conflict toast appears.
+result: [pending]
+
+## Round 1 Tests (resolved — G-09-1a/b/c closed by plans 09-07 and 09-08, confirmed in ROADMAP.md and re-verified with no regression)
 
 ### 1. macOS device tests (T9.1-T9.5)
 expected: All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays; a Hold-mode macro shows the static held dot and genuinely holds the input under load.
@@ -26,18 +44,19 @@ reason: "I cant test windows, so mark as pass for now i want to proceed with fix
 
 ## Summary
 
-total: 2
+total: 3
 passed: 0
-issues: 1
-pending: 0
+issues: 0
+pending: 3
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
 
 - gap_id: G-09-1a
   truth: "AutoMux's performance returns to baseline (no lag) once all macros are disabled/stopped"
-  status: failed
+  status: resolved
+  resolved_by: "09-07-PLAN.md — narrowed CGEventTap event mask to 8 consumed types"
   reason: "User reported: hotkey-triggered global macro at 100ms interval caused laptop lag, and AutoMux remained slowed down even after the macro(s) were turned off"
   severity: major
   test: 1
@@ -58,7 +77,8 @@ blocked: 1
 
 - gap_id: G-09-1b
   truth: "User can delete a macro from within the app"
-  status: failed
+  status: resolved
+  resolved_by: "09-08-PLAN.md — added per-card delete button wired to remove_macro IPC"
   reason: "User reported: there is still not a way to delete macros"
   severity: major
   test: 1
@@ -73,7 +93,8 @@ blocked: 1
 
 - gap_id: G-09-1c
   truth: "A macro targeted to a specific process fires when that process is focused (matching the app's process-targeting feature)"
-  status: failed
+  status: resolved
+  resolved_by: "09-07-PLAN.md (NSWorkspace observer hardening) + 09-08-PLAN.md (controlled target-app select fix)"
   reason: "User reported: global macro worked (despite lag), but a targetted macro did not seem to work"
   severity: major
   test: 1
