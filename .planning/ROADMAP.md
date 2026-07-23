@@ -35,7 +35,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 - [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
 - [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 6/6 plans done; 08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; awaiting human device verification on real macOS + Windows hosts to mark Sections 5+6 done)*
 - [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
-- [ ] **Phase 10: UI Redesign & Macro Management** — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
+- [ ] **Phase 10: UI Redesign & Macro Management** *(planned — 6 plans)* — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
 
 ## Phase Details
 
@@ -178,7 +178,32 @@ Plans:
   4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across restarts
   5. Action type selection displays unambiguous labels — "Left Click", "Right Click", "Hold", "Key Press" — with no unlabeled or ambiguous options
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+**Wave 1**
+
+- [ ] 10-01-PLAN.md — TRACER: Intent::UpdateMacro + update_macro IPC + 3 tests; inline name-edit slice + translucent .glass-card (UX-09, UI-01)
+
+**Wave 2**
+
+- [ ] 10-02-PLAN.md — Design tokens: :root/[data-theme=light]/@theme inline, typography scale, finalized glass + sidebar-glass, theme.ts + boot script (UI-01, UI-03, UI-04)
+
+**Wave 3**
+
+- [ ] 10-03-PLAN.md — Sidebar nav + 3-state theme toggle + window 720×680; early UI-04 perf gate (UI-01, UI-02, UI-03, UI-04)
+
+**Wave 4**
+
+- [ ] 10-04-PLAN.md — KeyCaptureField + MacroForm: two labeled selectors + selectable Key Press (UX-10, UX-09, UI-02)
+
+**Wave 5**
+
+- [ ] 10-05-PLAN.md — MacroCard: inline edit (full UX-09) + inline delete confirmation replacing native dialog (UX-08, UX-09)
+
+**Wave 6**
+
+- [ ] 10-06-PLAN.md — Automated gates + full UI-SPEC checklist human-verify + final UI-04 perf re-confirm (all requirements)
+
 **UI hint**: yes
 
 ## Progress
@@ -194,4 +219,4 @@ Plans:
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
 | 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
-| 10. UI Redesign & Macro Management | v2.0 | 0/TBD | Not started | — |
+| 10. UI Redesign & Macro Management | v2.0 | 0/6 | Planned | — |
