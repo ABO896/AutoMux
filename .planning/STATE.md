@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — EXECUTING
-Plan: 2 of 11
-Next: `/gsd-plan-phase 09 --gaps` created `09-11-PLAN.md` (commit f77de11) closing both Blocker gaps from 09-VERIFICATION.md: (1) an unconditional HoldRelease bypass in StateActor::handle_action so a guaranteed-delivery release is never dropped by Gate 1/2/3 regardless of engine/enabled/target-app state; (2) hotkey-rebind rollback safety on both platforms (macOS: drop the pre-unbind in handleCardSetTriggerKey; Windows: Intent::SetMacroTriggerKey now replies Err on conflict via a Result-carrying oneshot instead of silently coercing to None/0). gsd-plan-checker independently re-verified the plan against source and returned VERIFICATION PASSED. Run `/gsd-execute-phase 09` to execute 09-11, then re-verify. EXEC-01/EXEC-02 remain reverted from Complete in REQUIREMENTS.md pending this closure. Separately, on-device human verification (T9.8 macOS + Windows tests 6.1-6.3) remains outstanding and unaffected by this gap-closure.
-Status: Ready to execute
+Phase: 09 (parallel-macro-execution) — SOURCE-LEVEL COMPLETE (status: human_needed)
+Plan: 11 of 11
+Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
+Status: Source-level complete, awaiting human real-device verification (no further code work pending)
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
 ```
-Progress: [██████████] 100% (plans 14/14 complete in v2.0)
+Progress: [██████████] 100% (plans 25/25 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -45,8 +45,8 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
 | 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
-| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | In Progress (10/10 plans done; CR-01 hotkey double-dispatch gap closed and confirmed at source level; re-verification found 2 NEW Blocker gaps — HoldRelease gating stuck-input risk, hotkey-rebind data loss — gap-closure plan needed; EXEC-01/EXEC-02 reverted from Complete) |
-| 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Source-level complete / human_needed (11/11 plans done; both Blocker gaps — HoldRelease gating stuck-input, hotkey-rebind data loss — closed by 09-11 and independently re-confirmed against source 2026-07-22T21:30:00Z; 16/16 backend tests pass, cargo build + tsc clean; only real-device tests T9.1-T9.7 (macOS) / 6.1-6.3 (Windows) remain, Windows never yet run on-device) |
+| 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | Not started — now unblocked (Phase 9's source-level Blocker gaps are closed; Phase 9 real-device confirmation continues in parallel) |
 
 ## Accumulated Context
 
@@ -83,8 +83,8 @@ Progress: [██████████] 100% (plans 14/14 complete in v2.0)
 **Resume file:** None
 
 Last session: 2026-07-22T18:11:41.363Z
-Stopped at: Completed 09-11-PLAN.md (gap-closure: HoldRelease bypass + hotkey rebind rollback safety)
-Next: Run `/gsd-execute-phase 09` to execute 09-11-PLAN.md (HoldRelease bypass in handle_action + hotkey-rebind rollback safety on both platforms), then re-verify the phase. Full detail in 09-VERIFICATION.md, 09-REVIEW.md, and 09-11-PLAN.md. Separately, Phase 8 still awaits human device verification (Tests 5.1–5.6 macOS + 6.1–6.5 Windows, Sections 5+6 of 08-VERIFICATION.md) — independent of Phase 9. Phase 10 (UI redesign) should wait until Phase 9's Blocker gaps are closed.
+Stopped at: Phase 9 re-verified source-level complete (status human_needed) — plan 09-11's two Blocker-gap fixes (HoldRelease Gate 1/2/3 bypass; hotkey-rebind rollback safety) independently re-confirmed against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z)
+Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Two new out-of-scope Critical findings (LoadProfile data loss; Windows hook injected-event filtering) were filed as todos in .planning/todos/pending/.
 
 ## Performance Metrics
 
