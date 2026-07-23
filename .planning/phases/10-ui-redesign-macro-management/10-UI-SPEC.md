@@ -1,10 +1,11 @@
 ---
 phase: 10
 slug: ui-redesign-macro-management
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-07-23
+reviewed_at: 2026-07-23
 ---
 
 # Phase 10 — UI Design Contract
@@ -235,18 +236,21 @@ All copy remains **platform-agnostic** (no "macOS"/"Windows" branching in user-f
 
 ## UI Considerations
 
-Applicable state considerations resolved: 9 covered, 2 backstop, 0 unresolved.
+Applicable state considerations resolved: 10 covered, 4 backstop, 0 unresolved. (Ran via the `ui-consideration-probe` engine across 11 named surfaces — sidebar, theme toggle, macro card list, delete confirmation, inline edit form, target-app dropdown, Input selector, Mode selector, key-capture widget, profile list, macro card header text — 67 raw applicable rows; most were dismissed as structurally inapplicable, e.g. `empty`/`loading`/`error` on the static 2-item sidebar or the fixed-option Input/Mode selectors. Two genuine gaps not caught by the manual pass are added below: E3-loading and E4-error.)
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
 | empty | macro list | ✅ covered | Empty-state card with icon, heading `No macros configured yet.`, CTA `+ Create Your First Macro` — unchanged copy, restyled to new Display typography role |
 | empty | profile list | ✅ covered | `No saved profiles yet.` / `Save your current configuration above.` — unchanged |
 | loading | target-app dropdown (create + edit forms) | ✅ covered | Existing `<option disabled>Loading…</option>` pattern, carried forward unchanged into both the create form and the new inline-edit form |
+| loading | macro card list — initial cold-boot population | 🧪 backstop | The macro list is populated from the existing `get_state` IPC snapshot on app boot (unchanged StateActor pattern), not a network fetch, so no dedicated loading spinner/skeleton is added — but no explicit contract previously stated this. Contract: on cold boot, render the empty-state card (not a blank/flash-of-nothing region) until the first `state-changed` payload arrives; since the IPC round-trip is local and sub-frame in practice, this should be visually imperceptible. Verification: executor/checker should confirm no visible flash of an unstyled or blank list region between window paint and first content on a cold launch. |
 | error | target-app dropdown fetch failure | ✅ covered | Existing `Failed to load apps` disabled option, carried forward |
 | error | hotkey/action IPC failure (conflict) | ✅ covered | Existing Phase 8 `ConflictErrorToast` (C-1), unchanged copy and trigger sites; extended to also fire from the new inline-edit form's key-capture commit path |
+| error | delete-macro IPC failure (`remove_macro` rejects) | 🧪 backstop | Not previously specified — the Interaction Contract (UX-08) only documents the success path. Contract: on `remove_macro` failure, reuse the existing `profileMessage`-style inline error banner pattern (CONVENTIONS.md's toast-with-auto-dismiss convention) with copy `Delete failed` / `Could not delete this macro. Try again.`; the card's confirmation state (C-D1) stays open (does not silently revert to normal display) so the user can retry. No new component — reuses the existing message-banner pattern. Backstop (not "covered") because the exact banner placement/wiring is left to the planner/executor; verification requires confirming the error path is reachable and the card doesn't silently lose the user's Delete intent. |
 | populated | macro card list | ✅ covered | Card list with running-state dot, target/trigger meta row, step chips — carried forward from Phase 9, restyled |
 | partial | mixed macro running states (firing/held/waiting/combined/disabled) | ✅ covered | `computeRunningState` (Phase 9) is unchanged logic; only the dot/label styling is restyled to the new token set — no new states introduced |
 | zero-one-many | macro card list count | ✅ covered | 0 → empty-state card; 1..N → scrollable `flex flex-col gap-2` list, unchanged structural pattern |
+| long-text | key-capture widget modifier display (Key Press input + hotkey binding) | ✅ covered | Modifiers render as discrete chips (one per key, per Phase 8 `ModifierPreviewChip`), not a single concatenated string — there is no unbounded-length string to truncate; each chip's own text is a short fixed key-name/symbol, already within the Label typography role's normal sizing. |
 | destructive-confirm | delete macro | ✅ covered | D-14: inline in-card confirmation state (see Component Inventory C-D1) replaces `window.confirm()`; exact copy above |
 | overflow | long macro name / long target-app identifier in card header | 🧪 backstop | Card header uses `truncate` (Tailwind `overflow-hidden text-ellipsis whitespace-nowrap`) on the macro-name `<span>` and the target-app `<span>`, with a native `title="{full value}"` attribute for hover-reveal of the untruncated string. No dedicated tooltip component is introduced (matches the zero-new-dependency convention). Verification requires an executor/checker visual check with a deliberately long name (e.g. 60+ char macro name, a long reverse-DNS bundle ID like `com.mycompany.internal.reallylongapplicationname`) — no explicit backend truncation exists to test against automatically. |
 | long-text | delete-confirmation heading with a long macro name | 🧪 backstop | Same `truncate` + `title` treatment applies inside the confirmation heading `Delete "{macro name}"?` — the quoted name portion truncates, the surrounding literal text (`Delete "` / `"?`) never truncates. Needs the same manual long-name visual check as the row above. |
@@ -453,6 +457,8 @@ Before declaring this phase complete, the executor MUST verify:
 - [ ] `✕` Delete button opens the **C-D1** inline confirmation (`Delete "{name}"?` / `This can't be undone.` / `Cancel` / `Delete`) — NOT `window.confirm()`.
 - [ ] Confirming delete removes the macro from the list; canceling leaves it untouched.
 - [ ] Long macro names and long target-app identifiers truncate with `title`-attribute hover-reveal in both the card header and the delete-confirmation heading.
+- [ ] No visible flash of a blank/unstyled macro-list region between window paint and first content on a cold app launch (empty-state card renders as the placeholder until the first `state-changed` payload arrives).
+- [ ] A failed `remove_macro` call (e.g. simulate by triggering delete during a backend error condition) shows an inline `Delete failed` error banner and leaves the card's confirmation state open — it does not silently discard the user's delete intent.
 - [ ] No new npm dependencies were added (`package.json` diff is empty except for version bumps, if any).
 - [ ] No new spacing values outside the 4/8/16/24/32/48/64 scale (plus the declared 84px sidebar-width and 24px chip-touch-target exceptions); modifier chip micro-padding is `px-2 py-1` (8px/4px), not the old `px-1.5 py-0.5`.
 - [ ] Exactly 4 typography size roles (20/15/13/11px) and exactly 2 weights (400 regular for Body, 600 semibold for Display/Heading/Label) — no exceptions anywhere, including chip/badge text and nav-item labels.
@@ -464,11 +470,11 @@ Before declaring this phase complete, the executor MUST verify:
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-07-23 (1 revision cycle — Typography and Spacing blockers resolved; UI-consideration probe run post-approval, 2 additional gaps added as backstop items)
