@@ -5,8 +5,8 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 09
 current_phase_name: parallel-macro-execution
 status: executing
-stopped_at: Completed quick task 260723-k9l (Fix LoadProfile failure wiping all macros)
-last_updated: "2026-07-23T12:52:18.057Z"
+stopped_at: Completed quick task 260723-krr (Fix Windows keyboard hook not filtering injected keystrokes)
+last_updated: "2026-07-23T13:09:25.807Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -82,9 +82,9 @@ Progress: [██████████] 100% (plans 25/25 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-23T12:52:05.306Z
-Stopped at: Completed quick task 260723-k9l (Fix LoadProfile failure wiping all macros)
-Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Two new out-of-scope Critical findings were filed as todos: LoadProfile data loss was resolved via quick task 260723-k9l (fix + regression test, moved to .planning/todos/completed/); Windows hook injected-event filtering remains open in .planning/todos/pending/.
+Last session: 2026-07-23T13:08:54.298Z
+Stopped at: Completed quick task 260723-krr (Fix Windows keyboard hook not filtering injected keystrokes)
+Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
 
@@ -92,6 +92,7 @@ Next: Phase 9 routes to human real-device verification only — macOS tests T9.1
 |---|-------------|------|--------|-----------|
 | 260723-jt3 | Reconcile Phase 9 planning docs: fix stale STATE.md continuity text, reconcile REQUIREMENTS.md EXEC-01/EXEC-02 annotations with 09-VERIFICATION.md, file two new backlog items (LoadProfile data loss, Windows hook injected-keystroke filtering) | 2026-07-23 | 6e76eb6 | [260723-jt3-reconcile-phase-9-planning-docs-fix-stal](./quick/260723-jt3-reconcile-phase-9-planning-docs-fix-stal/) |
 | 260723-k9l | Fix LoadProfile failure wiping all macros (memory + disk): reordered Intent::LoadProfile so macros.clear()/auto_save_default() run only on a successful load, Err branch restarts scheduler tasks without persisting; added persistence-layer regression test; closed backlog item 09-REVIEW-CR-01 | 2026-07-23 | 88ee2a7 | [260723-k9l-fix-loadprofile-failure-wiping-all-macro](./quick/260723-k9l-fix-loadprofile-failure-wiping-all-macro/) |
+| 260723-krr | Fix Windows keyboard hook not filtering injected keystrokes (CR-02): added flags_indicate_injected predicate + hook_callback gating so a macro's own SendInput-synthesized keystroke can no longer self-trigger the Ctrl+Shift+Q emergency stop or another macro's hotkey binding; closed backlog item | 2026-07-23 | 6ab0b66 | [260723-krr-fix-windows-keyboard-hook-not-filtering-](./quick/260723-krr-fix-windows-keyboard-hook-not-filtering-/) |
 
 ## Performance Metrics
 
@@ -165,3 +166,4 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 10] CR-01 final closure: consolidated to single HOTKEY_BINDINGS registry on both platforms (refreshed unconditionally from reevaluate_all_macros, before the engine-active early-return); deleted the redundant MACRO_TRIGGER_KEYS registry and its per-platform keydown/hook lookup block entirely, closing the dual-registry double-dispatch self-cancel bug symmetrically on macOS and Windows.
 - [Phase ?]: [Phase 9 Plan 11] Gap-closure: action_should_inject free fn gives HoldRelease an unconditional Gate 1/2/3 bypass in handle_action (stuck-input fix); resolve_trigger_key_update + Result-carrying SetMacroTriggerKey oneshot rejects conflicting Windows rebinds instead of silently coercing to None/0; macOS handleCardSetTriggerKey no longer pre-unbinds before bind_hotkey, relying on its overwrite-on-success/preserve-on-conflict semantics. Closes both Blocker gaps from 09-VERIFICATION.md.
 - [Phase ?]: [Quick 260723-k9l]: Gated Intent::LoadProfile's macros.clear()+auto_save_default() behind a successful profile load (Ok branch only); Err branch restarts scheduler tasks via reevaluate_all_macros() without persisting. Closes 09-REVIEW.md CR-01 data-loss bug; regression test added in persistence.rs.
+- [Phase ?]: [Quick 260723-krr]: Fixed Windows keyboard hook missing LLKHF_INJECTED filter (09-REVIEW.md CR-02) — added flags_indicate_injected predicate + hook_callback gating so a macro's own SendInput-synthesized keystroke can no longer self-trigger the Ctrl+Shift+Q emergency stop or another macro's hotkey binding, mirroring the macOS CGEventTap's existing LLMHF_INJECTED guard. Predicate + tests relocated to platform/mod.rs mid-execution because pub mod windows; is itself cfg(target_os=windows)-gated, making anything defined inside windows/mod.rs untestable on macOS regardless of its own gating. Closed backlog item.
