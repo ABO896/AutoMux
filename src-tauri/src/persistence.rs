@@ -318,4 +318,75 @@ mod tests {
             json_size_kb
         );
     }
+
+    /// T-k9l-01 / 09-REVIEW.md CR-01 / 09-VERIFICATION.md Out-of-Scope Finding #1:
+    /// guards the durable data-safety contract that `Intent::LoadProfile`'s Task-1
+    /// handler fix depends on — a failed `load_profile()` must never overwrite
+    /// `default.json` and must leave a previously saved profile fully intact on
+    /// disk. The in-memory `state.macros` preservation asserted by that fix is
+    /// verified structurally in the handler itself (Task 1); a `StateActor`-level
+    /// test is infeasible here because `StateActor.app_handle` is a concrete
+    /// `tauri::AppHandle<Wry>` that cannot be produced headlessly, which is why
+    /// this whole suite tests at the `AppState`/`ProfileData`/`ProfileManager`
+    /// layer instead.
+    #[tokio::test]
+    async fn failed_load_does_not_wipe_saved_default_profile() {
+        let dir = std::env::temp_dir().join(format!("automux_test_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mgr = ProfileManager {
+            profiles_dir: dir.clone(),
+        };
+
+        let mut macros = HashMap::new();
+        for i in 0..2 {
+            let id = Uuid::new_v4();
+            macros.insert(
+                id,
+                MacroConfig {
+                    id,
+                    name: format!("Macro_{}", i),
+                    interval_ms: 100,
+                    enabled: true,
+                    target_app: None,
+                    trigger_key: None,
+                    trigger_modifiers: 0,
+                    trigger_mode: crate::state::TriggerMode::Pulse,
+                    sequence: ActionSequence {
+                        steps: vec![ActionStep::InterleavedInterval {
+                            input: InputEvent::MouseButton(MouseButton::Left),
+                            interval_ms: 100,
+                        }],
+                    },
+                },
+            );
+        }
+
+        let profile = ProfileData {
+            name: "default".to_string(),
+            macros,
+            engine_active: true,
+        };
+        mgr.save_profile(&profile).await.unwrap();
+
+        let before = std::fs::read_to_string(dir.join("default.json")).unwrap();
+
+        let result = mgr.load_profile("does-not-exist-xyz").await;
+        assert!(
+            result.is_err(),
+            "loading a nonexistent profile must return Err"
+        );
+
+        let after = std::fs::read_to_string(dir.join("default.json")).unwrap();
+        assert_eq!(before, after, "a failed load must not modify default.json");
+
+        let reloaded = mgr.load_profile("default").await.unwrap();
+        assert_eq!(
+            reloaded.macros.len(),
+            2,
+            "a failed load must not wipe saved macros"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
