@@ -490,12 +490,44 @@ fn build_mod_mask() -> u64 {
     m
 }
 
+/// @safety-officer: LLKHF_INJECTED marks a `WH_KEYBOARD_LL` event as
+/// `SendInput`/`keybd_event`-synthesized. `hook_callback` MUST treat these
+/// identically to the macOS CGEventTap's `LLMHF_INJECTED` guard
+/// (`platform/macos/observer.rs:279-281`) by skipping the emergency-stop
+/// check AND hotkey matching, or a macro's own injected keystroke can
+/// self-trigger a toggle or emergency stop (CR-02,
+/// `.planning/todos/pending/2026-07-23-windows-hook-injected-event-filtering.md`).
+//
+// Not gated to `target_os = "windows"` — it takes and returns only plain
+// `u32`/`bool`, so it compiles (and is unit-testable) on every host, unlike
+// `hook_callback` itself which only compiles on Windows.
+//
+// `#[allow(dead_code)]`: on non-Windows hosts `hook_callback` (its only
+// caller) is compiled out by its own `#[cfg(target_os = "windows")]`, which
+// would otherwise make this ungated function trip
+// `cargo clippy --all-targets -- -D warnings`; the attribute is inert on
+// Windows, where the function is genuinely called.
+#[allow(dead_code)]
+fn flags_indicate_injected(flags: u32) -> bool {
+    // Win32 `winuser.h` constant, stable since Windows 2000 — same
+    // "hardcode the stable Win32 constant with a citation comment" pattern
+    // already used for MOD_ALT/MOD_CONTROL/MOD_SHIFT/MOD_WIN in the
+    // `windows_mod_constants` test below.
+    const LLKHF_INJECTED: u32 = 0x0000_0010;
+    flags & LLKHF_INJECTED != 0
+}
+
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if ncode >= 0 {
         let kb_struct = *(lparam.0 as *const KBDLLHOOKSTRUCT);
         let msg_id = wparam.0 as u32;
-        if msg_id == WM_KEYDOWN || msg_id == WM_SYSKEYDOWN {
+        // CR-02: skip the emergency-stop check AND hotkey matching for
+        // SendInput-injected events — mirrors the macOS CGEventTap's
+        // LLMHF_INJECTED guard at platform/macos/observer.rs:279-281.
+        if (msg_id == WM_KEYDOWN || msg_id == WM_SYSKEYDOWN)
+            && !flags_indicate_injected(kb_struct.flags)
+        {
             let keycode = kb_struct.vkCode as u16;
 
             // Emergency stop check: Ctrl + Shift + Q
