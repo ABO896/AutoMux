@@ -14,8 +14,8 @@
 
 ### Parallel Macro Execution
 
-- [ ] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A *(scheduler parallel-execution mechanism ships 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10 — single HOTKEY_BINDINGS registry, redundant registry removed; on-device human verification — T9.8 single-keypress toggle — pending)*
-- [ ] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS *(identical latent CR-01 defect closed symmetrically in 09-10; real-device Windows confirmation — tests 6.1-6.3 — remains blocked_by physical-device, carried forward unchanged)*
+- [ ] **EXEC-01**: Multiple macros can run simultaneously on macOS — triggering macro B while macro A is running does not block, queue, or cancel macro A *(scheduler parallel-execution mechanism ships 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10 — single HOTKEY_BINDINGS registry, redundant registry removed; two further Blocker gaps — the HoldRelease Gate 1/2/3 bypass in `handle_action`/`action_should_inject` and hotkey-rebind rollback safety — closed by plan 09-11 and re-confirmed closed by the 09-VERIFICATION.md re-verification (2026-07-22T21:30:00Z); source-level reliability is complete — on-device human verification (macOS T9.1-T9.7) is the sole pending item)*
+- [ ] **EXEC-02**: Multiple macros can run simultaneously on Windows — same parallel behavior as macOS *(identical latent CR-01 defect closed symmetrically in 09-10; the 09-11 HoldRelease-bypass fix is shared code, and the Windows-specific hotkey-rebind rejection via `resolve_trigger_key_update` + a Result-carrying `SetMacroTriggerKey` oneshot is confirmed closed by 09-VERIFICATION.md (2026-07-22T21:30:00Z); real-device Windows confirmation — tests 6.1-6.3 — remains blocked_by physical-device and has never been run on-device)*
 
 ### Macro Management
 
@@ -100,8 +100,8 @@
 | CI-05 | Phase 7 | Complete |
 | SAFE-04 | Phase 7 | Complete |
 | ERR-01 | Phase 7 | Complete |
-| EXEC-01 | Phase 9 | Complete (parallel scheduler shipped 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10; on-device T9.8 human verification pending) |
-| EXEC-02 | Phase 9 | Complete (identical CR-01 defect closed symmetrically 09-10; Windows physical-device tests 6.1-6.3 remain blocked_by physical-device, unchanged from 09-VERIFICATION.md) |
+| EXEC-01 | Phase 9 | Complete (source-level) (parallel scheduler shipped 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10; 09-11 gap-closure — HoldRelease bypass + hotkey-rebind rollback safety — confirmed by 09-VERIFICATION.md 2026-07-22T21:30:00Z; on-device human verification T9.1-T9.7 macOS still pending) |
+| EXEC-02 | Phase 9 | Complete (source-level) (identical CR-01 defect closed symmetrically 09-10; 09-11 gap-closure — HoldRelease bypass + hotkey-rebind rollback safety — confirmed by 09-VERIFICATION.md 2026-07-22T21:30:00Z; Windows physical-device tests 6.1-6.3 remain pending, never yet run on-device) |
 | UX-08 | Phase 10 | Pending |
 | UX-09 | Phase 10 | Pending |
 | UX-10 | Phase 10 | Pending |
@@ -121,3 +121,5 @@
 *Last updated: 2026-06-30 — UX-11/UX-12/UX-14 user-facing surfaces complete (plan 08-05: ConflictErrorToast, ConflictWarningRegion, FirstRunGlobalNotice, ↗ Global subtitle, ModifierPreviewChip); UX-13 frontend complete; UX-14 platform verification complete (plan 08-06: 08-VERIFICATION.md gate artifact + manual device test plans; 4/4 automated gates green, 1 gate deferred to CI per plan)*
 
 *Updated 2026-07-22 — EXEC-01/EXEC-02 complete at the source level (plan 09-10: CR-01 dual hotkey-registry double-dispatch gap closed symmetrically on macOS and Windows, consolidating to the single HOTKEY_BINDINGS registry); on-device human verification (T9.8 macOS, Windows tests 6.1-6.3) remains pending, unchanged in disposition from 09-VERIFICATION.md*
+
+*Updated 2026-07-23 — EXEC-01/EXEC-02 annotations reconciled with the 09-VERIFICATION.md re-verification (2026-07-22T21:30:00Z): the two Blocker gaps found after 09-10 (HoldRelease Gate 1/2/3 bypass in handle_action/action_should_inject; hotkey-rebind rollback safety — macOS pre-unbind dropped, Windows resolve_trigger_key_update + Result-carrying SetMacroTriggerKey oneshot) are closed by plan 09-11 and independently re-confirmed against source with 16/16 backend tests passing; checkboxes remain unchecked pending the sole outstanding item, on-device human verification (macOS T9.1-T9.7, Windows 6.1-6.3, the Windows tests never yet run on a real device)*
