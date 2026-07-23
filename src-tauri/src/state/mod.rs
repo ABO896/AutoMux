@@ -798,8 +798,10 @@ impl StateActor {
                 let _ = reply.send(self.state.clone());
             }
             Intent::LoadProfile(name, reply) => {
-                // 1. Clear existing macros and stop all scheduler tasks
-                self.state.macros.clear();
+                // 1. Stop all scheduler tasks unconditionally, regardless of load
+                // outcome below. Do NOT clear state.macros here — that must wait
+                // until a successful disk read (see Ok branch) so a failed load
+                // never destroys the in-memory macro registry.
                 let _ = self
                     .scheduler_tx
                     .send(crate::scheduler::SchedulerIntent::StopAll)
@@ -811,6 +813,7 @@ impl StateActor {
                 // layer has the result without performing a second disk read.
                 match self.profile_mgr.load_profile(&name).await {
                     Ok(profile) => {
+                        self.state.macros.clear();
                         for (_, config) in profile.macros.clone() {
                             self.state.macros.insert(config.id, config);
                         }
@@ -828,17 +831,26 @@ impl StateActor {
                         // unchanged on load failure and the previous
                         // conflicts value remains correct.
                         self.recompute_conflicts();
+                        // 4. Clear flag, then write once (D-06) — only on success.
+                        self.state.loading_profile = false;
+                        self.auto_save_default().await;
                         let _ = reply.send(Ok(profile));
                     }
                     Err(e) => {
+                        // T-k9l-01: state.macros was never touched above, but the
+                        // unconditional StopAll did tear down scheduler tasks for
+                        // the still-current macros. Restart them so a failed load
+                        // never silently stops every running macro. Do NOT call
+                        // auto_save_default() here — state did not change, so
+                        // there is nothing to persist, and persisting here is
+                        // exactly the bug that wiped default.json on failure.
+                        self.reevaluate_all_macros().await;
+                        self.state.loading_profile = false;
                         use tauri::Emitter;
                         let _ = self.app_handle.emit("auto-save-error", e.to_string());
                         let _ = reply.send(Err(e));
                     }
                 }
-                // 4. Clear flag, then write once (D-06)
-                self.state.loading_profile = false;
-                self.auto_save_default().await;
                 // WR-02: Do NOT call self.broadcast_state() here — the outer run() loop
                 // already broadcasts state unconditionally after every handle_intent call.
                 // Calling it here caused a double state-changed event on every profile load.
@@ -1333,8 +1345,10 @@ mod tests {
         );
 
         // Trigger path 4: profile load cleared the macro entirely.
-        let mut empty_state = AppState::default();
-        empty_state.engine_active = true;
+        let empty_state = AppState {
+            engine_active: true,
+            ..Default::default()
+        };
         assert!(
             !empty_state.macros.contains_key(&id),
             "sanity: macro must be absent for this case"
