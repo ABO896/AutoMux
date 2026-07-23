@@ -136,27 +136,24 @@ Declared values — **carried forward unchanged from Phase 8** (multiples of 4 o
 
 **Other exceptions (carried forward from Phase 8, unchanged):**
 - Icon-only touch target on chip `✕` cancel controls = 24px (below the 44px iOS / 32px Material recommendation, but matches existing key-capture chip styling — do not change).
-- Modifier chip micro-padding = `px-1.5 py-0.5` (6px / 2px) — intentionally tight.
+- Modifier chip micro-padding = `px-2 py-1` (8px / 4px) — tightened from Phase 8's `px-1.5 py-0.5` (6px/2px), which was not a 4-multiple; the 8px/4px pair is the closest values on the standard scale and keeps chips visually compact.
 
 ---
 
 ## Typography
 
-**This phase redefines the type scale** (previously 6 ad-hoc sizes across the codebase; consolidated to 4 roles + 1 declared micro exception, per contract convention of 3–4 sizes / 2 weights max).
+**This phase redefines the type scale** (previously 6 ad-hoc sizes across the codebase; consolidated to exactly 4 sizes and exactly 2 weights, no exceptions).
 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Display | 20px | 600 (semibold) | 1.2 | Empty-state heading copy (upgraded from icon-only), sidebar wordmark area if retained |
 | Heading | 15px | 600 (semibold) | 1.3 | Macro card name, section headers (`Macros`, `Saved Profiles`), sidebar nav item label |
 | Body | 13px | 400 (regular) | 1.5 | Form inputs, dropdown text, body copy, banner body text |
-| Label | 11px | 500* | 1.4 | Meta text, target-app/trigger-key inline labels, banner headings, button text |
+| Label | 11px | 600 (semibold) | 1.4 | Meta text, target-app/trigger-key inline labels, banner headings, button text, chip/badge text (modifier chips, step chips, count badges) |
 
-\* **Weight exception:** Label role uses `font-medium` (500) rather than one of the two primary weights, for the same reason Phase 8 declared it — it is the existing convention for compact meta text and changing it would touch every label-role element in the app for no visual gain. Declared explicitly per contract rule ("declare exceptions, don't silently exceed the 2-weight cap"). **The two PRIMARY weights for all new/redesigned prose and CTAs are 400 (regular) and 600 (semibold)** — `font-medium` (500) is retained ONLY for the Label role's existing meta-text convention.
+**Exactly 4 sizes, exactly 2 weights — no exceptions.** The Phase 8 10px chip size is folded into the 11px Label size (chip/badge text now renders at 11px, `font-mono` where the content is a key/code value, `font-semibold` otherwise — replacing the old `text-[10px] font-medium` chip treatment). The Phase 8 500-weight (`font-medium`) Label convention is dropped entirely: Label now uses 600 (semibold), the same weight as Display and Heading. **The two weights used anywhere in this phase's typography are 400 (regular, Body only) and 600 (semibold, Display/Heading/Label).** Every button, chip, nav-item label, and CTA class in this document (`font-medium` → `font-semibold`, `text-[10px]` → `text-[11px]`) is updated accordingly — see Component Inventory below.
 
-**Declared micro exception (carried forward, unavoidable given information density):**
-- Chip/badge text (modifier chips, step chips, count badges) = **10px**, `font-mono` where the content is a key/code value, `font-medium` (500) otherwise. This is the same exception Phase 8 declared (`text-[10px]`) — cards at 84px-sidebar-adjusted width still need compact chips for step lists and modifier previews.
-
-**Icon glyph sizing (not "typography" but declared for consistency):** empty-state icon = 24px (`text-2xl`, unchanged from Phase 8); banner icons (`⚠`, `🌍`, `✎`) = 16px (`text-base`, unchanged).
+**Icon glyph sizing (not "typography," not counted toward the 4-size cap — these are icon glyphs, not text roles):** empty-state icon = 24px (`text-2xl`, unchanged from Phase 8); banner icons (`⚠`, `🌍`, `✎`) = 16px (`text-base`, unchanged).
 
 ---
 
@@ -287,7 +284,7 @@ New or materially-changed components this phase, with location and exact spec.
 ```
 **Exact classes:** container `w-[84px] shrink-0 flex flex-col items-center py-4 gap-1 border-r border-border` with the translucency treatment from the **Translucency** section (`backdrop-filter: blur(24px)`, translucent surface background — implemented as a small CSS class, e.g. `.sidebar-glass`, since Tailwind 4 utilities alone can't express `color-mix` + custom blur values inline).
 
-Nav item: `flex flex-col items-center gap-1 px-2 py-3 rounded-lg cursor-pointer transition-colors w-16` — icon at `text-base` (16px), label at Label-role typography (11px/500). Active: `bg-accent/10 text-accent`. Inactive: `text-text-muted hover:text-text-main`.
+Nav item: `flex flex-col items-center gap-1 px-2 py-3 rounded-lg cursor-pointer transition-colors w-16` — icon at `text-base` (16px), label at Label-role typography (11px/600 semibold). Active: `bg-accent/10 text-accent`. Inactive: `text-text-muted hover:text-text-main`.
 
 ### C-SB2. Theme toggle (new)
 
@@ -314,8 +311,8 @@ Nav item: `flex flex-col items-center gap-1 px-2 py-3 rounded-lg cursor-pointer 
 - Container: same card padding as normal (`glass-card p-4`), but header content swaps to `flex items-center justify-between`.
 - Heading: Heading-role typography (15px/600), `text-text-main`.
 - Body: Body-role typography (13px/400), `text-text-dim`.
-- `Cancel` button: neutral, `px-2.5 py-1 rounded-md text-[11px] font-medium bg-surface-alt border border-border text-text-muted hover:text-text-main transition-colors cursor-pointer`.
-- `Delete` button: destructive, `px-2.5 py-1 rounded-md text-[11px] font-medium bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20 transition-colors cursor-pointer` (same visual weight as the existing delete icon button's danger tint, just with a text label instead of `✕` in this confirming state).
+- `Cancel` button: neutral, `px-2.5 py-1 rounded-md text-[11px] font-semibold bg-surface-alt border border-border text-text-muted hover:text-text-main transition-colors cursor-pointer`.
+- `Delete` button: destructive, `px-2.5 py-1 rounded-md text-[11px] font-semibold bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20 transition-colors cursor-pointer` (same visual weight as the existing delete icon button's danger tint, just with a text label instead of `✕` in this confirming state).
 
 **Dismissal:** `Cancel` click, clicking elsewhere on the card (optional — planner's call whether to wire an outside-click dismiss; not required for UX-08 correctness), or successful `Delete` click (card is removed from the list entirely via the existing `remove_macro` IPC + `state-changed` broadcast — no local removal needed).
 
@@ -325,7 +322,7 @@ Nav item: `flex flex-col items-center gap-1 px-2 py-3 rounded-lg cursor-pointer 
 
 **Trigger:** new `✎` icon button, placed to the LEFT of the existing `✕` delete button in the card header's action-icon cluster (`flex items-center gap-1.5`), same visual weight/size as the delete button but neutral-tinted (`text-text-muted`, not `text-danger`):
 ```
-class="px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors cursor-pointer
+class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
        bg-surface-alt border border-border text-text-muted hover:text-text-main hover:border-border-hover"
 title="Edit macro"
 ```
@@ -366,6 +363,8 @@ title="Edit macro"
 │toggle) │ └─────────────────────────────────────────────────┘   │
 └────────┴─────────────────────────────────────────────────────┘
 ```
+
+**Primary visual anchor:** on the Macros screen, the macro card list is the primary visual anchor — it occupies the largest share of the content column, sits below the (secondary) status/permission cards and banners, and is the only region styled with the Heading-role typography reserved for card names. All other content-column elements (status cards, banners) are visually subordinate to it.
 
 **Z-order / stacking:** unchanged from Phase 8 — all banners use document flow (no `position: absolute`/`fixed`); the sidebar is a flex sibling of the content column, not an overlay. Spacing between stacked banners remains `gap-3`.
 
@@ -455,8 +454,8 @@ Before declaring this phase complete, the executor MUST verify:
 - [ ] Confirming delete removes the macro from the list; canceling leaves it untouched.
 - [ ] Long macro names and long target-app identifiers truncate with `title`-attribute hover-reveal in both the card header and the delete-confirmation heading.
 - [ ] No new npm dependencies were added (`package.json` diff is empty except for version bumps, if any).
-- [ ] No new spacing values outside the 4/8/16/24/32/48/64 scale (plus the declared 84px sidebar-width and 24px chip-touch-target exceptions).
-- [ ] No more than 4 typography size roles + 1 declared micro (10px chip) exception; no more than 2 primary weights (400/600) plus the declared 500 Label-role exception.
+- [ ] No new spacing values outside the 4/8/16/24/32/48/64 scale (plus the declared 84px sidebar-width and 24px chip-touch-target exceptions); modifier chip micro-padding is `px-2 py-1` (8px/4px), not the old `px-1.5 py-0.5`.
+- [ ] Exactly 4 typography size roles (20/15/13/11px) and exactly 2 weights (400 regular for Body, 600 semibold for Display/Heading/Label) — no exceptions anywhere, including chip/badge text and nav-item labels.
 - [ ] All new copy is platform-agnostic (no "macOS"/"Windows" branching in user-visible strings).
 - [ ] `cargo build` and `cargo test -p automux` remain green after the `tauri.conf.json` window-size change.
 - [ ] `npx tsc --noEmit` is clean.
