@@ -334,6 +334,15 @@ function App() {
   // form's two capture slots is the one currently recording.
   const [editFormCapturingSlot, setEditFormCapturingSlot] = createSignal<"trigger" | "action" | null>(null);
 
+  // D-14 (UX-08): inline in-card delete confirmation state, replacing the
+  // old native-dialog confirm. App-owned alongside editingCardId
+  // (RESEARCH.md Pattern 1) — only one card is ever in edit OR
+  // delete-confirm mode.
+  const [confirmingDeleteId, setConfirmingDeleteId] = createSignal<string | null>(null);
+  // UI-SPEC backstop: a failed remove_macro shows this banner and leaves the
+  // card's confirm state open, rather than silently discarding the delete.
+  const [deleteError, setDeleteError] = createSignal(false);
+
   // ── Initial data fetch ──
   // WR-08: `cancelled` flag prevents stale setters from firing after unmount.
   createEffect(() => {
@@ -576,12 +585,29 @@ function App() {
     }
   }
 
-  async function handleRemoveMacro(id: string, name: string) {
-    if (!window.confirm(`Delete macro "${name}"?`)) return;
+  // D-14 (UX-08): ✕ opens the in-card C-D1 confirmation instead of the old
+  // native dialog. Mutual exclusion with the full edit surface — starting a
+  // delete-confirm on this card cancels any in-progress edit.
+  function handleDeleteStart(id: string) {
+    handleCancelEditMacro();
+    setDeleteError(false);
+    setConfirmingDeleteId(id);
+  }
+
+  function handleDeleteCancel() {
+    setConfirmingDeleteId(null);
+  }
+
+  async function handleDeleteConfirm(id: string) {
     try {
       await invoke("remove_macro", { id });
+      setConfirmingDeleteId(null);
+      setDeleteError(false);
     } catch (e) {
       console.error("Remove macro failed:", e);
+      // UI-SPEC backstop: leave the card's confirm state open so the
+      // delete intent isn't silently discarded — the user can retry.
+      setDeleteError(true);
     }
   }
 
@@ -613,6 +639,7 @@ function App() {
   // discards A's unsaved local edits for free (no confirmation needed,
   // nothing was persisted).
   function handleStartEditMacro(macro: MacroConfig) {
+    setConfirmingDeleteId(null);
     const derived = deriveEditFormFields(macro);
     setEditMacroName(macro.name);
     setEditMacroInput(derived.input);
@@ -1125,6 +1152,28 @@ function App() {
             </div>
           </Show>
 
+          {/* ── Delete Failure Banner (D-14 backstop) ── */}
+          <Show when={deleteError()}>
+            <div
+              id="delete-error-banner"
+              class="bg-danger/10 border border-danger/20 rounded-lg p-3 flex items-center gap-3"
+            >
+              <span class="text-danger text-base">⚠</span>
+              <div class="flex-1">
+                <p class="text-xs font-medium text-danger">Delete failed</p>
+                <p class="text-[11px] text-text-dim">
+                  Could not delete this macro. Try again.
+                </p>
+              </div>
+              <button
+                onClick={() => setDeleteError(false)}
+                class="text-[11px] text-text-muted hover:text-text-main transition-colors duration-200 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </Show>
+
           {/* ── Macros List ── */}
           <div class="flex items-center justify-between mt-1">
             <span class="text-xs font-medium text-text-muted uppercase tracking-wider">
@@ -1260,7 +1309,10 @@ function App() {
                       onEditCancel={handleCancelEditMacro}
                       onEditSave={(values) => handleSaveMacro(macro, values)}
                       onToggleEnabled={() => handleToggleMacro(macro.id, macro.enabled)}
-                      onDeleteClick={() => handleRemoveMacro(macro.id, macro.name)}
+                      isConfirmingDelete={() => confirmingDeleteId() === macro.id}
+                      onDeleteStart={() => handleDeleteStart(macro.id)}
+                      onDeleteConfirm={() => handleDeleteConfirm(macro.id)}
+                      onDeleteCancel={handleDeleteCancel}
                       editName={editMacroName}
                       onEditNameChange={setEditMacroName}
                       editInput={editMacroInput}
