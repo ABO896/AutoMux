@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { domKeycodeToNative, resolveKeyName } from "./keymap";
 import { getStoredPreference, applyTheme, type ThemePreference } from "./theme";
+import Sidebar from "./components/Sidebar";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
@@ -193,7 +194,7 @@ function modifierChips(bits: number): string[] {
 
 // ── App ─────────────────────────────────────────────────────────
 
-type Tab = "dashboard" | "profiles";
+export type Tab = "dashboard" | "profiles";
 
 // Module-level listener ref — survives across renders; prevents double-attach (T-03-08)
 let _keyCaptureListener: ((e: KeyboardEvent) => void) | null = null;
@@ -805,34 +806,12 @@ function App() {
         <span class="text-[10px] text-text-dim font-mono">v{appVersion()}</span>
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div class="flex border-b border-border shrink-0">
-        <button
-          id="tab-dashboard"
-          class={`flex-1 py-2 text-xs font-medium text-center transition-colors cursor-pointer ${
-            activeTab() === "dashboard"
-              ? "text-accent border-b-2 border-accent"
-              : "text-text-muted hover:text-text-main"
-          }`}
-          onClick={() => setActiveTab("dashboard")}
-        >
-          Dashboard
-        </button>
-        <button
-          id="tab-profiles"
-          class={`flex-1 py-2 text-xs font-medium text-center transition-colors cursor-pointer ${
-            activeTab() === "profiles"
-              ? "text-accent border-b-2 border-accent"
-              : "text-text-muted hover:text-text-main"
-          }`}
-          onClick={() => setActiveTab("profiles")}
-        >
-          Profiles
-        </button>
-      </div>
+      {/* ── Sidebar + Content row (D-08: sidebar rail replaces top tab bar) ── */}
+      <div class="flex flex-1 overflow-hidden">
+        <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} />
 
-      {/* ── Content ── */}
-      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+        {/* ── Content ── */}
+        <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
         <Show when={activeTab() === "dashboard"}>
           {/* ═══════════════ DASHBOARD TAB ═══════════════ */}
 
@@ -1706,6 +1685,7 @@ function App() {
             </div>
           </Show>
         </Show>
+        </div>
       </div>
 
       {/* ── Footer ── */}
