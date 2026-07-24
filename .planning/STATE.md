@@ -5,14 +5,14 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 10
 current_phase_name: ui-redesign-macro-management
 status: executing
-stopped_at: "Completed 10-05-PLAN.md (MacroCard.tsx extraction: full inline edit + delete confirmation, C-E1/C-D1, D-13/D-14). No checkpoints in this plan. Next: plan 10-06 (final polish/verification)."
-last_updated: "2026-07-24T14:53:34.279Z"
+stopped_at: "Phase 10 Plan 06 Task 1 complete (automated gates: cargo build/test 24/24 pass, tsc clean, zero new dependencies — c38b784). Task 2 is a blocking checkpoint:human-verify gate (full UI-SPEC 23-item checklist walk across both themes + final UI-04 perf re-confirm on a real macOS Tahoe device) — awaiting human. This is the last plan in Phase 10; the phase cannot be marked complete until this checkpoint resolves."
+last_updated: "2026-07-24T14:58:12.400Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 31
-  completed_plans: 30
-  percent: 83
+  completed_plans: 31
+  percent: 100
 ---
 
 # Project State
@@ -83,8 +83,8 @@ Progress: [██████████] 97% (plans 25/25 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-24T14:53:34.270Z
-Stopped at: Completed 10-05-PLAN.md (MacroCard.tsx extraction: full inline edit + delete confirmation, C-E1/C-D1, D-13/D-14). No checkpoints in this plan. Next: plan 10-06 (final polish/verification).
+Last session: 2026-07-24T14:58:12.392Z
+Stopped at: Phase 10 Plan 06 Task 1 complete (automated gates: cargo build/test 24/24 pass, tsc clean, zero new dependencies — c38b784). Task 2 is a blocking checkpoint:human-verify gate (full UI-SPEC 23-item checklist walk across both themes + final UI-04 perf re-confirm on a real macOS Tahoe device) — awaiting human. This is the last plan in Phase 10; the phase cannot be marked complete until this checkpoint resolves.
 Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
@@ -128,6 +128,7 @@ Next: Phase 9 routes to human real-device verification only — macOS tests T9.1
 | Phase 10 P02 | 10min | 3 tasks | 4 files |
 | Phase 10 P04 | 13min | 2 tasks | 3 files |
 | Phase 10 P05 | 16min | 2 tasks | 2 files |
+| Phase 10 P06 | ~10min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -182,7 +183,10 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 10 Plan 5]: Retired the pre-existing per-field micro-editors (target-app click-select, trigger-key click-capture) in favor of one unified full inline edit surface (C-E1) mounting MacroForm a second time — matches D-13's literal 'reuses the SAME form' contract; UI-SPEC's Component Inventory only documents C-E1/C-D1 as new non-normal card states.
 - [Phase ?]: [Phase 10 Plan 5]: Dropped the macOS bind_hotkey double-invoke from the edit-save path — Intent::UpdateMacro's handler already calls reevaluate_all_macros() after every successful edit, refreshing the platform hotkey registry unconditionally (Phase 9 Plan 10 single-registry consolidation), so the atomic Save Changes call covers hotkey registration without a separate immediate-commit call.
 - [Phase ?]: [Phase 10 Plan 5]: Delete-confirm (C-D1) replaces the card's entire body, not just its header row — UI-SPEC's ASCII mockup draws only the two confirmation lines inside the card box with no meta row/step chips below, which is the reading kept symmetric with how the edit state (C-E1) already replaces the full card body.
+- [Phase ?]: [Phase 10 Plan 6]: Dependency-diff baseline anchored at Phase 10's first commit (d748d5c) rather than just working-tree diff, proving zero new npm/Cargo dependencies across the whole phase (10-01 through 10-06), not just uncommitted changes.
+- [Phase ?]: [Phase 10 Plan 6]: requirements-completed left empty in 10-06-SUMMARY.md — Task 2 (human UI-SPEC checklist walk) gates UI-01/UI-02/UI-03/UI-04/UX-10 completion; marking them complete before the checkpoint is approved would misrepresent phase progress.
 
 ### Blockers
 
 - Phase 10 Plan 03 Task 3: blocking checkpoint:human-verify — early UI-04 idle CPU/GPU perf gate (all blur surfaces active: .glass-card + .sidebar-glass) plus both-theme visual spot-check on a real macOS Tahoe device. Tasks 1-2 (Sidebar.tsx, ThemeToggle.tsx, window resize to 720x680) are committed (dbdc8ee, 3f5237d); plan 10-03 cannot be marked complete until this checkpoint is approved or the documented blur-reduction fallback is applied and re-measured.
+- Phase 10 Plan 06 Task 2: blocking checkpoint:human-verify — full UI-SPEC Verification Checklist walk (23 items) across both light and dark themes, plus final UI-04 idle CPU/GPU re-confirmation, on a real macOS Tahoe device (Windows spot-check where available). Task 1 (automated gates: cargo build/test 24/24 pass, tsc clean, zero new dependencies) is committed (c38b784). This is the LAST plan in Phase 10 — the phase cannot be marked complete until this checkpoint is approved or failing items are addressed. See 10-VERIFICATION.md Section 2 for the full checklist.

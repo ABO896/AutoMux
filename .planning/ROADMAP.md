@@ -178,7 +178,7 @@ Plans:
   4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across restarts
   5. Action type selection displays unambiguous labels — "Left Click", "Right Click", "Hold", "Key Press" — with no unlabeled or ambiguous options
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 Plans:
 **Wave 1**
 
@@ -202,7 +202,7 @@ Plans:
 
 **Wave 6**
 
-- [ ] 10-06-PLAN.md — Automated gates + full UI-SPEC checklist human-verify + final UI-04 perf re-confirm (all requirements)
+- [x] 10-06-PLAN.md — Automated gates + full UI-SPEC checklist human-verify + final UI-04 perf re-confirm (all requirements)
 
 **UI hint**: yes
 
@@ -219,7 +219,7 @@ Plans:
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
 | 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
-| 10. UI Redesign & Macro Management | v2.0 | 5/6 | In Progress|  |
+| 10. UI Redesign & Macro Management | v2.0 | 6/6 | In Progress|  |
 
 ## Backlog
 
