@@ -6,6 +6,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { domKeycodeToNative, resolveKeyName } from "./keymap";
 import { getStoredPreference, applyTheme, type ThemePreference } from "./theme";
 import Sidebar from "./components/Sidebar";
+import ThemeToggle from "./components/ThemeToggle";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
@@ -254,12 +255,18 @@ function App() {
   // D-06/D-07: theme preference, seeded from localStorage (boot script in
   // index.html already applied the resolved data-theme before first paint;
   // this signal is the runtime source of truth for the live matchMedia
-  // follow effect below and, in plan 10-03, the sidebar ThemeToggle control).
+  // follow effect below and the sidebar ThemeToggle control).
   const [themePreference, setThemePreference] = createSignal<ThemePreference>(getStoredPreference());
-  // Consumed by the plan 10-03 sidebar ThemeToggle control (not built yet in
-  // this plan) — referenced here so strict noUnusedLocals is satisfied
-  // without rendering partial UI ahead of schedule.
-  void setThemePreference;
+
+  // D-06/D-07: advances the 3-state theme cycle System → Light → Dark →
+  // System, applies it (data-theme swap + localStorage persist via theme.ts)
+  // and mirrors the new value into the signal for the ThemeToggle glyph.
+  function cycleThemePreference() {
+    const order: ThemePreference[] = ["system", "light", "dark"];
+    const next = order[(order.indexOf(themePreference()) + 1) % order.length];
+    applyTheme(next);
+    setThemePreference(next);
+  }
 
   // ── New Macro Form State ──
   const [showNewMacro, setShowNewMacro] = createSignal(false);
@@ -808,7 +815,9 @@ function App() {
 
       {/* ── Sidebar + Content row (D-08: sidebar rail replaces top tab bar) ── */}
       <div class="flex flex-1 overflow-hidden">
-        <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} />
+        <Sidebar activeTab={activeTab} onSelectTab={setActiveTab}>
+          <ThemeToggle preference={themePreference} onCycle={cycleThemePreference} />
+        </Sidebar>
 
         {/* ── Content ── */}
         <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
