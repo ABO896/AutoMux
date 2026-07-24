@@ -277,7 +277,12 @@ function App() {
 
   // ── Card Inline Edit State ──
   const [editingCardId, setEditingCardId] = createSignal<string | null>(null);
-  const [editingField, setEditingField] = createSignal<"key" | "target" | null>(null);
+  // D-13 tracer: "name" is the thin end-to-end slice of the inline
+  // expand-in-place edit (full field set generalized in plan 10-05). Gated
+  // on the same centralized editingCardId signal for mutual exclusion with
+  // the existing key/target inline editors.
+  const [editingField, setEditingField] = createSignal<"key" | "target" | "name" | null>(null);
+  const [editingMacroName, setEditingMacroName] = createSignal("");
 
   // ── Platform Detection ──
   // WR-02: navigator.platform is deprecated and returns empty string in some Chromium
@@ -522,6 +527,53 @@ function App() {
       await invoke("remove_macro", { id });
     } catch (e) {
       console.error("Remove macro failed:", e);
+    }
+  }
+
+  // D-13 tracer (UX-09): opens the inline name editor for one card. Uses the
+  // centralized editingCardId/editingField signals — opening this on card B
+  // while card A is mid-edit (key/target/name) cancels A's edit for free,
+  // since editingCardId is a single shared value (mutual exclusion).
+  function handleStartEditMacroName(macro: MacroConfig) {
+    setEditingCardId(macro.id);
+    setEditingField("name");
+    setEditingMacroName(macro.name);
+  }
+
+  function handleCancelEditMacroName() {
+    setEditingCardId(null);
+    setEditingField(null);
+  }
+
+  // D-13 tracer (UX-09): the thin end-to-end slice — only `name` is editable
+  // here (full field set generalized in plan 10-05). Every other field is
+  // forwarded unchanged from the macro's current values so the single
+  // atomic update_macro call cannot clobber anything the user didn't touch.
+  async function handleSaveMacroName(macro: MacroConfig) {
+    const name = editingMacroName().trim();
+    if (!name) return;
+    try {
+      await invoke("update_macro", {
+        id: macro.id,
+        name,
+        sequence: macro.sequence,
+        trigger_mode: macro.trigger_mode,
+        target_app: macro.target_app,
+        trigger_key: macro.trigger_key,
+        trigger_modifiers: macro.trigger_modifiers,
+      });
+      setEditingCardId(null);
+      setEditingField(null);
+    } catch (e) {
+      // UX-09 (3alt): reuse the Phase 8 C-1 conflict toast; keep the editor
+      // open so the user can correct and retry (mirrors handleCreateMacro's
+      // catch block).
+      const msg = String(e);
+      const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
+      const macroName = macroMatch ? macroMatch[1] : "another macro";
+      const keyLabel = macro.trigger_key !== null ? resolveKeyName(macro.trigger_key) : "Key";
+      showConflictError(keyLabel, macroName);
+      console.error("Failed to update macro:", e);
     }
   }
 
@@ -1261,7 +1313,7 @@ function App() {
                   return (
                   <div class="glass-card p-4">
                     <div class="flex items-center justify-between mb-2">
-                      <div class="flex items-center gap-2">
+                      <div class="flex items-center gap-2 flex-1 min-w-0">
                         <div
                           class={(() => {
                             switch (runningState()) {
@@ -1278,16 +1330,49 @@ function App() {
                             }
                           })()}
                         />
-                        <span class="text-sm font-medium">{macro.name}</span>
-                        <Show when={runningState() === "waiting"}>
-                          <span class="text-[10px] text-text-dim">
-                            Waiting for {macro.target_app}
-                          </span>
-                        </Show>
-                        <Show when={runningState() === "combined"}>
-                          <span class="text-[10px] text-text-dim">
-                            Active (Hold + Click)
-                          </span>
+                        <Show
+                          when={editingCardId() === macro.id && editingField() === "name"}
+                          fallback={
+                            <>
+                              <span class="text-sm font-medium">{macro.name}</span>
+                              <Show when={runningState() === "waiting"}>
+                                <span class="text-[10px] text-text-dim">
+                                  Waiting for {macro.target_app}
+                                </span>
+                              </Show>
+                              <Show when={runningState() === "combined"}>
+                                <span class="text-[10px] text-text-dim">
+                                  Active (Hold + Click)
+                                </span>
+                              </Show>
+                            </>
+                          }
+                        >
+                          {/* D-13 tracer (UX-09): thin end-to-end name-edit
+                              slice — full field set generalized in 10-05. */}
+                          <input
+                            value={editingMacroName()}
+                            onInput={(e) => setEditingMacroName(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") handleCancelEditMacroName();
+                            }}
+                            class="flex-1 min-w-0 bg-background border border-border rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+                          />
+                          <button
+                            onClick={() => handleSaveMacroName(macro)}
+                            disabled={!editingMacroName().trim()}
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
+                                   bg-accent text-white hover:bg-accent/80 disabled:opacity-30"
+                          >
+                            Save Changes
+                          </button>
+                          <button
+                            onClick={handleCancelEditMacroName}
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
+                                   bg-surface-alt border border-border text-text-muted hover:text-text-main"
+                          >
+                            Cancel
+                          </button>
                         </Show>
                       </div>
                       <div class="flex items-center gap-1.5">
@@ -1301,6 +1386,14 @@ function App() {
                         >
                           <div class="toggle-thumb" />
                         </div>
+                        <button
+                          onClick={() => handleStartEditMacroName(macro)}
+                          class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
+                                 bg-surface-alt border border-border text-text-muted hover:text-text-main hover:border-border-hover"
+                          title="Edit macro"
+                        >
+                          ✎
+                        </button>
                         <button
                           onClick={() => handleRemoveMacro(macro.id, macro.name)}
                           class="px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors cursor-pointer
