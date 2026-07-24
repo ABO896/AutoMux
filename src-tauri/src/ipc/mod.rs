@@ -1,4 +1,4 @@
-use crate::state::{ActionSequence, AppState, Intent, MacroConfig, StateManager};
+use crate::state::{ActionSequence, AppState, Intent, MacroConfig, StateManager, TriggerMode};
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{command, State};
@@ -155,6 +155,40 @@ pub async fn set_macro_trigger_key(
     let (tx, rx) = tokio::sync::oneshot::channel();
     state
         .send_intent(Intent::SetMacroTriggerKey(id, trigger_key, modifiers, tx))
+        .await
+        .map_err(|e| e.to_string())?;
+    rx.await.map_err(|e| e.to_string())?
+}
+
+/// Consolidated macro edit (UX-09) — updates name, action sequence, trigger
+/// mode, target app, and trigger key/modifiers in one atomic operation.
+/// Mirrors `set_macro_trigger_key`'s oneshot + double-unwrap shape. The
+/// trigger-key conflict check is reused (via `Intent::UpdateMacro`'s handler
+/// calling `resolve_trigger_key_update`) — on conflict this returns `Err`
+/// and NO field is mutated on the backend.
+#[command(rename_all = "snake_case")]
+pub async fn update_macro(
+    state: State<'_, StateManager>,
+    id: Uuid,
+    name: String,
+    sequence: ActionSequence,
+    trigger_mode: TriggerMode,
+    target_app: Option<String>,
+    trigger_key: Option<u16>,
+    trigger_modifiers: Option<u64>,
+) -> Result<(), String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    state
+        .send_intent(Intent::UpdateMacro(
+            id,
+            name,
+            sequence,
+            trigger_mode,
+            target_app,
+            trigger_key,
+            trigger_modifiers,
+            tx,
+        ))
         .await
         .map_err(|e| e.to_string())?;
     rx.await.map_err(|e| e.to_string())?

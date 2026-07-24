@@ -100,6 +100,7 @@ pub fn run() {
             ipc::list_profiles,
             ipc::list_running_apps,
             ipc::set_macro_trigger_key,
+            ipc::update_macro,
             ipc::check_input_monitoring,
             ipc::get_tcc_identity_status,
             #[cfg(debug_assertions)]

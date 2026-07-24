@@ -168,6 +168,22 @@ pub enum Intent {
         Option<u64>,
         tokio::sync::oneshot::Sender<Result<(), String>>,
     ),
+    /// UX-09: Consolidated macro edit — updates name, action sequence,
+    /// trigger mode, target app, and trigger key/modifiers in one atomic
+    /// operation. The oneshot reply is `Err(msg)` ONLY for a trigger-key
+    /// conflict (reusing `resolve_trigger_key_update`); on `Err`, NO field is
+    /// mutated — the edit form stays open with the user's unsaved changes
+    /// intact, matching the Interaction Contract's "3alt" row in UI-SPEC.
+    UpdateMacro(
+        Uuid,
+        String,         // name
+        ActionSequence, // sequence — single-step, mirrors AddMacro's shape
+        TriggerMode,
+        Option<String>, // target_app
+        Option<u16>,    // trigger_key
+        Option<u64>,    // trigger_modifiers
+        tokio::sync::oneshot::Sender<Result<(), String>>,
+    ),
     /// UX-11: Bind a trigger key for an existing macro. The oneshot sender
     /// carries the conflict result back to the IPC caller — `Ok(())` if the
     /// slot was free or this macro already owned it, `Err(msg)` otherwise.
@@ -627,6 +643,46 @@ impl StateActor {
                         self.reevaluate_all_macros().await;
                         // UX-12: refresh derived `conflicts` after a
                         // successful trigger-key update.
+                        self.recompute_conflicts();
+                        self.auto_save_default().await;
+                        let _ = reply.send(Ok(()));
+                    }
+                }
+            }
+            Intent::UpdateMacro(id, name, sequence, trigger_mode, target_app, trigger_key, trigger_modifiers, reply) => {
+                // UX-09: mirrors SetMacroTriggerKey's shape exactly — reuse
+                // resolve_trigger_key_update (do NOT reimplement the conflict
+                // check; RESEARCH.md's Don't-Hand-Roll table flags duplication
+                // as a drift risk). Err → reply without mutating any field
+                // (atomic reject); Ok → mutate every field together.
+                match resolve_trigger_key_update(&self.state, id, trigger_key, trigger_modifiers)
+                {
+                    Err(conflicting_id) => {
+                        let conflicting_name = self
+                            .state
+                            .macros
+                            .get(&conflicting_id)
+                            .map(|m| m.name.clone())
+                            .unwrap_or_else(|| format!("{:?}", conflicting_id));
+                        let msg = format!(
+                            "Key (keycode {}) is already assigned to \"{}\". Unbind it first or pick a different key.",
+                            trigger_key.unwrap_or_default(),
+                            conflicting_name
+                        );
+                        let _ = reply.send(Err(msg));
+                    }
+                    Ok((new_key, new_mods)) => {
+                        if let Some(mac) = self.state.macros.get_mut(&id) {
+                            mac.name = name;
+                            mac.sequence = sequence;
+                            mac.trigger_mode = trigger_mode;
+                            mac.target_app = target_app;
+                            mac.trigger_key = new_key;
+                            mac.trigger_modifiers = new_mods;
+                        }
+                        self.reevaluate_all_macros().await;
+                        // UX-12: refresh derived `conflicts` after a
+                        // successful macro edit.
                         self.recompute_conflicts();
                         self.auto_save_default().await;
                         let _ = reply.send(Ok(()));
