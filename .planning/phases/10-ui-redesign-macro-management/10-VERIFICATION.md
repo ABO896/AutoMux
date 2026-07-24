@@ -1,7 +1,7 @@
 ---
 phase: 10
 slug: ui-redesign-macro-management
-status: automated-gates-passed
+status: human_needed
 human_verified: false
 created: 2026-07-24
 ---
