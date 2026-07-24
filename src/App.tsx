@@ -7,15 +7,15 @@ import { domKeycodeToNative, resolveKeyName } from "./keymap";
 import { getStoredPreference, applyTheme, type ThemePreference } from "./theme";
 import Sidebar from "./components/Sidebar";
 import ThemeToggle from "./components/ThemeToggle";
-import KeyCaptureField from "./components/KeyCaptureField";
 import MacroForm, { type MacroFormSubmitValues } from "./components/MacroForm";
+import MacroCard from "./components/MacroCard";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
 
 export type TriggerMode = "Pulse" | "Hold";
 
-interface MacroConfig {
+export interface MacroConfig {
   id: string;
   name: string;
   interval_ms: number;
@@ -78,7 +78,7 @@ function formatInputEvent(ev: InputEvent): string {
   return "?";
 }
 
-function formatStep(step: ActionStep): string {
+export function formatStep(step: ActionStep): string {
   if ("SustainedHold" in step)
     return `Hold ${formatInputEvent(step.SustainedHold.input)}`;
   if ("InterleavedInterval" in step)
@@ -86,7 +86,7 @@ function formatStep(step: ActionStep): string {
   return "?";
 }
 
-type RunningState = "firing" | "held" | "combined" | "waiting" | "disabled";
+export type RunningState = "firing" | "held" | "combined" | "waiting" | "disabled";
 
 /**
  * EXEC-01/EXEC-02 (D-01–D-04): Pure derivation of a macro's visible running
@@ -315,21 +315,24 @@ function App() {
   const [appsLoading, setAppsLoading] = createSignal(false);
   const [appsError, setAppsError] = createSignal(false);
 
-  // ── Card Inline Edit State ──
+  // ── Card Inline Edit State (D-13, UX-09 full field set) ──
+  // Centralized in App(), NOT per-card local state (RESEARCH.md Pattern 1) —
+  // opening edit on card B while card A is mid-edit simply reassigns
+  // editingCardId and repopulates these shared signals from B's macro
+  // values, which discards A's unsaved edits for free (mutual exclusion).
   const [editingCardId, setEditingCardId] = createSignal<string | null>(null);
-  // D-13 tracer: "name" is the thin end-to-end slice of the inline
-  // expand-in-place edit (full field set generalized in plan 10-05). Gated
-  // on the same centralized editingCardId signal for mutual exclusion with
-  // the existing key/target inline editors.
-  const [editingField, setEditingField] = createSignal<"key" | "target" | "name" | null>(null);
-  const [editingMacroName, setEditingMacroName] = createSignal("");
-
-  // ── Platform Detection ──
-  // WR-02: navigator.platform is deprecated and returns empty string in some Chromium
-  // WebView configurations (including Tauri on macOS). Use userAgent as the primary
-  // signal — it is always populated in Tauri's Chromium-based WebView and reliably
-  // contains "Mac" on macOS builds.
-  const IS_MACOS = navigator.userAgent.toLowerCase().includes("mac");
+  const [editMacroName, setEditMacroName] = createSignal("");
+  const [editMacroInput, setEditMacroInput] = createSignal("Left");
+  const [editMacroMode, setEditMacroMode] = createSignal<TriggerMode>("Pulse");
+  const [editMacroInterval, setEditMacroInterval] = createSignal("100");
+  const [editMacroTarget, setEditMacroTarget] = createSignal("");
+  const [editMacroTriggerKeyCode, setEditMacroTriggerKeyCode] = createSignal<number | null>(null);
+  const [editMacroTriggerModifiers, setEditMacroTriggerModifiers] = createSignal<number>(0);
+  const [editMacroActionKeyCode, setEditMacroActionKeyCode] = createSignal<number | null>(null);
+  // Mirrors the New Macro form's formCapturingSlot — since triggerKeyRecording
+  // / _keyCaptureListener are shared/global, this tracks which of the edit
+  // form's two capture slots is the one currently recording.
+  const [editFormCapturingSlot, setEditFormCapturingSlot] = createSignal<"trigger" | "action" | null>(null);
 
   // ── Initial data fetch ──
   // WR-08: `cancelled` flag prevents stale setters from firing after unmount.
@@ -582,40 +585,73 @@ function App() {
     }
   }
 
-  // D-13 tracer (UX-09): opens the inline name editor for one card. Uses the
-  // centralized editingCardId/editingField signals — opening this on card B
-  // while card A is mid-edit (key/target/name) cancels A's edit for free,
-  // since editingCardId is a single shared value (mutual exclusion).
-  function handleStartEditMacroName(macro: MacroConfig) {
+  // UX-09 (D-13): derives the MacroForm-shaped field set (input choice,
+  // interval, action-key value) from a macro's persisted sequence.steps, the
+  // inverse of MacroForm's own handleSubmit assembly — used to pre-fill the
+  // edit form when a card's full edit is opened.
+  function deriveEditFormFields(macro: MacroConfig): {
+    input: string;
+    interval: string;
+    actionKeyCode: number | null;
+  } {
+    const step = macro.sequence.steps[0];
+    if (!step) {
+      return { input: "Left", interval: String(macro.interval_ms || 100), actionKeyCode: null };
+    }
+    const ev = "SustainedHold" in step ? step.SustainedHold.input : step.InterleavedInterval.input;
+    const intervalMs = "InterleavedInterval" in step ? step.InterleavedInterval.interval_ms : macro.interval_ms;
+    if ("Key" in ev) {
+      return { input: "KeyPress", interval: String(intervalMs || 100), actionKeyCode: ev.Key };
+    }
+    return { input: ev.MouseButton, interval: String(intervalMs || 100), actionKeyCode: null };
+  }
+
+  // D-13/UX-09: opens the full inline expand-in-place edit for one card.
+  // editingCardId is a single shared signal (mutual exclusion) — opening
+  // this on card B while card A is mid-edit reassigns editingCardId to B and
+  // repopulates the shared edit-form signals from B's own values, which
+  // discards A's unsaved local edits for free (no confirmation needed,
+  // nothing was persisted).
+  function handleStartEditMacro(macro: MacroConfig) {
+    const derived = deriveEditFormFields(macro);
+    setEditMacroName(macro.name);
+    setEditMacroInput(derived.input);
+    setEditMacroMode(macro.trigger_mode);
+    setEditMacroInterval(derived.interval);
+    setEditMacroTarget(macro.target_app ?? "");
+    setEditMacroTriggerKeyCode(macro.trigger_key);
+    setEditMacroTriggerModifiers(macro.trigger_modifiers);
+    setEditMacroActionKeyCode(derived.actionKeyCode);
+    setEditFormCapturingSlot(null);
     setEditingCardId(macro.id);
-    setEditingField("name");
-    setEditingMacroName(macro.name);
   }
 
-  function handleCancelEditMacroName() {
+  function handleCancelEditMacro() {
     setEditingCardId(null);
-    setEditingField(null);
+    setEditFormCapturingSlot(null);
+    setTriggerKeyRecording(false);
+    if (_keyCaptureListener) {
+      document.removeEventListener("keydown", _keyCaptureListener, true);
+      _keyCaptureListener = null;
+    }
   }
 
-  // D-13 tracer (UX-09): the thin end-to-end slice — only `name` is editable
-  // here (full field set generalized in plan 10-05). Every other field is
-  // forwarded unchanged from the macro's current values so the single
-  // atomic update_macro call cannot clobber anything the user didn't touch.
-  async function handleSaveMacroName(macro: MacroConfig) {
-    const name = editingMacroName().trim();
-    if (!name) return;
+  // UX-09: full-field save — generalizes the 10-01 tracer's name-only
+  // update_macro call to every field MacroForm assembles (name, action type,
+  // key/button assignment, timing), via the single atomic Intent::UpdateMacro.
+  async function handleSaveMacro(macro: MacroConfig, values: MacroFormSubmitValues) {
     try {
       await invoke("update_macro", {
         id: macro.id,
-        name,
-        sequence: macro.sequence,
-        trigger_mode: macro.trigger_mode,
-        target_app: macro.target_app,
-        trigger_key: macro.trigger_key,
-        trigger_modifiers: macro.trigger_modifiers,
+        name: values.name,
+        sequence: values.sequence,
+        trigger_mode: values.triggerMode,
+        target_app: values.targetApp,
+        trigger_key: values.triggerKey,
+        trigger_modifiers: values.triggerModifiers,
       });
       setEditingCardId(null);
-      setEditingField(null);
+      setEditFormCapturingSlot(null);
     } catch (e) {
       // UX-09 (3alt): reuse the Phase 8 C-1 conflict toast; keep the editor
       // open so the user can correct and retry (mirrors handleCreateMacro's
@@ -623,7 +659,7 @@ function App() {
       const msg = String(e);
       const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
       const macroName = macroMatch ? macroMatch[1] : "another macro";
-      const keyLabel = macro.trigger_key !== null ? resolveKeyName(macro.trigger_key) : "Key";
+      const keyLabel = values.triggerKey !== null ? resolveKeyName(values.triggerKey) : "Key";
       showConflictError(keyLabel, macroName);
       console.error("Failed to update macro:", e);
     }
@@ -670,45 +706,6 @@ function App() {
     document.addEventListener("keydown", onKeyDown, true);
   }
 
-  // @architect: macOS relies on bind_hotkey's overwrite-on-success /
-  // preserve-on-conflict semantics (09-11 gap-closure) — no pre-unbind.
-  // bind_hotkey overwrites the binding on success and, on a key conflict,
-  // throws the "is already assigned to ..." error WITHOUT mutating state,
-  // so a rejected rebind leaves the macro's previously-working hotkey
-  // intact. Windows uses set_macro_trigger_key, which now (09-11) also
-  // rejects conflicts via an Err reply instead of silently coercing.
-  // UX-13: `modifiers` is the platform-native bitmask from computeModifiers,
-  // forwarded to both bind_hotkey (macOS) and set_macro_trigger_key (both).
-  async function handleCardSetTriggerKey(id: string, nativeCode: number, modifiers: number) {
-    try {
-      if (IS_MACOS) {
-        await invoke("bind_hotkey", { macro_id: id, keycode: nativeCode, modifiers });
-        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
-      } else {
-        await invoke("set_macro_trigger_key", { id, trigger_key: nativeCode, modifiers });
-      }
-      setEditingCardId(null);
-      setEditingField(null);
-    } catch (e) {
-      // UX-11: surface the conflict error to the C-1 toast (Plan 08-05) —
-      // but only for a genuine conflict. 09-VERIFICATION gap #11: a
-      // non-conflict IPC failure (e.g. a stale macro_id) must not be
-      // mislabeled as "hotkey already bound".
-      const msg = String(e);
-      const macroMatch = msg.match(/is already assigned to "([^"]+)"/);
-      if (macroMatch) {
-        const keyLabel = resolveKeyName(nativeCode);
-        showConflictError(keyLabel, macroMatch[1]);
-      } else {
-        console.error("Card trigger key update failed:", e);
-      }
-      // Reset the card-edit UI state on failure too, so a failed edit
-      // doesn't leave the card frozen showing the "Press…" capture chip.
-      setEditingCardId(null);
-      setEditingField(null);
-    }
-  }
-
   // @architect: Guard prevents duplicate in-flight request (T-03-12); re-fetches on every open (D-06)
   async function handlePickerFocus() {
     if (appsLoading()) return;
@@ -721,17 +718,6 @@ function App() {
       setAppsError(true);
     } finally {
       setAppsLoading(false);
-    }
-  }
-
-  // @architect: Empty string converts to null for Global targeting (T-03-13)
-  async function handleCardSetTargetApp(id: string, targetApp: string | null) {
-    try {
-      await invoke("set_macro_target_app", { id, target_app: targetApp || null });
-      setEditingCardId(null);
-      setEditingField(null);
-    } catch (e) {
-      console.error("Card target update failed:", e);
     }
   }
 
@@ -1195,8 +1181,7 @@ function App() {
                 onTriggerKeyStartCapture={() => {
                   // Cancel any in-progress card edit before starting form capture
                   if (editingCardId() !== null) {
-                    setEditingCardId(null);
-                    setEditingField(null);
+                    handleCancelEditMacro();
                   }
                   setFormCapturingSlot("trigger");
                   startCapture((nativeCode, mods) => {
@@ -1217,8 +1202,7 @@ function App() {
                 actionKeyRecording={() => triggerKeyRecording() && formCapturingSlot() === "action"}
                 onActionKeyStartCapture={() => {
                   if (editingCardId() !== null) {
-                    setEditingCardId(null);
-                    setEditingField(null);
+                    handleCancelEditMacro();
                   }
                   setFormCapturingSlot("action");
                   startCapture((nativeCode) => {
@@ -1263,196 +1247,73 @@ function App() {
             <div class="flex flex-col gap-2">
               <For each={macroList()}>
                 {(macro) => {
-                  // WR-01: compute once per card as a reactive thunk and
-                  // reuse at all three former call sites, so the dot color
-                  // and the inline waiting/combined labels cannot disagree.
+                  // WR-01: compute once per card as a reactive thunk, passed
+                  // down as a prop so the dot color and inline
+                  // waiting/combined labels cannot disagree.
                   const runningState = () => computeRunningState(macro, state()!);
                   return (
-                  <div class="glass-card p-4">
-                    <div class="flex items-center justify-between mb-2">
-                      <div class="flex items-center gap-2 flex-1 min-w-0">
-                        <div
-                          class={(() => {
-                            switch (runningState()) {
-                              case "firing":
-                                return "w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)] animate-pulse";
-                              case "held":
-                                return "w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_var(--color-accent-glow)]";
-                              case "combined":
-                                return "w-2 h-2 rounded-full bg-warning shadow-[0_0_6px_var(--color-warning-glow)] animate-pulse";
-                              case "waiting":
-                                return "w-2 h-2 rounded-full bg-success shadow-[0_0_6px_var(--color-success-glow)]";
-                              default:
-                                return "w-2 h-2 rounded-full bg-text-dim";
-                            }
-                          })()}
-                        />
-                        <Show
-                          when={editingCardId() === macro.id && editingField() === "name"}
-                          fallback={
-                            <>
-                              <span class="text-sm font-medium">{macro.name}</span>
-                              <Show when={runningState() === "waiting"}>
-                                <span class="text-[10px] text-text-dim">
-                                  Waiting for {macro.target_app}
-                                </span>
-                              </Show>
-                              <Show when={runningState() === "combined"}>
-                                <span class="text-[10px] text-text-dim">
-                                  Active (Hold + Click)
-                                </span>
-                              </Show>
-                            </>
-                          }
-                        >
-                          {/* D-13 tracer (UX-09): thin end-to-end name-edit
-                              slice — full field set generalized in 10-05. */}
-                          <input
-                            value={editingMacroName()}
-                            onInput={(e) => setEditingMacroName(e.currentTarget.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") handleCancelEditMacroName();
-                            }}
-                            class="flex-1 min-w-0 bg-background border border-border rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-accent/50 transition-colors"
-                          />
-                          <button
-                            onClick={() => handleSaveMacroName(macro)}
-                            disabled={!editingMacroName().trim()}
-                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
-                                   bg-accent text-white hover:bg-accent/80 disabled:opacity-30"
-                          >
-                            Save Changes
-                          </button>
-                          <button
-                            onClick={handleCancelEditMacroName}
-                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
-                                   bg-surface-alt border border-border text-text-muted hover:text-text-main"
-                          >
-                            Cancel
-                          </button>
-                        </Show>
-                      </div>
-                      <div class="flex items-center gap-1.5">
-                        <div
-                          class="toggle-track"
-                          data-active={macro.enabled}
-                          onClick={() =>
-                            handleToggleMacro(macro.id, macro.enabled)
-                          }
-                          style={{ transform: "scale(0.8)" }}
-                        >
-                          <div class="toggle-thumb" />
-                        </div>
-                        <button
-                          onClick={() => handleStartEditMacroName(macro)}
-                          class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer
-                                 bg-surface-alt border border-border text-text-muted hover:text-text-main hover:border-border-hover"
-                          title="Edit macro"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => handleRemoveMacro(macro.id, macro.name)}
-                          class="px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors cursor-pointer
-                                 bg-danger/10 text-danger border border-danger/20 hover:bg-danger/20"
-                          title="Delete macro"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Target & Trigger */}
-                    <div class="flex items-center justify-between text-[11px] text-text-dim mb-1">
-                      <div class="flex items-center gap-2">
-                        <span>🎯</span>
-                        <Show
-                          when={editingCardId() === macro.id && editingField() === "target"}
-                          fallback={
-                            <span
-                              class="font-mono cursor-pointer border border-transparent hover:border-accent/40 rounded px-1"
-                              onClick={() => {
-                                setEditingCardId(macro.id);
-                                setEditingField("target");
-                                handlePickerFocus();
-                              }}
-                            >
-                              {macro.target_app || "Global"}
-                            </span>
-                          }
-                        >
-                          <select
-                            class="flex-1 min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/50 transition-colors text-text-main cursor-pointer"
-                            value={macro.target_app ?? ""}
-                            onFocus={handlePickerFocus}
-                            onChange={(e) => handleCardSetTargetApp(macro.id, e.currentTarget.value || null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") {
-                                setEditingCardId(null);
-                                setEditingField(null);
-                              }
-                            }}
-                          >
-                            <option value="">🌐 Global (no target)</option>
-                            <Show when={appsLoading()}>
-                              <option disabled>Loading…</option>
-                            </Show>
-                            <Show when={appsError()}>
-                              <option disabled>Failed to load apps</option>
-                            </Show>
-                            <For each={apps()}>
-                              {(app) => (
-                                <option value={app.identifier}>
-                                  {app.display_name} ({app.identifier})
-                                </option>
-                              )}
-                            </For>
-                          </select>
-                        </Show>
-                      </div>
-                      <div class="flex items-center gap-1">
-                        <KeyCaptureField
-                          compact
-                          label={() =>
-                            macro.trigger_key !== null ? resolveKeyName(macro.trigger_key!) : "Set key…"
-                          }
-                          hasValue={() => macro.trigger_key !== null}
-                          recording={() => editingCardId() === macro.id && editingField() === "key"}
-                          recordingModifierChips={() => modifierChips(recordingModifiers())}
-                          onStartCapture={() => {
-                            setEditingCardId(macro.id);
-                            setEditingField("key");
-                            startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
-                          }}
-                          onCancelRecording={() => {
-                            setEditingCardId(null);
-                            setEditingField(null);
-                            if (_keyCaptureListener) {
-                              document.removeEventListener("keydown", _keyCaptureListener, true);
-                              _keyCaptureListener = null;
-                            }
-                            setTriggerKeyRecording(false);
-                          }}
-                        />
-                        <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
-                        {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
-                        <span class="text-[10px] text-text-dim">↗ Global</span>
-                      </div>
-                    </div>
-
-                    {/* Steps */}
-                    <Show when={macro.sequence.steps.length > 0}>
-                      <div class="flex flex-wrap gap-1.5 mt-2">
-                        <For each={macro.sequence.steps}>
-                          {(step) => (
-                            <span class="text-[10px] bg-surface-alt border border-border rounded px-2 py-0.5 text-text-muted">
-                              {formatStep(step)}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
+                    <MacroCard
+                      macro={macro}
+                      runningState={runningState}
+                      isEditing={() => editingCardId() === macro.id}
+                      onEditStart={() => handleStartEditMacro(macro)}
+                      onEditCancel={handleCancelEditMacro}
+                      onEditSave={(values) => handleSaveMacro(macro, values)}
+                      onToggleEnabled={() => handleToggleMacro(macro.id, macro.enabled)}
+                      onDeleteClick={() => handleRemoveMacro(macro.id, macro.name)}
+                      editName={editMacroName}
+                      onEditNameChange={setEditMacroName}
+                      editInput={editMacroInput}
+                      onEditInputChange={setEditMacroInput}
+                      editMode={editMacroMode}
+                      onEditModeChange={setEditMacroMode}
+                      editInterval={editMacroInterval}
+                      onEditIntervalChange={setEditMacroInterval}
+                      editTarget={editMacroTarget}
+                      onEditTargetChange={setEditMacroTarget}
+                      onEditTargetFocus={handlePickerFocus}
+                      apps={apps}
+                      appsLoading={appsLoading}
+                      appsError={appsError}
+                      editTriggerKeyCode={editMacroTriggerKeyCode}
+                      editTriggerKeyModifiers={editMacroTriggerModifiers}
+                      editTriggerKeyRecording={() => triggerKeyRecording() && editFormCapturingSlot() === "trigger"}
+                      onEditTriggerKeyStartCapture={() => {
+                        setEditFormCapturingSlot("trigger");
+                        startCapture((nativeCode, mods) => {
+                          setEditMacroTriggerKeyCode(nativeCode);
+                          setEditMacroTriggerModifiers(mods);
+                          setEditFormCapturingSlot(null);
+                        });
+                      }}
+                      onEditTriggerKeyCancelCapture={() => {
+                        setTriggerKeyRecording(false);
+                        setEditFormCapturingSlot(null);
+                        if (_keyCaptureListener) {
+                          document.removeEventListener("keydown", _keyCaptureListener, true);
+                          _keyCaptureListener = null;
+                        }
+                      }}
+                      editActionKeyCode={editMacroActionKeyCode}
+                      editActionKeyRecording={() => triggerKeyRecording() && editFormCapturingSlot() === "action"}
+                      onEditActionKeyStartCapture={() => {
+                        setEditFormCapturingSlot("action");
+                        startCapture((nativeCode) => {
+                          setEditMacroActionKeyCode(nativeCode);
+                          setEditFormCapturingSlot(null);
+                        });
+                      }}
+                      onEditActionKeyCancelCapture={() => {
+                        setTriggerKeyRecording(false);
+                        setEditFormCapturingSlot(null);
+                        if (_keyCaptureListener) {
+                          document.removeEventListener("keydown", _keyCaptureListener, true);
+                          _keyCaptureListener = null;
+                        }
+                      }}
+                      recordingModifierChips={() => modifierChips(recordingModifiers())}
+                      editSubmitDisabled={() => !editMacroName().trim()}
+                    />
                   );
                 }}
               </For>
