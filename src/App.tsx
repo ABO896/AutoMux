@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getVersion } from "@tauri-apps/api/app";
 import { domKeycodeToNative, resolveKeyName } from "./keymap";
+import { getStoredPreference, applyTheme, type ThemePreference } from "./theme";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
@@ -249,6 +250,16 @@ function App() {
 
   const [appVersion, setAppVersion] = createSignal<string>("…");
 
+  // D-06/D-07: theme preference, seeded from localStorage (boot script in
+  // index.html already applied the resolved data-theme before first paint;
+  // this signal is the runtime source of truth for the live matchMedia
+  // follow effect below and, in plan 10-03, the sidebar ThemeToggle control).
+  const [themePreference, setThemePreference] = createSignal<ThemePreference>(getStoredPreference());
+  // Consumed by the plan 10-03 sidebar ThemeToggle control (not built yet in
+  // this plan) — referenced here so strict noUnusedLocals is satisfied
+  // without rendering partial UI ahead of schedule.
+  void setThemePreference;
+
   // ── New Macro Form State ──
   const [showNewMacro, setShowNewMacro] = createSignal(false);
   const [newMacroName, setNewMacroName] = createSignal("");
@@ -353,6 +364,23 @@ function App() {
     });
     onCleanup(() => {
       unlisten.then((fn) => fn());
+    });
+  });
+
+  // D-06/D-07: live OS-appearance follow. While the preference is "system",
+  // re-apply the theme whenever the OS prefers-color-scheme changes so the
+  // app updates without requiring a restart. Listener is removed on cleanup
+  // per CONVENTIONS.md's "always clean up subscriptions inside effects."
+  createEffect(() => {
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (themePreference() === "system") {
+        applyTheme("system");
+      }
+    };
+    mql.addEventListener("change", onChange);
+    onCleanup(() => {
+      mql.removeEventListener("change", onChange);
     });
   });
 
