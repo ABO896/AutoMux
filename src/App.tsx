@@ -7,6 +7,7 @@ import { domKeycodeToNative, resolveKeyName } from "./keymap";
 import { getStoredPreference, applyTheme, type ThemePreference } from "./theme";
 import Sidebar from "./components/Sidebar";
 import ThemeToggle from "./components/ThemeToggle";
+import KeyCaptureField from "./components/KeyCaptureField";
 import "./App.css";
 
 // ── Types (mirrors Rust state) ──────────────────────────────────
@@ -1225,66 +1226,34 @@ function App() {
                     <option value="Pulse">⏱ Pulse (Interval)</option>
                     <option value="Hold">🔒 Hold (Latched)</option>
                   </select>
-                  <div class="flex flex-col">
-                    {/* UX-13 (C-5): modifier preview chips during capture.
-                        Shows held modifiers in semantic order (Shift → Ctrl →
-                        Alt → Cmd/Win) above the existing capture chip. */}
-                    <Show when={triggerKeyRecording() && recordingModifiers() !== 0}>
-                      <div class="flex items-center gap-1 mb-1">
-                        <For each={modifierChips(recordingModifiers())}>
-                          {(label) => (
-                            <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono text-text-main">
-                              {label}
-                            </span>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                    <div
-                      class={`rounded-lg px-3 py-2 text-sm w-40 cursor-pointer flex items-center justify-between
-                        ${triggerKeyRecording()
-                          ? "bg-background border border-accent text-accent shadow-[0_0_8px_var(--color-accent-glow)]"
-                          : newMacroTriggerKeyCode() !== null
-                            ? "bg-background border border-border text-text-main"
-                            : "bg-background border border-border text-text-dim"
-                        }`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        // Cancel any in-progress card edit before starting form capture
-                        if (editingCardId() !== null) {
-                          setEditingCardId(null);
-                          setEditingField(null);
-                        }
-                        startCapture((nativeCode, mods) => {
-                          setNewMacroTriggerKeyCode(nativeCode);
-                          setNewMacroTriggerModifiers(mods);
-                        });
-                      }}
-                    >
-                      <span>
-                        {triggerKeyRecording()
-                          ? "Press a key…"
-                          : newMacroTriggerKeyCode() !== null
-                            ? resolveKeyName(newMacroTriggerKeyCode()!)
-                            : "Click to set key…"
-                        }
-                      </span>
-                      <Show when={triggerKeyRecording()}>
-                        <span
-                          class="text-text-dim hover:text-text-main ml-2 leading-none"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTriggerKeyRecording(false);
-                            if (_keyCaptureListener) {
-                              document.removeEventListener("keydown", _keyCaptureListener, true);
-                              _keyCaptureListener = null;
-                            }
-                          }}
-                        >✕</span>
-                      </Show>
-                    </div>
-                  </div>
+                  <KeyCaptureField
+                    label={() =>
+                      newMacroTriggerKeyCode() !== null
+                        ? resolveKeyName(newMacroTriggerKeyCode()!)
+                        : "Click to set key…"
+                    }
+                    hasValue={() => newMacroTriggerKeyCode() !== null}
+                    recording={triggerKeyRecording}
+                    recordingModifierChips={() => modifierChips(recordingModifiers())}
+                    onStartCapture={() => {
+                      // Cancel any in-progress card edit before starting form capture
+                      if (editingCardId() !== null) {
+                        setEditingCardId(null);
+                        setEditingField(null);
+                      }
+                      startCapture((nativeCode, mods) => {
+                        setNewMacroTriggerKeyCode(nativeCode);
+                        setNewMacroTriggerModifiers(mods);
+                      });
+                    }}
+                    onCancelRecording={() => {
+                      setTriggerKeyRecording(false);
+                      if (_keyCaptureListener) {
+                        document.removeEventListener("keydown", _keyCaptureListener, true);
+                        _keyCaptureListener = null;
+                      }
+                    }}
+                  />
                 </div>
 
                 <button
@@ -1469,83 +1438,34 @@ function App() {
                           </select>
                         </Show>
                       </div>
-                      <Show when={macro.trigger_key !== null} fallback={
-                        <div class="flex items-center gap-1">
-                          <span
-                            class="px-1.5 py-0.5 rounded border border-dashed border-border text-[10px] font-mono text-text-dim cursor-pointer hover:border-accent/40 hover:text-text-main"
-                            onClick={() => {
-                              setEditingCardId(macro.id);
-                              setEditingField("key");
-                              startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
-                            }}
-                          >Set key…</span>
-                          <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
-                          {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
-                          <span class="text-[10px] text-text-dim">↗ Global</span>
-                        </div>
-                      }>
-                        <div class="flex items-center gap-1">
-                          <Show
-                            when={editingCardId() === macro.id && editingField() === "key"}
-                            fallback={
-                              <span
-                                class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono cursor-pointer hover:border-accent/40"
-                                onClick={() => {
-                                  setEditingCardId(macro.id);
-                                  setEditingField("key");
-                                  startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
-                                }}
-                              >
-                                {resolveKeyName(macro.trigger_key!)}
-                              </span>
+                      <div class="flex items-center gap-1">
+                        <KeyCaptureField
+                          compact
+                          label={() =>
+                            macro.trigger_key !== null ? resolveKeyName(macro.trigger_key!) : "Set key…"
+                          }
+                          hasValue={() => macro.trigger_key !== null}
+                          recording={() => editingCardId() === macro.id && editingField() === "key"}
+                          recordingModifierChips={() => modifierChips(recordingModifiers())}
+                          onStartCapture={() => {
+                            setEditingCardId(macro.id);
+                            setEditingField("key");
+                            startCapture((nativeCode, mods) => handleCardSetTriggerKey(macro.id, nativeCode, mods));
+                          }}
+                          onCancelRecording={() => {
+                            setEditingCardId(null);
+                            setEditingField(null);
+                            if (_keyCaptureListener) {
+                              document.removeEventListener("keydown", _keyCaptureListener, true);
+                              _keyCaptureListener = null;
                             }
-                          >
-                            <div class="flex flex-col">
-                              {/* UX-13 (C-5): modifier preview chips during
-                                  card-edit capture — mirrors the new-macro
-                                  form's chip row above. */}
-                              <Show
-                                when={
-                                  triggerKeyRecording() &&
-                                  editingCardId() === macro.id &&
-                                  editingField() === "key" &&
-                                  recordingModifiers() !== 0
-                                }
-                              >
-                                <div class="flex items-center gap-1 mb-1">
-                                  <For each={modifierChips(recordingModifiers())}>
-                                    {(label) => (
-                                      <span class="px-1.5 py-0.5 rounded bg-surface-alt border border-border text-[10px] font-mono text-text-main">
-                                        {label}
-                                      </span>
-                                    )}
-                                  </For>
-                                </div>
-                              </Show>
-                              <span class="px-1.5 py-0.5 rounded border border-accent text-[10px] font-mono text-accent shadow-[0_0_4px_var(--color-accent-glow)] flex items-center gap-1">
-                                Press…
-                                <span
-                                  class="text-text-dim hover:text-text-main leading-none cursor-pointer"
-                                  onClick={() => {
-                                    setEditingCardId(null);
-                                    setEditingField(null);
-                                    if (_keyCaptureListener) {
-                                      document.removeEventListener("keydown", _keyCaptureListener, true);
-                                      _keyCaptureListener = null;
-                                    }
-                                    setTriggerKeyRecording(false);
-                                  }}
-                                >✕</span>
-                              </span>
-                            </div>
-                          </Show>
-                          <span class="text-[10px] text-text-muted">
-                            ({macro.trigger_mode})
-                          </span>
-                          {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
-                          <span class="text-[10px] text-text-dim">↗ Global</span>
-                        </div>
-                      </Show>
+                            setTriggerKeyRecording(false);
+                          }}
+                        />
+                        <span class="text-[10px] text-text-muted">({macro.trigger_mode})</span>
+                        {/* UX-14 (C-4): "↗ Global" subtitle — always visible */}
+                        <span class="text-[10px] text-text-dim">↗ Global</span>
+                      </div>
                     </div>
 
                     {/* Steps */}
