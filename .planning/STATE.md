@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
-current_phase: 09
-current_phase_name: parallel-macro-execution
+current_phase: 10
+current_phase_name: ui-redesign-macro-management
 status: executing
-stopped_at: Phase 10 UI-SPEC approved
-last_updated: "2026-07-23T14:24:20.843Z"
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-07-24T01:07:06.405Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 31
+  completed_plans: 26
   percent: 83
 ---
 
@@ -22,19 +22,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 09 — parallel-macro-execution
+**Current focus:** Phase 10 — ui-redesign-macro-management
 
 ## Current Position
 
-Phase: 09 (parallel-macro-execution) — SOURCE-LEVEL COMPLETE (status: human_needed)
-Plan: 11 of 11
+Phase: 10 (ui-redesign-macro-management) — EXECUTING
+Plan: 2 of 6
 Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
-Status: Source-level complete, awaiting human real-device verification (no further code work pending)
+Status: Ready to execute
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
 ```
-Progress: [██████████] 100% (plans 25/25 complete in v2.0)
+Progress: [████████░░] 84% (plans 25/25 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -80,10 +80,10 @@ Progress: [██████████] 100% (plans 25/25 complete in v2.0)
 
 ## Session Continuity
 
-**Resume file:** /Users/alvaro/AutoClicker/.planning/phases/10-ui-redesign-macro-management/10-UI-SPEC.md
+**Resume file:** None
 
-Last session: 2026-07-23T14:24:20.827Z
-Stopped at: Phase 10 UI-SPEC approved
+Last session: 2026-07-24T01:07:06.397Z
+Stopped at: Completed 10-01-PLAN.md
 Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
@@ -123,6 +123,7 @@ Next: Phase 9 routes to human real-device verification only — macOS tests T9.1
 | Phase 09 P09 | 10min | 2 tasks | 2 files |
 | Phase 09 P10 | 5min | 3 tasks | 4 files |
 | Phase 09 P11 | 10min | 3 tasks | 3 files |
+| Phase 10 P01 | 25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -167,3 +168,6 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 9 Plan 11] Gap-closure: action_should_inject free fn gives HoldRelease an unconditional Gate 1/2/3 bypass in handle_action (stuck-input fix); resolve_trigger_key_update + Result-carrying SetMacroTriggerKey oneshot rejects conflicting Windows rebinds instead of silently coercing to None/0; macOS handleCardSetTriggerKey no longer pre-unbinds before bind_hotkey, relying on its overwrite-on-success/preserve-on-conflict semantics. Closes both Blocker gaps from 09-VERIFICATION.md.
 - [Phase ?]: [Quick 260723-k9l]: Gated Intent::LoadProfile's macros.clear()+auto_save_default() behind a successful profile load (Ok branch only); Err branch restarts scheduler tasks via reevaluate_all_macros() without persisting. Closes 09-REVIEW.md CR-01 data-loss bug; regression test added in persistence.rs.
 - [Phase ?]: [Quick 260723-krr]: Fixed Windows keyboard hook missing LLKHF_INJECTED filter (09-REVIEW.md CR-02) — added flags_indicate_injected predicate + hook_callback gating so a macro's own SendInput-synthesized keystroke can no longer self-trigger the Ctrl+Shift+Q emergency stop or another macro's hotkey binding, mirroring the macOS CGEventTap's existing LLMHF_INJECTED guard. Predicate + tests relocated to platform/mod.rs mid-execution because pub mod windows; is itself cfg(target_os=windows)-gated, making anything defined inside windows/mod.rs untestable on macOS regardless of its own gating. Closed backlog item.
+- [Phase ?]: [Phase 10 Plan 1]: editingField gained a third value ('name') as a sibling to the existing key/target inline editors, still gated on the single centralized editingCardId signal — prevents the new name editor and the target/key editors from rendering simultaneously on the same card.
+- [Phase ?]: [Phase 10 Plan 1]: update_macro's persistence round-trip test uses a direct serde_json round-trip through ProfileData (no ProfileManager/AppHandle) — mirrors the existing profile_backwards_compat test's style since state/mod.rs's test module cannot construct a real tauri::AppHandle headlessly.
+- [Phase ?]: [Phase 10 Plan 1]: requirements mark-complete was NOT run for UX-09/UI-01 — gsd-tools requirements ready-ids confirmed both are still 'blocked' (span plans 10-02 through 10-06 of this phase); marking them complete after only this plan would misrepresent phase progress in REQUIREMENTS.md.
