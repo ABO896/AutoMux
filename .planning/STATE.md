@@ -27,9 +27,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 4 of 6 (10-03) — Complete. Task 3's human-verify checkpoint (early UI-04 idle CPU/GPU perf gate + both-theme visual spot-check) was approved by the user 2026-07-24 on a real macOS Tahoe device: no measurable idle overhead, both themes render cleanly, sidebar nav is keyboard-reachable. Blur-layer-reduction fallback was not needed. See 10-03-SUMMARY.md. Next: plan 10-04.
-Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
-Status: Executing (Phase 10, Plan 04 next)
+Plan: 4 of 6 (10-04) — Complete. Extracted KeyCaptureField.tsx (reusable key-capture widget) and MacroForm.tsx (shared field set incl. selectable Key Press per D-11, UX-10 two-selector relabeling). No checkpoints in this plan. See 10-04-SUMMARY.md. Next: plan 10-05.
+Status: Executing (Phase 10, Plan 05 next)
+
+Phase 9 (parallel-macro-execution) note: source-level work is complete and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z) — both prior Blocker gaps closed (HoldRelease Gate 1/2/3 bypass; hotkey-rebind rollback safety on both platforms). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The only remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device across any verification pass for this phase).
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
