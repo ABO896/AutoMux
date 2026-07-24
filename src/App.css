@@ -1,7 +1,16 @@
 @import "tailwindcss";
 
-/* ── Design System ───────────────────────────────────────────── */
-@theme {
+/* ── Design System — Theme Tokens ────────────────────────────────
+   Tailwind v4 attribute-driven theming (RESEARCH.md Pattern 3):
+   :root holds the dark (default) token values; the light override
+   block below swaps them for light mode; the dark-alias block is an
+   explicit alias of :root so the boot script's explicit "dark"
+   attribute resolves identically to the default. The theme-inline
+   mapping block maps every --color-* custom property to a Tailwind
+   utility so existing bg-accent/text-text-muted/border-border classes
+   keep working unchanged — only the underlying custom-property values
+   swap. */
+:root {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --color-background: #0a0a0f;
   --color-surface: #12121a;
@@ -19,6 +28,67 @@
   --color-danger-glow: #ef444440;
   --color-warning: #f59e0b;
   --color-warning-glow: #f59e0b40;
+}
+
+/* Explicit alias of :root — the boot script always sets an explicit
+   data-theme value ("light" or "dark"), never leaves it unset, so this
+   keeps the resolved-dark path identical to the default :root values. */
+[data-theme="dark"] {
+  --color-background: #0a0a0f;
+  --color-surface: #12121a;
+  --color-surface-alt: #1a1a28;
+  --color-border: #2a2a3a;
+  --color-border-hover: #3a3a50;
+  --color-text-main: #e8e8f0;
+  --color-text-muted: #6b6b80;
+  --color-text-dim: #4a4a5a;
+  --color-accent: #6366f1;
+  --color-accent-glow: #818cf880;
+  --color-success: #22c55e;
+  --color-success-glow: #22c55e40;
+  --color-danger: #ef4444;
+  --color-danger-glow: #ef444440;
+  --color-warning: #f59e0b;
+  --color-warning-glow: #f59e0b40;
+}
+
+[data-theme="light"] {
+  --color-background: #f4f4f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f0f0f6;
+  --color-border: #e1e1ea;
+  --color-border-hover: #cfcfdc;
+  --color-text-main: #1c1c26;
+  --color-text-muted: #6b6b80;
+  --color-text-dim: #9494a6;
+  --color-accent: #4f46e5;
+  --color-accent-glow: #6366f14d;
+  --color-success: #16a34a;
+  --color-success-glow: #16a34a40;
+  --color-danger: #dc2626;
+  --color-danger-glow: #dc262640;
+  --color-warning: #d97706;
+  --color-warning-glow: #d9770640;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-surface-alt: var(--color-surface-alt);
+  --color-border: var(--color-border);
+  --color-border-hover: var(--color-border-hover);
+  --color-text-main: var(--color-text-main);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-dim: var(--color-text-dim);
+  --color-accent: var(--color-accent);
+  --color-accent-glow: var(--color-accent-glow);
+  --color-success: var(--color-success);
+  --color-success-glow: var(--color-success-glow);
+  --color-danger: var(--color-danger);
+  --color-danger-glow: var(--color-danger-glow);
+  --color-warning: var(--color-warning);
+  --color-warning-glow: var(--color-warning-glow);
 }
 
 /* ── Base ────────────────────────────────────────────────────── */
@@ -75,9 +145,9 @@ button, input, select {
 
 /* ── Glassmorphism Card ──────────────────────────────────────── */
 /* D-03: real translucency — background is a translucent color-mix (not
-   opaque) so backdrop-filter has something to blend through. Interim
-   treatment for this plan; finalized/extended (tokens, .sidebar-glass) in
-   plan 10-02. */
+   opaque) so backdrop-filter has something to blend through. Finalized
+   this plan (10-02) against the token set above; the values themselves
+   were already established as the interim treatment in plan 10-01. */
 .glass-card {
   background: color-mix(in srgb, var(--color-surface) 72%, transparent);
   border: 1px solid var(--color-border);
@@ -89,6 +159,17 @@ button, input, select {
 .glass-card:hover {
   border-color: var(--color-border-hover);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Sidebar translucent panel (C-SB1) — a subtly stronger blur than
+   .glass-card so the sidebar reads as a distinct layer "above" the
+   content column, per Raycast/macOS sidebar convention (UI-SPEC
+   Translucency section). Tailwind 4 utilities alone can't express
+   color-mix + a custom blur value, hence a hand-written class here,
+   matching this file's existing convention (.toggle-track etc). */
+.sidebar-glass {
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  backdrop-filter: blur(24px);
 }
 
 /* ── Toggle Switch ───────────────────────────────────────────── */
