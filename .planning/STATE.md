@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 5 of 6 (10-04) — Complete. Extracted KeyCaptureField.tsx (reusable key-capture widget) and MacroForm.tsx (shared field set incl. selectable Key Press per D-11, UX-10 two-selector relabeling). No checkpoints in this plan. See 10-04-SUMMARY.md. Next: plan 10-05.
-Status: Executing (Phase 10, Plan 05 next)
+Plan: 5 of 6 (10-05) — Complete. Extracted MacroCard.tsx (normal/inline-edit/inline-delete-confirm states, C-E1/C-D1, D-13/D-14). window.confirm() fully removed from the delete path (0 occurrences in App.tsx), replaced by an in-card glass confirmation — fixes the WKWebView unreliability found during the Wave 3 checkpoint. UX-08/UX-09 marked complete in REQUIREMENTS.md. No checkpoints in this plan. See 10-05-SUMMARY.md. Next: plan 10-06 (final phase-closing verification, last plan in this phase).
+Status: Executing (Phase 10, Plan 06 next — final plan)
 
 Phase 9 (parallel-macro-execution) note: source-level work is complete and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z) — both prior Blocker gaps closed (HoldRelease Gate 1/2/3 bypass; hotkey-rebind rollback safety on both platforms). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The only remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device across any verification pass for this phase).
 
