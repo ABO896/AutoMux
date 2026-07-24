@@ -138,6 +138,10 @@ None - no external service configuration required.
 - **Outstanding manual verification (human UAT, not blocking this plan's completion):** click through the app — open `✎` on a macro, edit the name, click `Save Changes`, confirm the card shows the new name, restart the app, confirm the name persisted; and visually confirm `.glass-card` shows genuine blur of content behind it. No frontend test framework and no CI perf-profiling tooling exist in this project (per RESEARCH.md), so this remains a human-only check, consistent with how prior phases (8, 9) have deferred real-device/manual verification items.
 - The UI-04 idle CPU/GPU perf measurement (Activity Monitor/Task Manager vs. the v1.2.0 baseline) called for in RESEARCH.md/UI-SPEC has NOT been run in this plan — it is scoped as an early-wave gate per RESEARCH.md's Pitfall 3 guidance, and only sidebar/card blur exists so far (no sidebar yet — that lands in 10-02). Recommend running the measurement once 10-02's sidebar translucency lands, while the fallback (reduce blur layer count) can still be applied cheaply.
 
+## Self-Check: PASSED
+
+All 6 files/paths verified present (`src-tauri/src/state/mod.rs`, `src-tauri/src/ipc/mod.rs`, `src-tauri/src/lib.rs`, `src/App.tsx`, `src/App.css`, this SUMMARY). All 4 commit hashes (`6dd8abb`, `3fd2d12`, `667e19b`, `cd98417`) verified present in `git log`.
+
 ---
 *Phase: 10-ui-redesign-macro-management*
 *Completed: 2026-07-24*
