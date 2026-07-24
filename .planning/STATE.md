@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 10
 current_phase_name: ui-redesign-macro-management
 status: executing
-stopped_at: "Completed 10-04-PLAN.md (KeyCaptureField.tsx + MacroForm.tsx extraction, Key Press selectable, UX-10 relabeling); no checkpoints in this plan. Next: plan 10-05 (inline card-edit + delete confirmation, D-13/D-14)."
-last_updated: "2026-07-24T14:36:49.413Z"
+stopped_at: "Completed 10-05-PLAN.md (MacroCard.tsx extraction: full inline edit + delete confirmation, C-E1/C-D1, D-13/D-14). No checkpoints in this plan. Next: plan 10-06 (final polish/verification)."
+last_updated: "2026-07-24T14:53:34.279Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 31
-  completed_plans: 29
+  completed_plans: 30
   percent: 83
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 4 of 6 (10-04) — Complete. Extracted KeyCaptureField.tsx (reusable key-capture widget) and MacroForm.tsx (shared field set incl. selectable Key Press per D-11, UX-10 two-selector relabeling). No checkpoints in this plan. See 10-04-SUMMARY.md. Next: plan 10-05.
+Plan: 5 of 6 (10-04) — Complete. Extracted KeyCaptureField.tsx (reusable key-capture widget) and MacroForm.tsx (shared field set incl. selectable Key Press per D-11, UX-10 two-selector relabeling). No checkpoints in this plan. See 10-04-SUMMARY.md. Next: plan 10-05.
 Status: Executing (Phase 10, Plan 05 next)
 
 Phase 9 (parallel-macro-execution) note: source-level work is complete and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z) — both prior Blocker gaps closed (HoldRelease Gate 1/2/3 bypass; hotkey-rebind rollback safety on both platforms). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The only remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device across any verification pass for this phase).
@@ -35,7 +35,7 @@ Phase 9 (parallel-macro-execution) note: source-level work is complete and indep
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
 ```
-Progress: [█████████░] 94% (plans 25/25 complete in v2.0)
+Progress: [██████████] 97% (plans 25/25 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -83,8 +83,8 @@ Progress: [█████████░] 94% (plans 25/25 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-24T14:36:49.405Z
-Stopped at: Completed 10-04-PLAN.md (KeyCaptureField.tsx + MacroForm.tsx extraction, Key Press selectable, UX-10 relabeling); no checkpoints in this plan. Next: plan 10-05 (inline card-edit + delete confirmation, D-13/D-14).
+Last session: 2026-07-24T14:53:34.270Z
+Stopped at: Completed 10-05-PLAN.md (MacroCard.tsx extraction: full inline edit + delete confirmation, C-E1/C-D1, D-13/D-14). No checkpoints in this plan. Next: plan 10-06 (final polish/verification).
 Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
@@ -127,6 +127,7 @@ Next: Phase 9 routes to human real-device verification only — macOS tests T9.1
 | Phase 10 P01 | 25min | 3 tasks | 5 files |
 | Phase 10 P02 | 10min | 3 tasks | 4 files |
 | Phase 10 P04 | 13min | 2 tasks | 3 files |
+| Phase 10 P05 | 16min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -178,6 +179,9 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 10 Plan 2]: requirements mark-complete NOT run for UI-01/UI-03/UI-04 — this plan only lays the token/translucency foundation; full redesign spans plans 10-03 through 10-06 and the UI-04 perf gate is deferred to plan 10-03.
 - [Phase ?]: [Phase 10 Plan 4]: KeyCaptureField.tsx collapses the card's prior 3-branch trigger-key Show tree into one component instance (not-set + committed sub-states shared an identical onClick handler); gets a compact boolean prop for two visual variants (card meta-row chip vs MacroForm select-sized box).
 - [Phase ?]: [Phase 10 Plan 4]: Key Press action-key capture renders as its own row below Input+interval (not literally replacing the interval field) so a Key Press + Pulse macro's repeat interval stays editable — chosen over a more literal but functionality-losing reading of UI-SPEC's ambiguous 'renders in the input slot' wording. No modifiers signal created for the action-key capture since InputEvent::Key has no modifiers field.
+- [Phase ?]: [Phase 10 Plan 5]: Retired the pre-existing per-field micro-editors (target-app click-select, trigger-key click-capture) in favor of one unified full inline edit surface (C-E1) mounting MacroForm a second time — matches D-13's literal 'reuses the SAME form' contract; UI-SPEC's Component Inventory only documents C-E1/C-D1 as new non-normal card states.
+- [Phase ?]: [Phase 10 Plan 5]: Dropped the macOS bind_hotkey double-invoke from the edit-save path — Intent::UpdateMacro's handler already calls reevaluate_all_macros() after every successful edit, refreshing the platform hotkey registry unconditionally (Phase 9 Plan 10 single-registry consolidation), so the atomic Save Changes call covers hotkey registration without a separate immediate-commit call.
+- [Phase ?]: [Phase 10 Plan 5]: Delete-confirm (C-D1) replaces the card's entire body, not just its header row — UI-SPEC's ASCII mockup draws only the two confirmation lines inside the card box with no meta row/step chips below, which is the reading kept symmetric with how the edit state (C-E1) already replaces the full card body.
 
 ### Blockers
 

@@ -19,8 +19,8 @@
 
 ### Macro Management
 
-- [ ] **UX-08**: User can delete an existing macro — action is available directly from the macro list without entering an edit mode
-- [ ] **UX-09**: User can edit an existing macro's name, action type, key/button assignment, and timing configuration after creation
+- [x] **UX-08**: User can delete an existing macro — action is available directly from the macro list without entering an edit mode
+- [x] **UX-09**: User can edit an existing macro's name, action type, key/button assignment, and timing configuration after creation
 - [ ] **UX-10**: Action type selection unambiguously labels each option: left click, right click, hold (sustained), key press — no unlabeled or unclear choices presented to the user
 
 ### UI Redesign
@@ -102,8 +102,8 @@
 | ERR-01 | Phase 7 | Complete |
 | EXEC-01 | Phase 9 | Complete (source-level) (parallel scheduler shipped 09-01..09-08; CR-01 hotkey double-dispatch gap closed at source level 09-10; 09-11 gap-closure — HoldRelease bypass + hotkey-rebind rollback safety — confirmed by 09-VERIFICATION.md 2026-07-22T21:30:00Z; on-device human verification T9.1-T9.7 macOS still pending) |
 | EXEC-02 | Phase 9 | Complete (source-level) (identical CR-01 defect closed symmetrically 09-10; 09-11 gap-closure — HoldRelease bypass + hotkey-rebind rollback safety — confirmed by 09-VERIFICATION.md 2026-07-22T21:30:00Z; Windows physical-device tests 6.1-6.3 remain pending, never yet run on-device) |
-| UX-08 | Phase 10 | Pending |
-| UX-09 | Phase 10 | Pending |
+| UX-08 | Phase 10 | Complete |
+| UX-09 | Phase 10 | Complete |
 | UX-10 | Phase 10 | Pending |
 | UI-01 | Phase 10 | Pending |
 | UI-02 | Phase 10 | Pending |
