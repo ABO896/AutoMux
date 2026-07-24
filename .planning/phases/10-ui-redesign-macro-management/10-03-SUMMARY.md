@@ -71,25 +71,28 @@ coverage:
   - id: D4
     description: "UI-04 EARLY perf gate: idle CPU/GPU with all blur surfaces active (.glass-card + .sidebar-glass) measured on-device against the v1.2.0 baseline, with the documented blur-layer-reduction fallback available if the measurement regresses"
     requirement: "UI-04"
-    verification: []
+    verification:
+      - kind: other
+        ref: "Human report: idle CPU/GPU not measurably higher; macros run with no lag before/during/after. No fallback (blur-layer reduction) applied."
+        status: pass
     human_judgment: true
-    rationale: "Requires Activity Monitor / Task Manager on a real macOS Tahoe device comparing idle CPU/GPU against a v1.2.0 (or pre-Phase-10) build — no automated perf-measurement tooling exists in this project. This is Task 3 of the plan, a blocking human-verify checkpoint; the executor cannot self-approve it."
+    rationale: "Confirmed on-device by the user (2026-07-24): no measurable idle overhead increase. Blur-layer-reduction fallback was NOT needed."
 
 # Metrics
-duration: ~15min (Tasks 1-2 only; Task 3 checkpoint pending)
+duration: ~15min (Tasks 1-2), checkpoint resolved same day
 completed: 2026-07-24
-status: checkpoint_pending
+status: complete
 ---
 
 # Phase 10 Plan 03: Sidebar Navigation + ThemeToggle + Window Resize Summary
 
-**84px keyboard-navigable sidebar rail (replacing the top tab bar) with a 3-state ThemeToggle at its footer, plus the Raycast-leaning 720x680 window resize — Tasks 1-2 complete, Task 3 (early UI-04 perf gate + both-theme visual spot-check) is a blocking human-verify checkpoint awaiting the user**
+**84px keyboard-navigable sidebar rail (replacing the top tab bar) with a 3-state ThemeToggle at its footer, plus the Raycast-leaning 720x680 window resize — all 3 tasks complete, including the early UI-04 perf gate + both-theme visual spot-check checkpoint**
 
 ## Performance
 
-- **Duration:** ~15 min (Tasks 1-2)
-- **Completed:** 2026-07-24 (Tasks 1-2; Task 3 pending)
-- **Tasks:** 2/3 (Task 3 is a `checkpoint:human-verify` this executor cannot complete itself)
+- **Duration:** ~15 min (Tasks 1-2), checkpoint resolved same day
+- **Completed:** 2026-07-24
+- **Tasks:** 3/3
 - **Files modified:** 4 (`src/App.tsx`, `src-tauri/tauri.conf.json`, plus 2 new files: `src/components/Sidebar.tsx`, `src/components/ThemeToggle.tsx`)
 
 ## Accomplishments
@@ -107,7 +110,7 @@ Each completed task was committed atomically:
 
 1. **Task 1: Extract Sidebar.tsx and replace the top tab bar** - `dbdc8ee` (feat)
 2. **Task 2: ThemeToggle.tsx (3-state cycle) at the sidebar footer + window resize** - `3f5237d` (feat)
-3. **Task 3: Early UI-04 perf gate + both-theme visual spot-check** - **NOT STARTED — blocking `checkpoint:human-verify`, requires a human on a real macOS Tahoe device**
+3. **Task 3: Early UI-04 perf gate + both-theme visual spot-check** - **APPROVED** (human-verify checkpoint, no commit — verification only). User confirmed on-device (2026-07-24): idle CPU/GPU not measurably higher (macros ran with no lag before/during/after), both light and dark themes render cleanly, sidebar nav items are keyboard-reachable. No blur-layer-reduction fallback needed.
 
 ## Files Created/Modified
 
@@ -128,28 +131,30 @@ None — plan executed exactly as written for Tasks 1-2. Task 3 is an explicit b
 
 ## Issues Encountered
 
-None. `npx tsc --noEmit` and `cargo build --manifest-path src-tauri/Cargo.toml` are both clean after Tasks 1 and 2.
+None blocking. `npx tsc --noEmit` and `cargo build --manifest-path src-tauri/Cargo.toml` are both clean after Tasks 1 and 2. Two pre-existing (not introduced by this phase) bugs surfaced during the human checkpoint's manual testing, both out of scope for this plan:
+- **Macro delete button silently no-ops** — root cause is almost certainly `window.confirm()` being unreliable inside Tauri's WKWebView; this predates Phase 10 (commit `948f27a`). Plan 10-05 already replaces this with an in-card glass confirmation (D-14), so no separate fix needed here.
+- **Target-app process picker doesn't bind the clicked option** — pre-existing, unrelated to any file this phase touches. Logged as `.planning/todos/pending/2026-07-24-process-picker-doesnt-select-clicked-app.md` for a future `/gsd-debug` session.
+
+Also captured as a backlog idea (not a bug): a future settings page for app-level customization, starting with excluding AutoMux itself as a valid macro target to prevent self-triggering chaos. Filed as `.planning/phases/999.1-settings-page-app-customization-self-exclusion/` (ROADMAP.md Backlog section).
 
 ## User Setup Required
 
-**Task 3 requires a human on a real macOS Tahoe device** to:
-1. Build/run the current app (`npm run tauri dev` or a release build) and measure idle CPU/GPU (Activity Monitor) with all blur surfaces active (`.glass-card` on every macro card + `.sidebar-glass` on the new rail) — this is the point of maximum backdrop-filter layer count before plans 10-04/10-05 add more surfaces.
-2. Compare against a v1.2.0 (or pre-Phase-10) build's idle CPU/GPU baseline, if available.
-3. If NOT measurably higher: approve.
-4. If measurably higher: report the numbers so the documented fallback (blur only `.sidebar-glass` + the topmost banner, drop per-card blur) can be applied before 10-04/10-05 build on top.
-5. Also spot-check visually in BOTH light and dark themes (no dark-only element in light mode), confirm content behind a card/sidebar visibly blurs, confirm the window respects the 560×520 minimum and stays resizable, and confirm both sidebar nav items are Tab-reachable.
+None further — Task 3 was completed via the human checkpoint below.
 
-See the full instructions in the checkpoint returned to the orchestrator for this plan.
+**Task 3 checkpoint result (2026-07-24):** User built/ran the app (`npm run tauri dev`) on their macOS Tahoe device and reported:
+1. No measurable idle lag with all blur surfaces active (`.glass-card` on every card + `.sidebar-glass` on the rail) — macros ran with no lag before, during, or after. Fallback (blur-layer reduction) NOT needed.
+2. Both light and dark themes render cleanly with no dark-only elements bleeding into light mode.
+3. Theme toggle placement is discoverable, though the user noted (as a soft UX observation, not a blocking issue) it isn't exactly where they'd instinctively look first — no action taken, footer placement was an explicit design decision (D-06) from discuss-phase.
 
 ## Next Phase Readiness
 
-- **Blocked on Task 3.** This plan is NOT complete — STATE.md position reflects "checkpoint pending" rather than advancing to plan 04. Requirements UI-01/UI-02/UI-03/UI-04 are NOT marked complete in REQUIREMENTS.md (the UI-04 perf gate this plan exists to pin is exactly the pending checkpoint).
-- Once Task 3 is approved (or the blur-reduction fallback is applied and re-measured), the sidebar rail and ThemeToggle are otherwise ready for plans 10-04/10-05 to build the macro-edit/delete/action-type surfaces on top of the resized 720×680 window.
+- **Plan 10-03 is complete.** All 3 tasks done, checkpoint approved. Requirements UI-01/UI-02/UI-03/UI-04 remain "Pending" at the phase level in REQUIREMENTS.md (consistent with 10-01/10-02) — they're only marked complete when the full Phase 10 finishes.
+- The sidebar rail, ThemeToggle, and resized 720×680 window are ready for plans 10-04/10-05 to build the macro-edit/delete/action-type surfaces on top.
 
 ## Self-Check: PASSED
 
-Both files verified present (`src/components/Sidebar.tsx`, `src/components/ThemeToggle.tsx`) and both commit hashes (`dbdc8ee`, `3f5237d`) verified present in `git log`.
+Both files verified present (`src/components/Sidebar.tsx`, `src/components/ThemeToggle.tsx`) and both commit hashes (`dbdc8ee`, `3f5237d`) verified present in `git log`. Human-verify checkpoint (Task 3) approved by the user 2026-07-24.
 
 ---
 *Phase: 10-ui-redesign-macro-management*
-*Completed: 2026-07-24 (Tasks 1-2 only; Task 3 checkpoint pending)*
+*Completed: 2026-07-24*

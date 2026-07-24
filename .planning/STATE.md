@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 3 of 6 (10-03) — Tasks 1-2 complete and committed (dbdc8ee, 3f5237d); Task 3 is a blocking `checkpoint:human-verify` (early UI-04 idle CPU/GPU perf gate + both-theme visual spot-check on a real macOS Tahoe device) — plan 10-03 is NOT complete until this checkpoint is approved or the documented blur-layer-reduction fallback is applied and re-measured. See 10-03-SUMMARY.md.
+Plan: 3 of 6 (10-03) — Complete. Task 3's human-verify checkpoint (early UI-04 idle CPU/GPU perf gate + both-theme visual spot-check) was approved by the user 2026-07-24 on a real macOS Tahoe device: no measurable idle overhead, both themes render cleanly, sidebar nav is keyboard-reachable. Blur-layer-reduction fallback was not needed. See 10-03-SUMMARY.md. Next: plan 10-04.
 Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
-Status: Blocked on human checkpoint (Phase 10 Plan 03 Task 3)
+Status: Executing (Phase 10, Plan 04 next)
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 

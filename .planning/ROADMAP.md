@@ -178,7 +178,7 @@ Plans:
   4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across restarts
   5. Action type selection displays unambiguous labels — "Left Click", "Right Click", "Hold", "Key Press" — with no unlabeled or ambiguous options
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 Plans:
 **Wave 1**
 
@@ -190,7 +190,7 @@ Plans:
 
 **Wave 3**
 
-- [ ] 10-03-PLAN.md — Sidebar nav + 3-state theme toggle + window 720×680; early UI-04 perf gate (UI-01, UI-02, UI-03, UI-04)
+- [x] 10-03-PLAN.md — Sidebar nav + 3-state theme toggle + window 720×680; early UI-04 perf gate (UI-01, UI-02, UI-03, UI-04)
 
 **Wave 4**
 
@@ -219,7 +219,7 @@ Plans:
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
 | 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
-| 10. UI Redesign & Macro Management | v2.0 | 2/6 | In Progress|  |
+| 10. UI Redesign & Macro Management | v2.0 | 3/6 | In Progress|  |
 
 ## Backlog
 
@@ -232,4 +232,5 @@ Plans:
 Captured 2026-07-24 during the Phase 10 (10-03) UAT checkpoint: a dedicated settings page where users can tweak app-level behavior, starting with an option to exclude AutoMux itself as a valid macro target — preventing a macro/autoclick from firing on AutoMux's own window/process and causing runaway self-triggering chaos.
 
 Plans:
+
 - [ ] TBD (promote with /gsd-review-backlog when ready)
