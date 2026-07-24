@@ -220,3 +220,16 @@ Plans:
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
 | 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
 | 10. UI Redesign & Macro Management | v2.0 | 2/6 | In Progress|  |
+
+## Backlog
+
+### Phase 999.1: Settings page for app customization, including self-exclusion (BACKLOG)
+
+**Goal:** [Captured for future planning]
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Captured 2026-07-24 during the Phase 10 (10-03) UAT checkpoint: a dedicated settings page where users can tweak app-level behavior, starting with an option to exclude AutoMux itself as a valid macro target — preventing a macro/autoclick from firing on AutoMux's own window/process and causing runaway self-triggering chaos.
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
