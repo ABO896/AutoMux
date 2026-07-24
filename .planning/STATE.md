@@ -5,8 +5,8 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 10
 current_phase_name: ui-redesign-macro-management
 status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-07-24T01:15:51.103Z"
+stopped_at: "Plan 10-03 Tasks 1-2 complete; Task 3 (checkpoint:human-verify, UI-04 perf gate + both-theme visual spot-check) pending human verification"
+last_updated: "2026-07-24T01:23:10.512Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 3 of 6
+Plan: 3 of 6 (10-03) — Tasks 1-2 complete and committed (dbdc8ee, 3f5237d); Task 3 is a blocking `checkpoint:human-verify` (early UI-04 idle CPU/GPU perf gate + both-theme visual spot-check on a real macOS Tahoe device) — plan 10-03 is NOT complete until this checkpoint is approved or the documented blur-layer-reduction fallback is applied and re-measured. See 10-03-SUMMARY.md.
 Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
-Status: Ready to execute
+Status: Blocked on human checkpoint (Phase 10 Plan 03 Task 3)
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
@@ -82,8 +82,8 @@ Progress: [█████████░] 87% (plans 25/25 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-24T01:15:51.095Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-07-24T01:23:03.856Z
+Stopped at: Plan 10-03 Tasks 1-2 complete; Task 3 (checkpoint:human-verify, UI-04 perf gate + both-theme visual spot-check) pending human verification
 Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
@@ -174,3 +174,7 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 10 Plan 1]: requirements mark-complete was NOT run for UX-09/UI-01 — gsd-tools requirements ready-ids confirmed both are still 'blocked' (span plans 10-02 through 10-06 of this phase); marking them complete after only this plan would misrepresent phase progress in REQUIREMENTS.md.
 - [Phase ?]: [Phase 10 Plan 2]: resolveTheme not imported into App.tsx (applyTheme already resolves internally; strict noUnusedLocals would fail an unused import) — themePreference's setter kept live via a bare void reference pending plan 10-03's ThemeToggle consumer, same deferred-consumer precedent as Phase 8 Plan 4.
 - [Phase ?]: [Phase 10 Plan 2]: requirements mark-complete NOT run for UI-01/UI-03/UI-04 — this plan only lays the token/translucency foundation; full redesign spans plans 10-03 through 10-06 and the UI-04 perf gate is deferred to plan 10-03.
+
+### Blockers
+
+- Phase 10 Plan 03 Task 3: blocking checkpoint:human-verify — early UI-04 idle CPU/GPU perf gate (all blur surfaces active: .glass-card + .sidebar-glass) plus both-theme visual spot-check on a real macOS Tahoe device. Tasks 1-2 (Sidebar.tsx, ThemeToggle.tsx, window resize to 720x680) are committed (dbdc8ee, 3f5237d); plan 10-03 cannot be marked complete until this checkpoint is approved or the documented blur-reduction fallback is applied and re-measured.
