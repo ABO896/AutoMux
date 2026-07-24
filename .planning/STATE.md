@@ -5,13 +5,13 @@ milestone_name: Redesign & Platform Excellence
 current_phase: 10
 current_phase_name: ui-redesign-macro-management
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-07-24T01:07:06.405Z"
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-07-24T01:15:51.103Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 31
-  completed_plans: 26
+  completed_plans: 27
   percent: 83
 ---
 
@@ -27,14 +27,14 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 ## Current Position
 
 Phase: 10 (ui-redesign-macro-management) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Next: Plan 09-11 was executed and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z), closing both prior Blocker gaps: (1) the HoldRelease Gate 1/2/3 bypass in `StateActor::handle_action`/`action_should_inject` (a guaranteed-delivery release is never dropped regardless of engine/enabled/target-app state); (2) hotkey-rebind rollback safety on both platforms (macOS: the pre-unbind in handleCardSetTriggerKey is dropped; Windows: `Intent::SetMacroTriggerKey` replies Err on conflict via `resolve_trigger_key_update` + a Result-carrying oneshot instead of silently coercing to None/0). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The ONLY remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3, the latter never yet run on a real device across any verification pass for this phase.
 Status: Ready to execute
 
 Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's progress.
 
 ```
-Progress: [████████░░] 84% (plans 25/25 complete in v2.0)
+Progress: [█████████░] 87% (plans 25/25 complete in v2.0)
 ```
 
 ## Phase Summary
@@ -82,8 +82,8 @@ Progress: [████████░░] 84% (plans 25/25 complete in v2.0)
 
 **Resume file:** None
 
-Last session: 2026-07-24T01:07:06.397Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-07-24T01:15:51.095Z
+Stopped at: Completed 10-02-PLAN.md
 Next: Phase 9 routes to human real-device verification only — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device). No further Phase 9 code work is pending: both Blocker gaps are closed, 16/16 backend tests pass, `cargo build` and `npx tsc --noEmit` are clean. Separately and independently, Phase 8 still awaits its own human device verification (Sections 5+6 of 08-VERIFICATION.md) — unrelated to Phase 9. Phase 10 (UI redesign) may now proceed since Phase 9's source-level Blocker gaps are closed, with Phase 9 real-device confirmation continuing in parallel. Both out-of-scope Critical findings filed as todos are now resolved: LoadProfile data loss via quick task 260723-k9l, and Windows hook injected-event filtering via quick task 260723-krr — both moved to .planning/todos/completed/.
 
 ### Quick Tasks Completed
@@ -124,6 +124,7 @@ Next: Phase 9 routes to human real-device verification only — macOS tests T9.1
 | Phase 09 P10 | 5min | 3 tasks | 4 files |
 | Phase 09 P11 | 10min | 3 tasks | 3 files |
 | Phase 10 P01 | 25min | 3 tasks | 5 files |
+| Phase 10 P02 | 10min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -171,3 +172,5 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 - [Phase ?]: [Phase 10 Plan 1]: editingField gained a third value ('name') as a sibling to the existing key/target inline editors, still gated on the single centralized editingCardId signal — prevents the new name editor and the target/key editors from rendering simultaneously on the same card.
 - [Phase ?]: [Phase 10 Plan 1]: update_macro's persistence round-trip test uses a direct serde_json round-trip through ProfileData (no ProfileManager/AppHandle) — mirrors the existing profile_backwards_compat test's style since state/mod.rs's test module cannot construct a real tauri::AppHandle headlessly.
 - [Phase ?]: [Phase 10 Plan 1]: requirements mark-complete was NOT run for UX-09/UI-01 — gsd-tools requirements ready-ids confirmed both are still 'blocked' (span plans 10-02 through 10-06 of this phase); marking them complete after only this plan would misrepresent phase progress in REQUIREMENTS.md.
+- [Phase ?]: [Phase 10 Plan 2]: resolveTheme not imported into App.tsx (applyTheme already resolves internally; strict noUnusedLocals would fail an unused import) — themePreference's setter kept live via a bare void reference pending plan 10-03's ThemeToggle consumer, same deferred-consumer precedent as Phase 8 Plan 4.
+- [Phase ?]: [Phase 10 Plan 2]: requirements mark-complete NOT run for UI-01/UI-03/UI-04 — this plan only lays the token/translucency foundation; full redesign spans plans 10-03 through 10-06 and the UI-04 perf gate is deferred to plan 10-03.
