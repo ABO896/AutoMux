@@ -170,6 +170,34 @@ The checklist to walk (verbatim from `10-UI-SPEC.md` § Verification Checklist):
 themes and idle overhead is not measurably higher than baseline; otherwise list the failing
 items.
 
+### Round 1 (2026-07-24/25) — 22/23 pass, item 4 failed
+
+User walked the checklist on-device and reported: all items pass ("everything else works
+perfectly") **except item 4** — no visible transparency or frosted-glass effect anywhere,
+despite `.glass-card`/`.sidebar-glass` both declaring `backdrop-filter: blur(...)`.
+
+**Root cause (confirmed by direct source read, not guesswork):** two compounding issues in
+`src/App.css`:
+1. Neither `.glass-card` nor `.sidebar-glass` declared `-webkit-backdrop-filter` alongside the
+   unprefixed property — a WKWebView compatibility gap (Tauri's macOS webview is WebKit-based).
+2. **The dominant cause:** `body`'s background was a flat, single solid color
+   (`background-color: var(--color-background)`) with no gradient/texture/imagery anywhere, and
+   the sidebar is a plain flex sibling (not an overlay) next to the content column — so nothing
+   textured ever sits behind either translucent surface. `backdrop-filter: blur()` on a
+   perfectly uniform background is a no-op visually: blurring one flat color returns that same
+   flat color. The CSS property was active; there was simply nothing behind it complex enough
+   for the blur to reveal.
+
+**Fix applied** (commit `1b79ed6`, `src/App.css`): added `-webkit-backdrop-filter` to both
+`.glass-card` and `.sidebar-glass`; added a subtle, theme-token-driven ambient background
+(two low-opacity `radial-gradient` blobs using `color-mix(in srgb, var(--color-accent) N%,
+transparent)`, `background-attachment: fixed`) to `body`, so both light and dark themes get a
+correctly-tinted, softly varied background for the glass panels to blur. No layout change, no
+new dependency. `npx tsc --noEmit` and `cargo build` both re-confirmed clean after the fix.
+
+**Status: awaiting Round 2 re-confirmation** — user needs to re-check item 4 (and re-glance at
+item 3, since the gradient is new) before this section can close.
+
 ## 3. Requirement → Result Map
 
 | Requirement | Automated Evidence | Human Evidence |
