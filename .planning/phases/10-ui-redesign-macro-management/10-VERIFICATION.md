@@ -1,7 +1,7 @@
 ---
 phase: 10
 slug: ui-redesign-macro-management
-status: complete
+status: passed
 human_verified: true
 created: 2026-07-24
 verified: 2026-08-04
