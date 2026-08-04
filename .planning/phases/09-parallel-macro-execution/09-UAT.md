@@ -1,28 +1,28 @@
 ---
-status: testing
+status: complete
 phase: 09-parallel-macro-execution
 source: [09-VERIFICATION.md]
 started: 2026-07-21T20:15:00Z
-updated: 2026-07-22T21:30:00Z
+updated: 2026-08-04T00:00:00Z
 ---
 
 ## Current Test
 
-number: 3
-name: Run T9.1-T9.7 on a real macOS host (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning, held-not-firing indicator, Hold-under-load, responsiveness-after-stop, creation-time targeting)
-expected: |
-  All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other.
-awaiting: user response
+[testing complete]
 
-## Round 2 Tests (pending — from 2026-07-22 09-VERIFICATION.md re-verification pass)
+## Round 2 Tests (from 2026-07-22 09-VERIFICATION.md re-verification pass)
 
 ### 3. macOS device tests (T9.1-T9.7, superset of round-1 T9.1-T9.5 — round 1's perf/delete/targeting gaps are now fixed, retest as part of this pass)
 expected: All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays; a Hold-mode macro shows the static held dot and genuinely holds the input under load; responsiveness returns to baseline after all macros stop (G-09-1a fix); app-targeted macro fires when its target app is focused (G-09-1c fix).
-result: [pending]
+result: pass
 
 ### 4. Windows device tests (6.1-6.3)
 expected: All 3 tests pass via SendInput injection and the Win32 hook observer — same concurrent-firing and independent-stop behavior as macOS. Never actually executed on any verification pass for this phase.
-result: [pending]
+result: pass
+
+### 5. (Recommended, not gating) Device-level confirmation of the 09-11 gap-closure fixes
+expected: Held input releases when a Hold-mode macro is disabled / engine toggled off / active app switched / different profile loaded; a rejected hotkey rebind never destroys the original hotkey on either platform, and the conflict toast appears.
+result: pass
 
 ### 5. (Recommended, not gating) Device-level confirmation of the 09-11 gap-closure fixes
 expected: Held input releases when a Hold-mode macro is disabled / engine toggled off / active app switched / different profile loaded; a rejected hotkey rebind never destroys the original hotkey on either platform, and the conflict toast appears.
@@ -45,9 +45,9 @@ reason: "I cant test windows, so mark as pass for now i want to proceed with fix
 ## Summary
 
 total: 3
-passed: 0
+passed: 3
 issues: 0
-pending: 3
+pending: 0
 skipped: 0
 blocked: 0
 
