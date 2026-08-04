@@ -508,7 +508,7 @@ unsafe extern "system" fn hook_callback(ncode: i32, wparam: WPARAM, lparam: LPAR
         // SendInput-injected events — mirrors the macOS CGEventTap's
         // LLMHF_INJECTED guard at platform/macos/observer.rs:279-281.
         if (msg_id == WM_KEYDOWN || msg_id == WM_SYSKEYDOWN)
-            && !super::flags_indicate_injected(kb_struct.flags)
+            && !super::flags_indicate_injected(kb_struct.flags.0)
         {
             let keycode = kb_struct.vkCode as u16;
 
