@@ -77,6 +77,19 @@ Progress: [██████████] 100% (31/31 plans executed in v2.0; a
 | UX | NamedKey schema migration (UX-04) | future | v1.2.0 roadmap creation |
 | UX | Cross-platform profile portability (UX-05) | future | v1.2.0 roadmap creation |
 
+## Deferred Items
+
+Items acknowledged and deferred at v2.0 milestone close on 2026-08-04:
+
+| Category | Item | Status | Note |
+|----------|------|--------|------|
+| debug | macros-dont-fire-post-crash | awaiting_human_verify | 2026-06-17 — a fix was diagnosed/applied for macros not firing on macOS Tahoe 26 after the 06-03 crash fix, but never confirmed on a real device under this session's own name. Deferred: the underlying macro-firing path has since been exercised extensively and passed real-device UAT in Phase 8 (5.1, 6.1), Phase 9 (T9.1-T9.7, 6.1-6.3), and Phase 10, all on the same class of hardware, with no related failures reported. |
+| verification | Phase 06 (06-VERIFICATION.md) | human_needed | 4 device scenarios (A-D: permission-detection live-update, macro-fire-after-grant, clean launch/no Console errors, Accessibility Settings appearance) were never confirmed under Phase 6's own name, even though ROADMAP.md marks the phase complete (2026-06-12). Deferred: scenario B (macros fire after grant) has since been repeatedly reconfirmed by Phase 8/9/10's own passing device UAT on macOS; scenarios A/C/D remain unconfirmed. |
+| uat (out-of-scope, prior milestone) | Phase 05 (05-HUMAN-UAT.md) | partial, 4 pending scenarios | Belongs to v1.2.0 ("Reliability & Polish"), a milestone already marked shipped on 2026-06-02 — not v2.0. Pre-existing debt, unrelated to this close-out. |
+| verification (out-of-scope, prior milestone) | Phase 05 (05-VERIFICATION.md) | human_needed | Same v1.2.0 scope note as above. |
+
+Not deferred (resolved during this close-out): the `knowledge-base.md` debug-session-audit flag was a tool false positive — it is the debug KB index file (used by `gsd-debugger` to surface known-pattern hypotheses), not an actual open session, and was left in place unchanged. Four other flagged debug sessions (G-09-1a, G-09-1b, G-09-1c, glass-blur-still-not-visible) were genuinely already resolved but had stale bookkeeping (status field + file location) — fixed and moved to `.planning/debug/resolved/` prior to close.
+
 ## Session Continuity
 
 **Resume file:** None
