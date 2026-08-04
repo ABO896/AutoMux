@@ -2,17 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
-current_phase: 10
-current_phase_name: UI Redesign & Macro Management
-status: milestone_complete
-stopped_at: "Milestone v2.0 (Redesign & Platform Excellence) is now FULLY COMPLETE (2026-08-04) — all 6 phases (5-10) done. This session closed the last two open phases: Phase 9 (parallel-macro-execution) — resumed the in-progress Round 2 UAT session, ran its 3 remaining device-verification checkpoints (macOS T9.1-T9.7, Windows 6.1-6.3, device confirmation of the 09-11 gap-closure fixes), all passed; canonicalized 09-VERIFICATION.md to passed; added 09-SECURITY.md (threats_open: 0). Phase 8 (hotkey-reliability-conflict-safety) — the last remaining blocker: refreshed a stale 08-VERIFICATION.md (independently re-confirmed UX-11/12/13/14 against current source, no regressions from Phase 9/10), created and ran 08-UAT.md's 2 device-test checkpoints (macOS 5.1-5.6, Windows 6.1-6.5), both passed; added 08-SECURITY.md (threats_open: 0); canonicalized 08-VERIFICATION.md to passed. Both phases transitioned via gsd-tools phase.complete. NOTE: phase.complete's automatic STATE.md update assumes strictly sequential phase advancement and does not detect that later-numbered phases can already be done — it reset Current Position to a stale 'next phase, ready to plan' state twice this session (after Phase 9 → pointed at already-complete Phase 10; after Phase 8 → pointed at already-complete Phase 9). Corrected by hand both times; this is now the terminal correction reflecting true milestone completion."
-last_updated: "2026-08-04T18:00:00.000Z"
+status: Awaiting next milestone
+stopped_at: "Milestone v2.0 is now FULLY COMPLETE. This session closed both remaining open phases. Phase 9 (parallel-macro-execution): resumed the in-progress Round 2 UAT session (09-UAT.md), ran its 3 remaining device-verification checkpoints (macOS T9.1-T9.7, Windows 6.1-6.3 — first genuine Windows-device execution for this phase — and device confirmation of the 09-11 gap-closure fixes), all passed with no regressions; reconciled stale Round 1 entries; canonicalized 09-VERIFICATION.md to `passed`; added 09-SECURITY.md (threats_open: 0); transitioned via phase.complete. Phase 8 (hotkey-reliability-conflict-safety): its 08-VERIFICATION.md was stale (a commit-ordering artifact from June), so spawned gsd-verifier to independently re-confirm UX-11/12/13/14 against current source — no regressions from Phase 9's HOTKEY_BINDINGS consolidation or Phase 10's component extraction, 25/25 tests pass; created 08-UAT.md and ran its 2 device-test checkpoints (macOS Section 5 tests 5.1-5.6, Windows Section 6 tests 6.1-6.5), both passed — the first genuine execution of Phase 8's own device-test protocol; added 08-SECURITY.md (threats_open: 0); canonicalized 08-VERIFICATION.md to `passed`; transitioned via phase.complete. Both phase.complete calls incorrectly reset STATE.md's Current Position (they assume sequential phase advancement and don't detect that a later-numbered phase already finished) — corrected by hand each time. Separately, earlier in this session, closed backlog item 2026-07-24-process-picker-doesnt-select-clicked-app via /gsd-debug: target-app picker rebuilt every `<option>` DOM node on every open (SolidJS `<For>` reference-diffing + fast IPC round-trip beating human click latency), fixed with a reference-preserving merge in `handlePickerFocus` (commit e342635; a first attempt using solid-js/store's `reconcile()` regressed the picker to permanently stuck-loading since it's incompatible with this codebase's plain-createSignal convention — caught via user verification, corrected)."
+last_updated: "2026-08-04T17:27:06.473Z"
+last_activity: 2026-08-04
+last_activity_desc: Milestone v2.0 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 31
   completed_plans: 31
   percent: 100
+current_phase: 10
+current_phase_name: UI Redesign & Macro Management
 ---
 
 # Project State
@@ -26,15 +28,10 @@ See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 ## Current Position
 
-Phase: 10 — UI Redesign & Macro Management (last phase of milestone v2.0)
-Plan: All 31/31 plans across the milestone complete
-Status: Milestone complete — awaiting `/gsd-complete-milestone` to archive
-
-All 6 milestone phases (5, 6, 7, 8, 9, 10) are now marked complete in ROADMAP.md. Phase 8 (hotkey-reliability-conflict-safety) was the last remaining blocker — its device-verification UAT (macOS Section 5, Windows Section 6) ran and passed today, 2026-08-04, closing out the milestone.
-
-```
-Progress: [██████████] 100% (31/31 plans executed in v2.0; all 6 phases fully closed 2026-08-04 — milestone complete)
-```
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-04 — Milestone v2.0 completed and archived
 
 ## Phase Summary
 
@@ -202,3 +199,7 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 ### Blockers
 
 None. All milestone v2.0 blockers are resolved: Phase 8's device tests (macOS 5.1-5.6, Windows 6.1-6.5) passed 2026-08-04; Phase 9's real-device tests (T9.1-T9.7 macOS, 6.1-6.3 Windows) passed 2026-08-04; Phase 10's former blockers (10-03 UI-04 perf checkpoint, 10-06 human-verify checklist) resolved 2026-08-04. See Phase Summary above and each phase's *-VERIFICATION.md.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

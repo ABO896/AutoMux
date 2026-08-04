@@ -1,5 +1,20 @@
 # Milestones: AutoMux
 
+## v2.0 Redesign & Platform Excellence (Shipped: 2026-08-04)
+
+**Phases completed:** 5 phases (6-10), 31 plans, 72 tasks
+**Requirements:** 24/25 satisfied (COMPAT-02 carried forward as device-verification debt — see PROJECT.md)
+**Security:** 0 open threats at the `high` block-on threshold, all 5 phases
+
+**Key accomplishments:**
+
+- macOS Tahoe 26 compatibility restored: live CGEventTap probe replacing a stale cached permission check, plus a CFRunLoop stop/reinit fix for a UAF crash in the tap's re-enable callback
+- Windows platform cleanup (compiler warnings, `OpenProcess` handle leak) + CI hardening (`npm ci`, updater signature upload, resilient artifact discovery) + Input Monitoring / TCC identity-change detection on macOS 26
+- Hotkey system reliability: full key-range binding (0-9, F1-F12, all modifiers), conflict detection with explicit reassignment, same-input overlap warnings, and verified/communicated global (system-wide) hotkey behavior on both platforms
+- Parallel macro execution via a StateActor/Scheduler two-phase dispatch redesign — triggering one macro never blocks, queues, or cancels another; closed through 9 gap-closure plans (stuck-input HoldRelease bypass, hotkey-rebind rollback safety, dual-registry double-dispatch, IPC argument-casing)
+- Macro management (delete, full edit — name/action/key/timing) and a redesigned Apple-inspired sidebar UI on macOS with a matching modern UI on Windows, light/dark/OS-follow theming
+- Retroactive per-phase security threat registers compiled for all 5 phases
+
 ---
 
 ## v1.0 — MVP
