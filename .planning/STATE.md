@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Redesign & Platform Excellence
-current_phase: 10
-current_phase_name: ui-redesign-macro-management
+current_phase: 8
+current_phase_name: Hotkey Reliability & Conflict Safety
 status: blocked
-stopped_at: "Phase 10 COMPLETE (2026-08-04). Human-verify checklist: 22/23 pass; item 4 (glass-blur) waived by explicit user decision — Tauri's embedded WKWebView does not composite backdrop-filter despite computing it correctly (confirmed directly in the live app's own DevTools, not just a proxy); see 10-VERIFICATION.md Round 3 and .planning/debug/glass-blur-still-not-visible.md. Item 5 (idle perf) separately confirmed via the idle-input-lag-freeze fix (CGEventTap Mach-port leak) + live user re-confirmation. src/App.css simplified to drop the now-dead backdrop-filter/gradient CSS. Milestone v2.0 is not yet fully done — Phases 8 and 9 remain blocked on unrelated human real-device verification (see below)."
-last_updated: "2026-08-04T00:00:00Z"
+stopped_at: "Phase 9 (parallel-macro-execution) is now COMPLETE (2026-08-04): resumed the in-progress 09-UAT.md Round 2 session, ran the 3 remaining device-verification checkpoints (macOS T9.1-T9.7, Windows 6.1-6.3, and device confirmation of the 09-11 gap-closure fixes) — all 3 passed, no regressions. Canonicalized 09-VERIFICATION.md status from human_needed to passed, reconciled the file's stale Round-1 issue/blocked entries (superseded by the Round 2 retest), ran gsd-secure-phase 9 (retroactive threat register from all 11 plan-time <threat_model> blocks, threats_open: 0 at the block_on:high threshold — new 09-SECURITY.md), then ran the transition workflow: EXEC-01/EXEC-02 marked complete in REQUIREMENTS.md, Phase 9 checkbox marked complete in ROADMAP.md (was already checked pending this formal close-out). NOTE: gsd-tools phase.complete's automatic STATE.md update incorrectly reset Current Position to 'Phase 10 — Ready to plan' (it assumes strictly sequential phase advancement, but Phase 10 had already independently completed on 2026-08-04 while Phase 9's device verification was still outstanding) — corrected by hand below to reflect Phase 8 as milestone v2.0's sole remaining blocker."
+last_updated: "2026-08-04T12:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -22,20 +22,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-02 — milestone v2.0 started)
 
 **Core value:** A macro that was set up must fire reliably — platform permissions must be detected correctly and execution must be accurate.
-**Current focus:** Phase 10 complete. Milestone v2.0 blocked only on Phase 8 + Phase 9 human real-device verification (unrelated to Phase 10).
+**Current focus:** Phases 9 and 10 complete. Milestone v2.0 blocked only on Phase 8 human real-device verification.
 
 ## Current Position
 
-Phase: 10 (ui-redesign-macro-management) — COMPLETE (2026-08-04)
-Plan: 6 of 6 (10-06) — both tasks done. Task 1: automated gates (cargo build/test, tsc, zero new deps). Task 2: human-verify checklist 22/23 pass; item 4 (glass-blur) waived per user decision (aesthetics deprioritized vs. AutoMux's core reliability purpose); item 5 (idle perf) confirmed via the idle-input-lag-freeze fix. All 7 Phase 10 requirements (UI-01..04, UX-08..10) now marked complete in REQUIREMENTS.md.
-Status: Phase 10 done. Milestone v2.0 remains open pending Phase 8 + Phase 9 human device verification (both pre-existing, unrelated blockers — no next phase is ready to start; backlog item 999.1 has 0 plans and is not yet promoted).
+Phase: 8 — Hotkey Reliability & Conflict Safety
+Plan: 6/6 plans done (all automated gates green)
+Status: Blocked on human device verification (Sections 5+6 of 08-VERIFICATION.md)
 
-Phase 9 (parallel-macro-execution) note: source-level work is complete and independently re-verified against source in 09-VERIFICATION.md (2026-07-22T21:30:00Z) — both prior Blocker gaps closed (HoldRelease Gate 1/2/3 bypass; hotkey-rebind rollback safety on both platforms). 16/16 backend tests pass; `cargo build` and `npx tsc --noEmit` are clean. The only remaining work is human real-device verification — macOS tests T9.1-T9.7 and Windows tests 6.1-6.3 (Windows never yet run on a real device across any verification pass for this phase).
+Phase 9 (parallel-macro-execution) is now fully COMPLETE (2026-08-04): all 3 remaining UAT device-verification checkpoints passed (macOS T9.1-T9.7, Windows 6.1-6.3, and device confirmation of the 09-11 gap-closure fixes), 09-VERIFICATION.md status canonicalized to `passed`, 09-SECURITY.md added (threats_open: 0), EXEC-01/EXEC-02 marked complete in REQUIREMENTS.md, Phase 9 checkbox complete in ROADMAP.md.
 
-Separately, Phase 8 (hotkey-reliability-conflict-safety) remains blocked on human device verification — Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey tests) are still pending and unrelated to Phase 9's or Phase 10's progress.
+Phase 10 (ui-redesign-macro-management) was already complete as of 2026-08-04 (see below) — it finished independently while Phase 9's device verification was still outstanding, which is why it appears "ahead of" Phase 9 in this log despite the lower phase number completing later.
+
+The only phase still blocking milestone v2.0 is **Phase 8** (hotkey-reliability-conflict-safety): Sections 5 + 6 of 08-VERIFICATION.md (manual macOS + Windows hotkey device tests) are still pending human execution — unrelated to Phase 9's or Phase 10's progress, and no code work remains for it either.
 
 ```
-Progress: [██████████] 100% (31/31 plans executed in v2.0; Phase 10 fully closed 2026-08-04; Phases 8+9 still await human device verification)
+Progress: [██████████] 100% (31/31 plans executed in v2.0; Phases 9+10 fully closed 2026-08-04; Phase 8 is the sole remaining blocker, awaiting human device verification)
 ```
 
 ## Phase Summary
@@ -46,7 +48,7 @@ Progress: [██████████] 100% (31/31 plans executed in v2.0; P
 | 6 | macOS Tahoe 26 Compatibility | COMPAT-01, COMPAT-02, COMPAT-03 | Complete (2026-06-17) |
 | 7 | Carry Work — Platform, CI & Safety | BUILD-01, MEM-01, CI-03, CI-04, CI-05, SAFE-04, ERR-01, COMPAT-04, COMPAT-05 | Complete (2026-06-30) |
 | 8 | Hotkey Reliability & Conflict Safety | UX-11, UX-12, UX-13, UX-14 | In Progress (6/6 plans done; 4/4 automated gates green, 2/2 manual device test plans documented — awaiting human device verification) |
-| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | Source-level complete / human_needed (11/11 plans done; both Blocker gaps — HoldRelease gating stuck-input, hotkey-rebind data loss — closed by 09-11 and independently re-confirmed against source 2026-07-22T21:30:00Z; 16/16 backend tests pass, cargo build + tsc clean; only real-device tests T9.1-T9.7 (macOS) / 6.1-6.3 (Windows) remain, Windows never yet run on-device) |
+| 9 | Parallel Macro Execution | EXEC-01, EXEC-02 | **Complete (2026-08-04)** — 11/11 plans done, both Blocker gaps closed and independently re-verified against source, all UAT device tests pass (macOS T9.1-T9.7, Windows 6.1-6.3), 09-SECURITY.md threats_open: 0 |
 | 10 | UI Redesign & Macro Management | UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10 | **Complete (2026-08-04)** — 22/23 human-verify items pass, item 4 (glass-blur) waived by user scope decision, item 5 (idle perf) confirmed via idle-input-lag-freeze fix |
 
 ## Accumulated Context
@@ -83,9 +85,9 @@ Progress: [██████████] 100% (31/31 plans executed in v2.0; P
 
 **Resume file:** None
 
-Last session: 2026-08-04T00:00:00.000Z
-Stopped at: Phase 10 is now COMPLETE. Session picked up on the Phase 10 Plan 06 Task 2 human-verify checkpoint: (1) committed the already-resolved idle-input-lag-freeze fix (CGEventTap Mach-port leak, commit 5699424), user confirmed idle perf item 5 now passes; (2) ran two more live-debugging rounds on the glass-blur item 4 failure — Round 3 finally closed the sandbox's remaining blind spot by having the user run getComputedStyle() directly in the live app's own DevTools (not a Safari proxy), which proved the CSS was computing correctly but Tauri's embedded WKWebView still wasn't compositing backdrop-filter — a real Tauri/wry rendering bug, not a CSS-authoring bug; (3) user decided to drop the frosted-glass pursuit entirely (aesthetics secondary to AutoMux's reliability purpose) rather than pull in native window-vibrancy; (4) simplified src/App.css to remove the now-dead backdrop-filter/gradient CSS; (5) updated REQUIREMENTS.md, ROADMAP.md, 10-VERIFICATION.md, and the glass-blur debug doc to record item 4 as waived (not failed) and close out all seven Phase 10 requirements.
-Next: Milestone v2.0 is not fully done — Phase 8 (Sections 5+6 of 08-VERIFICATION.md) and Phase 9 (real-device tests T9.1-T9.7 macOS, 6.1-6.3 Windows) both still await human device verification, unrelated to Phase 10. No further code work is pending for either — both are source-complete. There is no next phase queued (backlog item 999.1 has 0 plans, not yet promoted) — next action is either running Phase 8/9's device verification, or promoting/planning new work via /gsd-review-backlog or /gsd-new-milestone.
+Last session: 2026-08-04T12:00:00.000Z
+Stopped at: Phase 9 (parallel-macro-execution) is now fully COMPLETE. Resumed the in-progress Round 2 UAT session (09-UAT.md) and ran its 3 remaining device-verification checkpoints: macOS T9.1-T9.7, Windows 6.1-6.3 (first genuine Windows-device execution for this phase), and device confirmation of the 09-11 gap-closure fixes (HoldRelease release + hotkey-rebind rollback) — all 3 passed with no regressions. Reconciled the file's stale Round 1 issue/blocked entries (superseded by the Round 2 retest). Canonicalized 09-VERIFICATION.md status to `passed`, ran gsd-secure-phase 9 (retroactive STRIDE register from all 11 plans' plan-time threat models, threats_open: 0 — new 09-SECURITY.md), then transitioned: EXEC-01/EXEC-02 marked complete in REQUIREMENTS.md, Phase 9 checkbox complete in ROADMAP.md. Separately, earlier in this session, closed backlog item 2026-07-24-process-picker-doesnt-select-clicked-app via /gsd-debug: target-app picker rebuilt every `<option>` DOM node on every open (SolidJS `<For>` reference-diffing + fast IPC round-trip beating human click latency), fixed with a reference-preserving merge in `handlePickerFocus` (commit e342635; a first attempt using solid-js/store's `reconcile()` regressed the picker to permanently stuck-loading since it's incompatible with this codebase's plain-createSignal convention — caught via user verification, corrected).
+Next: Milestone v2.0 is not fully done — Phase 8 (Sections 5+6 of 08-VERIFICATION.md: manual macOS + Windows hotkey device tests) is the sole remaining blocker, unrelated to Phase 9/10. No code work is pending for it — it is source-complete. Recommended next step: resume/start Phase 8's device-verification UAT (no active 08-UAT.md session exists yet).
 
 ### Quick Tasks Completed
 
@@ -190,7 +192,6 @@ Plan 07-01 example comment contained 'updater' and matched 'sig.*upload', both o
 
 ### Blockers
 
-- Phase 8 Sections 5+6 of 08-VERIFICATION.md: manual macOS + Windows hotkey device tests still pending human execution — unrelated to Phase 9/10.
-- Phase 9 real-device tests T9.1-T9.7 (macOS) and 6.1-6.3 (Windows): source-level work is complete and re-verified; only on-device confirmation remains, Windows never yet run on a real device.
+- Phase 8 Sections 5+6 of 08-VERIFICATION.md: manual macOS + Windows hotkey device tests still pending human execution — unrelated to Phase 9/10. This is now the sole remaining blocker for milestone v2.0.
 
-(Phase 10's two former blockers — the 10-03 early UI-04 perf checkpoint and the 10-06 final human-verify checklist — are resolved: Phase 10 is COMPLETE as of 2026-08-04. See Phase Summary above and 10-VERIFICATION.md.)
+(Phase 9's real-device tests (T9.1-T9.7 macOS, 6.1-6.3 Windows) are resolved: all passed 2026-08-04, Phase 9 is COMPLETE. Phase 10's two former blockers — the 10-03 early UI-04 perf checkpoint and the 10-06 final human-verify checklist — are also resolved: Phase 10 is COMPLETE as of 2026-08-04. See Phase Summary above, 09-VERIFICATION.md, and 10-VERIFICATION.md.)

@@ -34,7 +34,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 - [x] **Phase 6: macOS Tahoe 26 Compatibility** *(planned — 3 plans)* — Investigate and fix CGEventTap input injection and permissions detection on macOS 26 Tahoe; ensure the app launches without crashes or entitlement errors (06-01/06-02 shipped 2026-06-04; 06-03 fixes UAF crash + injection regression surfaced on device) (completed 2026-06-12)
 - [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
 - [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 6/6 plans done; 08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; awaiting human device verification on real macOS + Windows hosts to mark Sections 5+6 done)*
-- [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
+- [x] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows (completed 2026-08-04)
 - [x] **Phase 10: UI Redesign & Macro Management** — Ship the Apple-inspired UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling (6/6 plans done; human-verify checklist 22/23 pass, item 4 glass-blur waived — WKWebView backdrop-filter compositing bug, descoped 2026-08-04; UI-04 idle-perf item confirmed via idle-input-lag-freeze fix) (completed 2026-08-04)
 
 ## Phase Details
@@ -218,7 +218,7 @@ Plans:
 | 6. macOS Tahoe 26 Compatibility | v2.0 | 3/3 | Complete | 2026-06-17 |
 | 7. Carry Work — Platform, CI & Safety | v2.0 | 3/3 | Complete   | 2026-06-17 |
 | 8. Hotkey Reliability & Conflict Safety | v2.0 | 6/6 | In Progress | — |
-| 9. Parallel Macro Execution | v2.0 | 11/11 | In Progress|  |
+| 9. Parallel Macro Execution | v2.0 | 11/11 | Complete    | 2026-08-04 |
 | 10. UI Redesign & Macro Management | v2.0 | 6/6 | In Progress|  |
 
 ## Backlog
