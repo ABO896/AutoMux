@@ -98,18 +98,9 @@
   box-sizing: border-box;
 }
 
-/* D-03 follow-up: .glass-card/.sidebar-glass need something varied behind
-   them for backdrop-filter to visibly soften — a flat --color-background
-   alone blurs to itself (no perceptible effect). These low-opacity accent
-   blobs give the blur real content to reveal, while staying theme-token
-   driven so both light and dark stay correctly tinted automatically. */
 body {
   font-family: var(--font-sans);
   background-color: var(--color-background);
-  background-image:
-    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--color-accent) 16%, transparent) 0%, transparent 42%),
-    radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--color-accent) 10%, transparent) 0%, transparent 48%);
-  background-attachment: fixed;
   color: var(--color-text-main);
   margin: 0;
   min-width: 320px;
@@ -152,17 +143,19 @@ button, input, select {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
-/* ── Glassmorphism Card ──────────────────────────────────────── */
-/* D-03: real translucency — background is a translucent color-mix (not
-   opaque) so backdrop-filter has something to blend through. Finalized
-   this plan (10-02) against the token set above; the values themselves
-   were already established as the interim treatment in plan 10-01. */
+/* ── Card ────────────────────────────────────────────────────── */
+/* Was backdrop-filter-based glass translucency (D-03); dropped per
+   2026-08-04 decision — Tauri's embedded WKWebView does not composite
+   backdrop-filter despite computing it correctly (confirmed via direct
+   getComputedStyle inspection in the live app across two independent
+   fix attempts; matches community-tracked Tauri/wry issues #13801,
+   #2976, #2826). Aesthetics/effects are secondary to AutoMux's core
+   purpose, so this is now a plain opaque surface rather than chasing a
+   WebView rendering bug. See .planning/debug/glass-blur-still-not-visible.md. */
 .glass-card {
-  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -171,16 +164,8 @@ button, input, select {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
-/* Sidebar translucent panel (C-SB1) — a subtly stronger blur than
-   .glass-card so the sidebar reads as a distinct layer "above" the
-   content column, per Raycast/macOS sidebar convention (UI-SPEC
-   Translucency section). Tailwind 4 utilities alone can't express
-   color-mix + a custom blur value, hence a hand-written class here,
-   matching this file's existing convention (.toggle-track etc). */
 .sidebar-glass {
-  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
+  background: var(--color-surface-alt);
 }
 
 /* ── Toggle Switch ───────────────────────────────────────────── */

@@ -21,14 +21,14 @@
 
 - [x] **UX-08**: User can delete an existing macro — action is available directly from the macro list without entering an edit mode
 - [x] **UX-09**: User can edit an existing macro's name, action type, key/button assignment, and timing configuration after creation
-- [ ] **UX-10**: Action type selection unambiguously labels each option: left click, right click, hold (sustained), key press — no unlabeled or unclear choices presented to the user
+- [x] **UX-10**: Action type selection unambiguously labels each option: left click, right click, hold (sustained), key press — no unlabeled or unclear choices presented to the user
 
 ### UI Redesign
 
-- [ ] **UI-01**: macOS app uses Apple design language with liquid glass visual effects native to macOS 26 — window materials, vibrancy, and controls match the Tahoe 26 HIG
-- [ ] **UI-02**: macOS UI layout is Raycast-inspired — clean, focused hierarchy, efficient use of space, keyboard-navigable
-- [ ] **UI-03**: Windows app uses a modern, polished equivalent UI — matches AutoMux's visual identity without mimicking macOS-specific effects unavailable on Windows
-- [ ] **UI-04**: UI redesign adds no measurable increase in memory or CPU overhead at idle compared to v1.2.0 — AutoMux stays lightweight
+- [x] **UI-01**: macOS app uses Apple design language with liquid glass visual effects native to macOS 26 — window materials, vibrancy, and controls match the Tahoe 26 HIG *(vibrancy/glass-blur descoped 2026-08-04 — see Out of Scope; Apple-esque clean design language, layout, and controls delivered without translucency effects)*
+- [x] **UI-02**: macOS UI layout is Raycast-inspired — clean, focused hierarchy, efficient use of space, keyboard-navigable
+- [x] **UI-03**: Windows app uses a modern, polished equivalent UI — matches AutoMux's visual identity without mimicking macOS-specific effects unavailable on Windows *(same descope as UI-01 — no platform branch in CSS, so parity is automatic)*
+- [x] **UI-04**: UI redesign adds no measurable increase in memory or CPU overhead at idle compared to v1.2.0 — AutoMux stays lightweight *(confirmed via idle-input-lag-freeze fix + live device re-measurement, 2026-08-04)*
 
 ### macOS 26 Follow-ups *(surfaced during Phase 6)*
 
@@ -79,6 +79,7 @@
 | Cross-platform profiles | Requires NamedKey schema migration (UX-04) first |
 | A11Y-01 ARIA attributes | Being addressed as part of UI-01/02/03 redesign — not tracked separately |
 | Mobile / web app | Desktop automation tool by design |
+| Window vibrancy / CSS backdrop-filter glass effects | Tauri's embedded WKWebView does not composite `backdrop-filter` despite computing it correctly (confirmed via direct computed-style inspection in the live app, two independent fix attempts; matches community-tracked Tauri/wry issues #13801, #2976, #2826). Native `window-vibrancy` (NSVisualEffectView/DWM Mica) would fix it but needs a new dependency + cross-platform work; user decided (2026-08-04) that aesthetics/effects are secondary to AutoMux's core reliability purpose and not worth pursuing further. See `.planning/debug/glass-blur-still-not-visible.md`. |
 
 ## Traceability
 
@@ -104,11 +105,11 @@
 | EXEC-02 | Phase 9 | Complete (source-level) (identical CR-01 defect closed symmetrically 09-10; 09-11 gap-closure — HoldRelease bypass + hotkey-rebind rollback safety — confirmed by 09-VERIFICATION.md 2026-07-22T21:30:00Z; Windows physical-device tests 6.1-6.3 remain pending, never yet run on-device) |
 | UX-08 | Phase 10 | Complete |
 | UX-09 | Phase 10 | Complete |
-| UX-10 | Phase 10 | Pending |
-| UI-01 | Phase 10 | Pending |
-| UI-02 | Phase 10 | Pending |
-| UI-03 | Phase 10 | Pending |
-| UI-04 | Phase 10 | Pending |
+| UX-10 | Phase 10 | Complete |
+| UI-01 | Phase 10 | Complete (vibrancy/glass-blur descoped 2026-08-04 — see Out of Scope) |
+| UI-02 | Phase 10 | Complete |
+| UI-03 | Phase 10 | Complete |
+| UI-04 | Phase 10 | Complete (idle-input-lag-freeze fix + live re-measurement, 2026-08-04) |
 
 **Coverage:**
 

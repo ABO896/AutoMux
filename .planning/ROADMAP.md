@@ -35,7 +35,7 @@ Note: v1.2.0 Phases 6–8 (Windows cleanup, CI hardening, safety & error surface
 - [x] **Phase 7: Carry Work — Platform, CI & Safety** — Eliminate Windows compiler warnings and the OpenProcess handle leak; harden the CI release pipeline; fix the REGISTRY deadlock risk and surface auto-save failures in the UI; add Input Monitoring detection and re-grant UX for macOS 26 signed-build upgrades (completed 2026-06-17)
 - [ ] **Phase 8: Hotkey Reliability & Conflict Safety** — Fix hotkey binding to support the full key range (not just A-Z); prevent duplicate hotkey assignments; warn on concurrent same-action macros; verify and communicate global (system-wide) hotkey behavior *(in progress — 6/6 plans done; 08-VERIFICATION.md gate artifact created; 4/4 automated gates green, 2/2 manual device test plans documented; awaiting human device verification on real macOS + Windows hosts to mark Sections 5+6 done)*
 - [ ] **Phase 9: Parallel Macro Execution** — Redesign the StateActor/Scheduler execution model so multiple macros run concurrently on both macOS and Windows
-- [ ] **Phase 10: UI Redesign & Macro Management** *(planned — 6 plans)* — Ship the full Apple/liquid-glass UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling
+- [x] **Phase 10: UI Redesign & Macro Management** — Ship the Apple-inspired UI redesign for macOS and a modern equivalent for Windows; add macro delete and edit capabilities with clear action-type labeling (6/6 plans done; human-verify checklist 22/23 pass, item 4 glass-blur waived — WKWebView backdrop-filter compositing bug, descoped 2026-08-04; UI-04 idle-perf item confirmed via idle-input-lag-freeze fix) (completed 2026-08-04)
 
 ## Phase Details
 
@@ -172,7 +172,7 @@ Plans:
 **Requirements**: UI-01, UI-02, UI-03, UI-04, UX-08, UX-09, UX-10
 **Success Criteria** (what must be TRUE):
 
-  1. On macOS 26 Tahoe, the AutoMux window uses native liquid glass materials and vibrancy — window chrome and controls match the Tahoe HIG; layout is clean, focused, and keyboard-navigable in a Raycast-inspired hierarchy
+  1. On macOS 26 Tahoe, the AutoMux window uses Apple design language — clean, focused, keyboard-navigable Raycast-inspired hierarchy. *(Descoped 2026-08-04: liquid glass materials/vibrancy dropped — Tauri's embedded WKWebView does not composite `backdrop-filter` despite computing it correctly, confirmed across two independent fix attempts; see `.planning/debug/glass-blur-still-not-visible.md`. Aesthetics are secondary to AutoMux's core reliability purpose.)*
   2. On Windows, the app presents a modern, polished UI matching AutoMux's visual identity without macOS-specific effects
   3. A user can delete any existing macro directly from the macro list without entering a separate edit mode
   4. A user can edit an existing macro's name, action type, key/button assignment, and timing after creation — changes persist across restarts

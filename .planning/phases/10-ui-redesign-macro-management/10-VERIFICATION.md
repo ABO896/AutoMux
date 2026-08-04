@@ -1,9 +1,10 @@
 ---
 phase: 10
 slug: ui-redesign-macro-management
-status: human_needed
-human_verified: false
+status: complete
+human_verified: true
 created: 2026-07-24
+verified: 2026-08-04
 ---
 
 # Phase 10 — Verification Report
@@ -195,38 +196,64 @@ transparent)`, `background-attachment: fixed`) to `body`, so both light and dark
 correctly-tinted, softly varied background for the glass panels to blur. No layout change, no
 new dependency. `npx tsc --noEmit` and `cargo build` both re-confirmed clean after the fix.
 
-**Status: awaiting Round 2 re-confirmation** — user needs to re-check item 4 (and re-glance at
-item 3, since the gradient is new) before this section can close.
+### Round 2 (2026-07-27) — item 4 still fails; root cause revised
+
+User re-tested on-device: item 4 still failed identically despite the Round 1 fix. A dedicated
+debug session (`.planning/debug/glass-blur-still-not-visible.md`) found the Round 1 gradient
+blobs were correctly rendering but positioned/sized so their alpha fell to ~0 before reaching
+the window's geometric center — the region where `.glass-card` elements actually render. A
+geometry fix (wider transparent-stops, 42%/48%→85%/90%) was applied and empirically verified
+via live `getComputedStyle()` + Canvas2D gradient rasterization in a standalone Safari tab
+(same WebKit engine family, not the literal embedded webview) — center alpha rose from ~1.6%
+to ~19.7%. Still marked `awaiting_human_verify` pending a live re-check.
+
+### Round 3 (2026-08-04) — root cause confirmed in the real embedded webview; descoped
+
+Live re-check in the actual running Tauri app: item 4 **still failed**, identical symptom.
+This time, `getComputedStyle()` was run directly inside the real embedded WKWebView (via the
+app's own DevTools console), not the Safari proxy used in Round 2. Result: `.glass-card`
+`background` = correctly translucent `color(srgb ... / 0.72)`; `backdropFilter` /
+`webkitBackdropFilter` = correctly `blur(20px) saturate(1.5)`; `body` `backgroundImage` =
+correctly the Round 2 gradient with the right alpha/stops. **Every CSS value is computed
+exactly as authored, inside the real embedding, yet nothing is visible.** This conclusively
+rules out every CSS-authoring hypothesis and confirms the residual hypothesis from Round 2:
+Tauri's embedded WKWebView (via wry) does not composite `backdrop-filter` despite computing it
+correctly — a known class of bug community-tracked at tauri-apps/tauri#13801, #2976, #2826.
+
+The reliable fix (native OS-level vibrancy via the `window-vibrancy` crate) requires a new
+Cargo dependency, `transparent: true` on the window, and platform-specific code on both macOS
+and Windows. **User decision (2026-08-04): forego transparency/frosted-glass effects entirely**
+— aesthetics and visual effects are secondary to AutoMux's core purpose (reliable macro
+automation), not worth the added dependency/complexity to chase. `src/App.css` was simplified
+to drop the non-functional `backdrop-filter` declarations and the gradient hack that only
+existed to feed them; `.glass-card`/`.sidebar-glass` now use plain opaque surface colors.
+Checklist item 4 is **waived**, not failed — see `.planning/debug/glass-blur-still-not-visible.md`
+for full resolution and `.planning/REQUIREMENTS.md`'s Out of Scope table for the decision record.
+
+**Status: Section 2 closed.** All other 22/23 items passed in Round 1 and are unaffected by
+this descope; item 4 is waived by explicit user decision rather than pending further work.
+Item 5 (idle perf) is separately confirmed via the `idle-input-lag-freeze` fix (CGEventTap
+Mach-port leak in the accessibility/input-monitoring polling probes) plus live user
+re-confirmation after the fix ("idle perf issue does seem to be fixed").
 
 ## 3. Requirement → Result Map
 
 | Requirement | Automated Evidence | Human Evidence |
 |-------------|--------------------|-----------------|
-| UI-01 (liquid-glass visual identity) | n/a — visual only | ⬜ pending — checklist items 3, 4 |
-| UI-02 (Raycast layout, keyboard nav) | n/a — visual/interaction only | ⬜ pending — checklist items 1, 6 |
-| UI-03 (Windows modern equivalent) | n/a — same CSS mechanism, no platform branch in code | ⬜ pending — checklist item 3 (Windows spot-check where available) |
-| UI-04 (no idle overhead) | n/a — perf only measurable on-device | ⬜ pending — checklist item 5 (final re-confirmation of the 10-03 early gate) |
-| UX-08 (delete macro) | `cargo test` (existing `remove_macro` path unchanged); `grep -cE 'window\.confirm' src/App.tsx` = 0 (10-05) | ⬜ pending — checklist items 13, 14, 17 |
-| UX-09 (edit macro) | `cargo test`: `update_macro_applies_all_fields`, `update_macro_conflict_no_partial_mutation`, `update_macro_persists_across_round_trip` all pass | ⬜ pending — checklist items 10, 11, 12 |
-| UX-10 (unambiguous action-type labels) | n/a — copy/visual only | ⬜ pending — checklist items 7, 9 |
+| UI-01 (liquid-glass visual identity) | n/a — visual only | ✅ items 1-3,6-23 pass; item 4 waived (glass-blur descoped 2026-08-04) |
+| UI-02 (Raycast layout, keyboard nav) | n/a — visual/interaction only | ✅ items 1, 6 pass |
+| UI-03 (Windows modern equivalent) | n/a — same CSS mechanism, no platform branch in code | ✅ item 3 pass (no platform branch, so parity is automatic) |
+| UI-04 (no idle overhead) | `cargo test` 25/25 pass incl. `probe_event_tap_invalidate_prevents_leak`; live 6.5min idle port-count flat | ✅ item 5 pass — idle-input-lag-freeze fix confirmed live by user |
+| UX-08 (delete macro) | `cargo test` (existing `remove_macro` path unchanged); `grep -cE 'window\.confirm' src/App.tsx` = 0 (10-05) | ✅ items 13, 14, 17 pass |
+| UX-09 (edit macro) | `cargo test`: `update_macro_applies_all_fields`, `update_macro_conflict_no_partial_mutation`, `update_macro_persists_across_round_trip` all pass | ✅ items 10, 11, 12 pass |
+| UX-10 (unambiguous action-type labels) | n/a — copy/visual only | ✅ items 7, 9 pass |
 
 ## 4. Verification Status
 
 | Section | Status | Notes |
 |---------|--------|-------|
-| 1. Automated Gates (build/test/tsc/deps) | ✅ done | `cargo build` 0 errors, `cargo test` 24/24 pass, `npx tsc --noEmit` clean, zero new npm/Cargo dependencies across all of Phase 10. |
-| 2. Human UI-SPEC Verification Checklist (both themes + perf re-confirm) | ⬜ pending | **Requires human** — must be run on a real macOS Tahoe device (Windows spot-check where available). See Task 2's `checkpoint:human-verify` in `10-06-PLAN.md`. |
+| 1. Automated Gates (build/test/tsc/deps) | ✅ done | `cargo build` 0 errors, `cargo test` 25/25 pass, `npx tsc --noEmit` clean, zero new npm/Cargo dependencies across all of Phase 10 (glass-blur CSS simplification is a net removal, not an addition). |
+| 2. Human UI-SPEC Verification Checklist (both themes + perf re-confirm) | ✅ done | 22/23 pass; item 4 (glass-blur) waived per explicit user decision 2026-08-04 — see Round 3 above. |
 
-The phase is **not yet complete**. Section 1 (this executor's scope) is fully green. Section 2
-is inherently manual — the executor cannot perform a visual/perceptual walk of translucency,
-theme rendering, or on-device idle CPU/GPU measurement. The user executes the checklist and
-updates Section 2's status to `✅ done` (or lists failing items) when the walk is complete.
-
-**Post-completion checklist for the user:**
-
-1. Run the app on a macOS Tahoe device (and Windows if available) and walk all 23 items in
-   `10-UI-SPEC.md`'s Verification Checklist, in both light and dark theme.
-2. Record the idle CPU/GPU measurement against the v1.2.0 baseline (checklist item 5).
-3. Reply "approved" (all pass) or list the specific failing item numbers.
-4. Once Section 2 is marked `✅ done`, Phase 10 is complete against all seven requirements
-   (UI-01..04, UX-08..10).
+**Phase 10 is complete against all seven requirements** (UI-01..04, UX-08..10). Item 4's
+waiver is a deliberate, documented scope decision, not an unresolved gap.
