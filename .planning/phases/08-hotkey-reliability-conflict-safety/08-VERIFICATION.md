@@ -1,404 +1,134 @@
 ---
-phase: 8
-slug: hotkey-reliability-conflict-safety
-status: complete
-nyquist_compliant: true
-wave_0_complete: true
-created: 2026-06-19
-verified: 2026-06-30T21:46:00Z
+phase: 08-hotkey-reliability-conflict-safety
+verified: 2026-08-04T14:44:40Z
+status: human_needed
+score: 4/4 must-have truths verified (source-level); 1 ROADMAP success criterion present-but-behavior-unverified at the phase's own literal device-test granularity
+behavior_unverified: 1
+overrides_applied: 0
+re_verification:
+  previous_status: complete (informal gate-status frontmatter; ROADMAP.md's own Phase 8 checkbox was — and remains — unchecked)
+  previous_score: "4/4 automated gates green (08-VERIFICATION.md 2026-06-30T21:46:00Z); Sections 5+6 (manual device tests) recorded pending"
+  gaps_closed:
+    - "None required closing — no regressions found. This pass re-confirms all UX-11/12/13/14 backend and frontend guarantees against CURRENT source (post Phase-9 and Phase-10 changes to the same files), not just the June 30 snapshot."
+  gaps_remaining:
+    - "ROADMAP SC4 / UX-14 literal device verification (08-VERIFICATION.md Sections 5 and 6 — macOS Tests 5.1-5.6, Windows Tests 6.1-6.5) has never been executed and marked done under Phase 8's own name. Unchanged since the original pass."
+  regressions: []
+gaps: []
+deferred: []
+behavior_unverified_items:
+  - truth: "ROADMAP SC4 — global hotkey operation is verified on both macOS and Windows real devices, per Phase 8's own literal test protocol (08-VERIFICATION.md Section 5 macOS Tests 5.1-5.6, Section 6 Windows Tests 6.1-6.5)"
+    test: "Run the 6 macOS tests (system-wide Cmd+F5 toggle while unfocused, first-run banner appears-once-and-dismisses, trigger-key conflict toast, same-input overlap warning, in-card Global subtitle, modifier chip preview order) and the 5 Windows tests (system-wide Ctrl+Shift+F5 toggle while unfocused, bind_hotkey IPC no-longer-a-no-op, first-run banner + Global subtitle, same-input overlap warning, modifier chip preview order) exactly as written in 08-VERIFICATION.md's original Section 5/6, on real macOS and Windows hardware with Accessibility + Input Monitoring (macOS) granted"
+    expected: "All 11 steps pass as literally specified; 08-VERIFICATION.md Section 7 status table Sections 5 and 6 can be marked done"
+    why_human: "Requires live CGEvent/Win32-hook injection, live OS focus switching, and human visual confirmation of toast/banner/chip UI — cannot be verified by static analysis. Phase 9's 2026-08-04 device UAT (09-UAT.md Round 2, Tests 3-4) exercised closely-related infrastructure (hotkey-triggered macro toggling while unfocused on both platforms, and confirmed the Phase 8 conflict warning renders on a real macOS device) and passed — but it is a distinct test protocol scoped to Phase 9's concurrent-execution goal, not a verbatim re-run of Phase 8's own 11 steps (e.g. the first-run-banner dismiss-persistence check, the Windows bind_hotkey-no-longer-no-op check, and the modifier-chip semantic-order check were not part of Phase 9's re-test). The project's own STATE.md (updated 2026-08-04) and ROADMAP.md (Phase 8 checkbox still unchecked) both independently confirm this is the sole open item and describe Phase 8 as 'source-complete' otherwise."
+human_verification:
+  - test: "Execute 08-VERIFICATION.md Section 5 (macOS Tests 5.1-5.6) and Section 6 (Windows Tests 6.1-6.5) on real macOS and Windows hosts."
+    expected: "All 11 steps pass exactly as specified in the original plan."
+    why_human: "Live device, live OS focus-switching, and human visual confirmation of toast/banner/chip UI — not verifiable by static analysis. This is the only outstanding item; the codebase itself has been independently confirmed correct and unregressed by this pass."
 ---
 
-# Phase 8 — Verification Report
+# Phase 8: Hotkey Reliability & Conflict Safety — Verification Report
 
-> Single source of truth for Phase 8 (Hotkey Reliability & Conflict Safety) gate status.
-> The phase is complete when all seven sections below are marked `✅ done` in Section 7.
+**Phase Goal:** The hotkey binding system is reliable, full-featured, and safe — supports a broad key range, prevents silent conflicts between macros, and users understand that binds are system-wide
+**Verified:** 2026-08-04T14:44:40Z
+**Status:** human_needed
+**Re-verification:** Yes — the prior 08-VERIFICATION.md (2026-06-30T21:46:00Z) was flagged stale by `gsd-tools` because 08-06-SUMMARY.md committed ~22 minutes after that verification timestamp, and because Phases 9 and 10 (both now complete, dated 2026-08-04) subsequently touched every file Phase 8 modified: `src/App.tsx`, `src-tauri/src/state/mod.rs`, `src-tauri/src/ipc/mod.rs`, `src-tauri/src/platform/windows/mod.rs`, and `src-tauri/src/platform/macos/observer.rs`. This pass independently re-derives every UX-11/12/13/14 guarantee from the CURRENT state of those files (not the June 30 snapshot) and re-runs the test suite myself rather than trusting any prior report's numbers.
 
-## 1. Test Suite
+## Re-verification Summary
 
-Command: `cargo test 2>&1 | tail -30`
+**No regressions found.** Phase 9's Plan 10 (commit `76d7b3c`, "remove redundant hotkey registry from both platform observers") deleted the `MACRO_TRIGGER_KEYS: HashMap<(u16, u64), Uuid>` registry that Phase 8 Plan 08-01 originally introduced, consolidating both platforms onto the single `HOTKEY_BINDINGS: Vec<HotkeyBinding>` / `Vec<WindowsHotkeyBinding>` registry that already existed pre-Phase-8 for hotkey *dispatch*. I independently confirmed:
 
-Notes on command: The plan references `cargo test -p automux-lib`, but the actual package name (per `src-tauri/Cargo.toml`) is `automux` (hyphen-free), with a separate `[lib] name = "automux_lib"` for the library. Running `cargo test` from `src-tauri/` exercises the full lib test suite (the equivalent of `cargo test -p automux_lib --lib` once the package name is corrected). The `windows_mod_constants` test from Plan 08-01 is gated on `#[cfg(windows)]` and is therefore correctly absent from the macOS test output — this is the expected behavior, not a missing test.
+1. **The consolidation preserves modifier-aware matching.** `HotkeyBinding.modifiers` and `WindowsHotkeyBinding.modifiers` are populated from `mac.trigger_modifiers` by `build_hotkey_bindings_vec()` (`state/mod.rs:384-411`, introduced in Phase 8 Plan 08-03, commit `f5bc0b6` — unchanged by 09-10). macOS's `HotkeyBinding::matches()` (`observer.rs:50-52`) does a bitwise-containment check (`flags.bits() & self.modifiers == self.modifiers`); Windows's `hook_callback` (`platform/windows/mod.rs:541`) does an exact-equality check (`binding.modifiers == mod_mask`) against a `build_mod_mask()` synthesized at keypress time. Both were already designed this way before Phase 9 touched the files (08-RESEARCH.md explicitly called this "correct bitwise containment check", the intended design); 09-10 only removed the *duplicate* lookup path that had caused a double-dispatch bug (closed by its own regression test, `state::tests::hotkey_registry_has_single_binding_per_trigger_macro`, which explicitly asserts exactly one binding per trigger-key macro).
+2. **`MACRO_TRIGGER_KEYS` is completely gone crate-wide** (`grep -rn "MACRO_TRIGGER_KEYS"` on `src-tauri/src/` returns nothing) — the literal artifact named in 08-01's must-haves (`HashMap<(u16, u64), Uuid>`) no longer exists, but the *truth* it existed to satisfy ("the platform trigger-key registry is keyed by matching including modifier bits") is fully preserved by the surviving `HOTKEY_BINDINGS` registry, which I verified is the sole path both platforms consult (no dead second lookup remains).
+3. **`bind_hotkey`/`unbind_hotkey` IPC commands remain platform-unconditional** (`ipc/mod.rs:81-108`, no `#[cfg(target_os = "macos")]` gate) — UX-14's "no longer macOS-only" guarantee holds.
+4. **All 9 state-mutating `Intent` handlers still call `recompute_conflicts()`** (`AddMacro`, `RemoveMacro`, `SetMacroEnabled`, `SetMacroTriggerKey`, `UpdateMacro`, `BindHotkey`, `UnbindHotkey`, `ToggleMacroHotkey`, `ToggleEngineHotkey`, plus `LoadProfile`) — confirmed by direct grep and read of each handler body.
+5. **All Phase 8 frontend UI surfaces survived Phase 10's component extraction** (`App.tsx` → `MacroCard.tsx`, `MacroForm.tsx`, `KeyCaptureField.tsx`): the conflict toast, conflict warning region, first-run global notice, `↗ Global` subtitle, and modifier-preview chips are all present, unchanged in behavior, and correctly re-wired through the new component props.
+6. **`cargo test --lib` (run by me just now, not trusted from any report): 25/25 pass**, including every Phase-8-specific test (`cg_event_flag_constants`, `self_rebind_allowed`, `bind_conflict_rejected`, `conflict_detection_overlap`, `conflict_disappear_on_disable`, `profile_backwards_compat`) plus later regression tests that directly re-exercise Phase 8 surfaces (`hotkey_registry_has_single_binding_per_trigger_macro`, `set_trigger_key_rejects_conflict_without_coercion`). `cargo build` and `npx tsc --noEmit` both clean.
+7. **One documentation staleness finding (not a code gap):** `REQUIREMENTS.md` still shows UX-13 as unchecked (`[ ]`) with the note "OS-level modifier matching on macOS is a follow-up." I traced this via `git log -S` and found the note was written in the Plan 08-05 docs commit (`9edbac4`, 2026-06-30 23:44), which is *after* Plan 08-03's commit (`f5bc0b6`, 2026-06-30 23:23) already wired `trigger_modifiers` into `build_hotkey_bindings_vec` and made the pre-existing `HotkeyBinding::matches()` bitwise check operate on real, non-zero modifier bits for the first time. The note was stale at the moment it was written and remains stale today — the functionality it describes as a "follow-up" was already complete. Recommend updating `REQUIREMENTS.md` line 42/95 to check the box and correct the note; this is a documentation fix, not a code change.
+8. **The one genuine open item is unchanged from the original pass and is NOT something Phase 9/10 caused:** ROADMAP.md's Phase 8 checkbox is still unchecked, and `.planning/STATE.md` (last updated 2026-08-04, today) explicitly states "Phase 8 is the sole remaining blocker, awaiting human device verification" and "no code work is pending for it — it is source-complete." I independently corroborate this: 08-VERIFICATION.md Section 7's status table has never had Sections 5 (macOS device tests) or 6 (Windows device tests) marked done. Phase 9's own device UAT (`09-UAT.md`, updated today) did run real macOS and Windows hardware tests that incidentally exercised hotkey-triggered toggling and confirmed "the Phase 8 conflict warning also displays" on a real macOS device — good corroborating evidence the backend is sound end-to-end — but it is Phase 9's own test protocol (T9.1-T9.7 macOS, its own 6.1-6.3 Windows numbering) scoped to concurrent execution, not a verbatim re-run of Phase 8's specific 11-step checklist (first-run-banner persistence, Windows bind_hotkey-no-longer-no-op, modifier-chip order). I am not crediting it as closing Phase 8's own device-verification requirement.
 
-Exit code: `0` (all 8 tests passed; the runtime was ~0.6s — well under the 10s latency budget from `08-VALIDATION.md`).
+## Goal Achievement
 
-Actual output:
+### Observable Truths
 
-```text
-running 8 tests
-test platform::macos::observer::tests::cg_event_flag_constants ... ok
-test state::tests::self_rebind_allowed ... ok
-test state::tests::bind_conflict_rejected ... ok
-test state::tests::conflict_detection_overlap ... ok
-test state::tests::conflict_disappear_on_disable ... ok
-test persistence::tests::large_config_memory_check ... ok
-test scheduler::tests::jitter_audit_10ms_interval ... ok
-test scheduler::tests::afk_farm_stress_test ... ok
+| # | Truth | Status | Evidence |
+|---|-------|--------|----------|
+| 1 | ROADMAP SC1 / UX-13 — a user can bind a hotkey using A-Z, 0-9, F1-F12, and modifier combinations; the binding UI accepts all of these | VERIFIED | `src/keymap.ts` confirms full A-Z (KeyA-KeyZ), 0-9 (Digit0-Digit9), F1-F12 coverage on both the macOS `CGKeyCode` map and the Windows `VK_*` map. `computeModifiers()`/`modifierChips()` (`App.tsx:154-201`) emit and label the exact bit values pinned by `cg_event_flag_constants` (macOS) and the `#[cfg(windows)]`-gated `windows_mod_constants` test. The `["Control","Shift","Alt","Meta"]` early-return filter is confirmed absent from `startCapture.onKeyDown` (`App.tsx:708-733`) — modifier-only keys can be committed. `trigger_modifiers` flows end-to-end into `HotkeyBinding`/`WindowsHotkeyBinding` and is exercised by a bitwise-containment (macOS) / exact-equality (Windows) match at keypress time — confirmed by direct source read, not just presence. |
+| 2 | ROADMAP SC2 / UX-11 — binding an already-assigned hotkey shows an explicit conflict error, no silent shadowing | VERIFIED | `check_trigger_key_conflict` (`state/mod.rs:263-278`) is invoked by `Intent::BindHotkey` (line 700), `Intent::AddMacro` (line 558), and `resolve_trigger_key_update` (used by both `SetMacroTriggerKey` and `UpdateMacro`, lines 619/658). Self-rebind returns `None` (no-op). `cargo test --lib` (run by me): `self_rebind_allowed`, `bind_conflict_rejected`, `set_trigger_key_rejects_conflict_without_coercion`, `update_macro_conflict_no_partial_mutation` all pass. Frontend `ConflictErrorToast` (`App.tsx:1094-1108`) renders on the exact error-string pattern the backend emits. |
+| 3 | ROADMAP SC3 / UX-12 — enabling a second macro injecting the same input surfaces a visible warning | VERIFIED | `recompute_conflicts` (`state/mod.rs:336-372`) is called from all 9 state-mutating `Intent` handlers plus `LoadProfile` (confirmed by direct grep + read of every call site). `cargo test --lib`: `conflict_detection_overlap`, `conflict_disappear_on_disable` pass. Frontend conflict-warning card (`App.tsx:1143`, `id="conflict-warning-card"`) renders one card per `state().conflicts` entry with correct Oxford-comma / singular-plural grammar. |
+| 4 | ROADMAP SC4 / UX-14 — hotkeys fire when AutoMux is unfocused; the UI communicates system-wide binding; verified on both macOS and Windows | PRESENT_BEHAVIOR_UNVERIFIED (source-level: VERIFIED) | Source-level: `bind_hotkey`/`unbind_hotkey` are platform-unconditional (`ipc/mod.rs:81-108`); Windows `HOTKEY_BINDINGS` registry (consolidated by Phase 9's 09-10, `platform/windows/mod.rs:434`) is populated identically to macOS via `build_hotkey_bindings_vec`; `FirstRunGlobalNotice` banner (`App.tsx:1069-1090`) and per-card `↗ Global` subtitle (`MacroCard.tsx:218`, present in both the bound-key and unset-key render branches) are both present and unchanged by Phase 10's component extraction. Device-level: 08-VERIFICATION.md's own Section 5 (6 macOS tests) and Section 6 (5 Windows tests) have never been executed and marked done under Phase 8's name — confirmed unchanged from the original pass, corroborated by today's STATE.md and ROADMAP.md. See `behavior_unverified_items` and Human Verification below. |
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+**Score:** 4/4 truths hold at the source level (all backend logic, unit tests, and frontend UI surfaces independently re-confirmed against current post-Phase-9/10 source, zero regressions). 1 of those 4 (SC4/UX-14) remains present-but-behavior-unverified specifically at the real-device granularity Phase 8's own plan defined — this is the same open item the project has tracked since the original pass, not a new finding.
 
-     Running unittests src/main.rs (target/debug/deps/automux-d61e43d607832aa7)
+### Required Artifacts
 
-running 0 tests
+| Artifact | Expected | Status | Details |
+|----------|----------|--------|---------|
+| `src-tauri/src/state/mod.rs` | `MacroConfig.trigger_modifiers`, `AppState.conflicts`, `InputConflict`, `check_trigger_key_conflict`, `recompute_conflicts`, `Intent::BindHotkey`/`UnbindHotkey` | VERIFIED | All present; `trigger_modifiers: u64` (line 115, `#[serde(default)]`), `conflicts: Vec<InputConflict>` (line 136, `#[serde(default)]`) — both confirmed backwards-compatible by the passing `profile_backwards_compat` test. |
+| `src-tauri/src/platform/macos/observer.rs` | Modifier-aware hotkey matching keyed by keycode+modifiers | VERIFIED (alternate implementation of the 08-01 must-have) | The literal `MACRO_TRIGGER_KEYS: HashMap<(u16, u64), Uuid>` artifact named in 08-01's must-haves was removed by Phase 9 Plan 10 as part of a deliberate, tested double-dispatch bug fix. The surviving `HOTKEY_BINDINGS: Vec<HotkeyBinding>` registry (pre-existing, now the sole registry) achieves the same modifier-aware-matching truth via `HotkeyBinding.modifiers` + `.matches()`'s bitwise check, fed by the same `trigger_modifiers` data Phase 8 introduced. `cg_event_flag_constants` test passes. |
+| `src-tauri/src/platform/windows/mod.rs` | Windows `HOTKEY_BINDINGS` registry + `build_mod_mask` + modifier-aware `hook_callback` lookup | VERIFIED | `WindowsHotkeyBinding{keycode, modifiers, macro_id}` (line 38-42), `HOTKEY_BINDINGS` static (line 434), `build_mod_mask()` (line 470-491), exact-match lookup in `hook_callback` (line 541). `windows_mod_constants` test present (cfg-gated to Windows, correctly absent from this macOS host's test run). No leftover `MACRO_TRIGGER_KEYS` anywhere in the crate. |
+| `src-tauri/src/ipc/mod.rs` | `bind_hotkey`/`unbind_hotkey` routed through `StateManager`, platform-unconditional | VERIFIED | Lines 81-108; no `#[cfg(target_os = "macos")]` gate; routes through `Intent::BindHotkey`/`UnbindHotkey` with a `Result`-carrying oneshot. |
+| `src/App.tsx` + `src/components/{MacroCard,MacroForm,KeyCaptureField}.tsx` | `computeModifiers`, `ConflictErrorToast`, `ConflictWarningRegion`, `FirstRunGlobalNotice`, in-card `↗ Global`, `ModifierPreviewChip` | VERIFIED | All 5 UI surfaces from Plan 08-05 confirmed present after Phase 10's component extraction; semantic modifier-chip order (`Shift → Ctrl → Alt → Cmd/Win`) unchanged in `modifierChips()` (`App.tsx:182-201`). |
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+### Key Link Verification
 
-   Doc-tests automux_lib
+| From | To | Via | Status | Details |
+|------|----|----|--------|---------|
+| `MacroConfig.trigger_modifiers` | `build_hotkey_bindings_vec` | `mac.trigger_modifiers` field read | WIRED | `state/mod.rs:391-395` (macOS), `407-411` (Windows). |
+| `Intent::BindHotkey` handler | platform `update_hotkey_bindings` | rebuild-and-replace the whole registry on every bind | WIRED | `state/mod.rs:733-741`; confirmed for both `#[cfg(target_os = "macos")]` and `#[cfg(target_os = "windows")]` branches. |
+| `check_trigger_key_conflict` | `Intent::BindHotkey`/`AddMacro`/`SetMacroTriggerKey`/`UpdateMacro` | pre-mutation conflict gate | WIRED | Confirmed at 4 call sites (lines 558, 619, 658, 700-701); conflicting bind returns `Err` via oneshot before any state mutation, confirmed by `set_trigger_key_rejects_conflict_without_coercion` and `update_macro_conflict_no_partial_mutation` passing tests. |
+| `recompute_conflicts` | `AppState.conflicts` → `state-changed` event → frontend `ConflictWarningRegion` | derived-field push on every state-mutating intent | WIRED | 9 call sites confirmed by direct read; frontend renders `state().conflicts` (`App.tsx:1143`+). |
+| `ipc::bind_hotkey`/`unbind_hotkey` | `Intent::BindHotkey`/`UnbindHotkey` | oneshot-carried `Result` | WIRED | `ipc/mod.rs:81-108`; both platforms consult the resulting registry identically. |
 
-running 0 tests
+### Behavioral Spot-Checks
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-```
+| Behavior | Command | Result | Status |
+|----------|---------|--------|--------|
+| Full backend regression suite (run by me, not trusted from any report) | `cargo test --lib` (from `src-tauri/`) | 25 passed; 0 failed | PASS |
+| Backend compiles clean | `cargo build --manifest-path src-tauri/Cargo.toml` | exit 0 | PASS |
+| Frontend typechecks clean | `npx tsc --noEmit` | exit 0, no output | PASS |
+| Clippy (informational — not a Phase 8 gate) | `cargo clippy --all-targets -- -D warnings` | 1 warning: `too_many_arguments` on `update_macro` (`ipc/mod.rs:170`) | PRE-EXISTING, NOT PHASE 8 — introduced by Phase 10 Plan 10-01 (`git log -S`, commit `6dd8abb`), unrelated to any Phase-8-touched function. The original Phase-8-era `needless_return` warning (`ipc/mod.rs:128`, documented in the prior 08-VERIFICATION.md) has since been fixed and no longer appears. |
+| No leftover `MACRO_TRIGGER_KEYS` registry anywhere in the crate | `grep -rn "MACRO_TRIGGER_KEYS" src-tauri/src/` | no matches | PASS — confirms Phase 9's consolidation is complete and clean |
+| No debt markers in Phase-8-touched files (current state) | `grep -n 'TBD\|FIXME\|XXX'` across `state/mod.rs`, `ipc/mod.rs`, `platform/macos/observer.rs`, `platform/windows/mod.rs`, `App.tsx`, `MacroCard.tsx`, `KeyCaptureField.tsx` | no matches | PASS |
 
-Test-by-test verification (every test named in the plan's per-task verification map):
+### Requirements Coverage
 
-| Test | Plan | Requirement | Result |
-|------|------|-------------|--------|
-| `cg_event_flag_constants` | 08-01 | UX-13 (R-1) | ✅ ok — macOS host only (Windows host runs the paired test below) |
-| `windows_mod_constants` | 08-01 | UX-13 (R-1) | ⏭️ cfg-gated to `#[cfg(windows)]` — not compiled on macOS host. Correctly absent from macOS test output. The cfg-gate is the test's own protection: the test body asserts `MOD_ALT=0x0001, MOD_CONTROL=0x0002, MOD_SHIFT=0x0004, MOD_WIN=0x0008` and would fail on a non-Windows host if it were compiled there. |
-| `self_rebind_allowed` | 08-02 | UX-11 (R-6) | ✅ ok — re-binding same macro to same key is accepted |
-| `bind_conflict_rejected` | 08-02 | UX-11 | ✅ ok — second macro on a hot slot is rejected with conflict error |
-| `conflict_detection_overlap` | 08-02 | UX-12 | ✅ ok — two enabled macros with same input detected |
-| `conflict_disappear_on_disable` | 08-02 | UX-12 | ✅ ok — disabling one macro clears the conflict |
-| `large_config_memory_check` | (pre-existing) | — | ✅ ok — persistence 1000-macro memory test still green |
-| `jitter_audit_10ms_interval` | (pre-existing) | — | ✅ ok — scheduler jitter audit still green |
-| `afk_farm_stress_test` | (pre-existing) | — | ✅ ok — scheduler AFK farm stress test still green |
+| Requirement | Source Plan | Description | Status | Evidence |
+|-------------|------------|-------------|--------|----------|
+| UX-11 | 08-01..08-05 | No silent shadowing of an existing hotkey bind | SATISFIED | `check_trigger_key_conflict` wired into all 4 mutation paths; toast UI present; regression tests pass; unregressed by Phase 9/10. |
+| UX-12 | 08-02, 08-05 | Warn on concurrent same-input macros | SATISFIED | `recompute_conflicts` wired into all 9 state-mutating handlers; warning UI present; regression tests pass; unregressed. |
+| UX-13 | 08-01, 08-04, 08-05 | Full practical key range incl. modifiers | SATISFIED at the source level | Full A-Z/0-9/F1-F12 + modifier-bit support confirmed end-to-end (frontend capture → IPC → backend match). **`REQUIREMENTS.md` still marks this unchecked with a stale "follow-up" note** — traced via `git log -S` to predate the very commit (`f5bc0b6`, same day) that already completed the described work. Recommend a documentation-only fix to `REQUIREMENTS.md` lines 42 and 95. |
+| UX-14 | 08-03, 08-05, 08-06 | Global hotkey behavior verified on both platforms, UI communicates system-wide | SATISFIED at the source level; device verification outstanding | Backend/frontend guarantees fully confirmed and unregressed. The phase's own literal device-test protocol (08-VERIFICATION.md Section 5/6) has never been executed — same open item the project has tracked since 2026-06-30, independently reconfirmed by today's STATE.md/ROADMAP.md. See Human Verification. |
 
-Test count: 8 unit tests pass (4 new conflict tests from 08-02, 1 macOS modifier-bit test from 08-01, 3 pre-existing persistence/scheduler tests). The pre-existing count was 4 (cg_event_flag_constants + 3 scheduler/persistence). Phase 8 added 4 (the conflict tests). The Windows `windows_mod_constants` test compiles cleanly on macOS via the cfg-gate and would be included in the count on a Windows host.
+No orphaned requirements: REQUIREMENTS.md's Phase 8 row set (UX-11, UX-12, UX-13, UX-14) maps exactly to the `requirements:` frontmatter declared across all 6 plans (08-01 through 08-06).
 
-**Note on count after Section 4:** Plan 08-06 Task 3 adds a `profile_backwards_compat` test (R-5 backwards compatibility smoke). The full test count after Section 4 is **9** unit tests. The Test Suite section above was captured before the Section 4 test was added; the post-Section-4 output is in Section 4 below.
+### Anti-Patterns Found
 
-**Status: ✅ done** — all expected tests pass; the suite is green.
+| File | Line | Pattern | Severity | Impact |
+|------|------|---------|----------|--------|
+| `.planning/REQUIREMENTS.md` | 42, 95 | UX-13 checkbox unchecked with a stale "OS-level modifier matching on macOS is a follow-up" note that predates the commit which completed that work | Info (documentation only) | No functional impact — the underlying code is correct and tested. Recommend checking the box and correcting the note text in a follow-up docs commit. |
+| `.planning/ROADMAP.md` | 36 | Phase 8 checkbox unchecked, pending Sections 5+6 device verification | Info (tracked, not new) | Matches this verification's own finding — not a discrepancy, this is the project accurately tracking its one remaining item. |
 
-## 2. Clippy
+No blocker-severity anti-patterns found in any Phase-8-touched source file.
 
-Command: `cargo clippy --all-targets -- -D warnings 2>&1 | tail -20`
+## Human Verification Required
 
-Notes on command: The plan references `cargo clippy -p automux-lib --all-targets -- -D warnings`. The actual package name is `automux` (the `[lib] name = "automux_lib"` is the library name, not the package name). Running `cargo clippy --all-targets -- -D warnings` from `src-tauri/` is the equivalent invocation.
+### 1. Execute Phase 8's own macOS + Windows device test protocol
 
-Expected: empty output, exit 0. The Phase 7 BUILD-01 fix established the zero-warning baseline; Phase 8 must not regress it.
+**Test:** Run 08-VERIFICATION.md Section 5 (6 macOS tests: system-wide `Cmd+F5` toggle while unfocused; first-run banner appears-once-and-dismisses; trigger-key conflict toast; same-input overlap warning; in-card `↗ Global` subtitle; modifier-chip preview semantic order) and Section 6 (5 Windows tests: system-wide `Ctrl+Shift+F5` toggle while unfocused; `bind_hotkey` IPC no-longer-a-no-op — closes the original CONCERNS.md:150-152 gap; first-run banner + `↗ Global`; same-input overlap warning; modifier-chip preview order with Windows modifiers) on real macOS and Windows hardware with Accessibility + Input Monitoring granted (macOS).
 
-**Actual result:** clippy exits non-zero with **one** warning. The warning is **pre-existing** (NOT introduced by Phase 8 — see "Pre-existing warning analysis" below) and was already noted in the deviation sections of plans 08-01, 08-02, 08-03, 08-04, and 08-05.
+**Expected:** All 11 steps pass exactly as specified; update 08-VERIFICATION.md Section 7's status table to mark Sections 5 and 6 done, and check the Phase 8 box in ROADMAP.md and correct REQUIREMENTS.md's UX-13/UX-14 entries.
 
-Actual output (`cargo clippy --all-targets -- -D warnings`):
+**Why human:** Requires live CGEvent/Win32-hook injection while the app is unfocused, live first-launch `localStorage` state, and human visual confirmation of toast/banner/chip rendering — none of this is verifiable by static source analysis. This is the sole remaining item for Phase 8, and the codebase underlying it has now been independently re-confirmed correct and unregressed by two full downstream phases (9 and 10) that both touched the same files.
 
-```text
-error: unneeded `return` statement
-   --> src/ipc/mod.rs:128:9
-    |
-128 |         return crate::platform::macos::observer::list_running_apps_impl();
-    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#needless_return
-    = note: `-D clippy::needless_return` implied by `-D warnings`
-    = help: to override `-D warnings` add `#[allow(clippy::needless_return)]`
-help: remove `return`
-    |
-128 -         return crate::platform::macos::observer::list_running_apps_impl();
-128 +         crate::platform::macos::observer::list_running_apps_impl()
-    |
+## Gaps Summary
 
-error: could not compile `automux` (lib) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-error: could not compile `automux` (lib test) due to 1 previous error
-```
+No code gaps. Every backend and frontend guarantee behind UX-11, UX-12, UX-13, and UX-14 was independently re-derived from the CURRENT state of every file Phase 9 and Phase 10 also touched (`src/App.tsx`, `src-tauri/src/state/mod.rs`, `src-tauri/src/ipc/mod.rs`, `src-tauri/src/platform/windows/mod.rs`, `src-tauri/src/platform/macos/observer.rs`), not merely re-read from the June 30 snapshot or trusted from either SUMMARY.md's or the prior 08-VERIFICATION.md's prose. `cargo test --lib` (25/25), `cargo build`, and `npx tsc --noEmit` all pass cleanly when run directly by me. Phase 9's registry consolidation (09-10) removed the literal `HashMap<(u16,u64),Uuid>` artifact named in Plan 08-01's must-haves, but I confirmed the underlying truth it existed to satisfy — modifier-aware hotkey matching — is fully preserved by the surviving, now-sole `HOTKEY_BINDINGS` registry, and that the consolidation itself fixed a genuine double-dispatch bug (pinned by a passing regression test).
 
-Exit code: `1` (clippy errored due to `-D warnings` promoting the warning to an error).
+The sole outstanding item — real-device execution of Phase 8's own 11-step manual test protocol (Section 5 macOS, Section 6 Windows) — is unchanged from the original 2026-06-30 pass and is not something Phase 9 or Phase 10 introduced or could have closed; the project's own STATE.md and ROADMAP.md (both updated today, 2026-08-04) independently agree this is the sole remaining blocker for milestone v2.0 and describe Phase 8 as otherwise "source-complete." I additionally flag (as documentation-only, non-blocking) that REQUIREMENTS.md's UX-13 checkbox and note are stale and should be corrected to reflect that OS-level modifier matching on macOS has been complete since Plan 08-03.
 
-### Pre-existing warning analysis
+**Recommended next step:** Route to human verification for the real-device macOS/Windows hotkey tests (08-VERIFICATION.md Section 5/6). Once complete, mark the ROADMAP.md Phase 8 checkbox done and correct REQUIREMENTS.md's UX-13 entry.
 
-The warning was introduced in commit `b206f8f` (Phase 1, v1.0 MVP, feat(03-01): add RunningApp, list_running_apps, set_macro_trigger_key IPC commands). The same warning was present at `src/ipc/mod.rs:126` during plan 08-01's execution and is now at line 128 (plans 08-02 and 08-03 added lines above it). Phase 8 plans 08-01, 08-02, 08-03, 08-04, 08-05 all noted this in their deviation sections as "pre-existing, not introduced by this plan, left for a separate cleanup."
+---
 
-Git log proof (the warning's origin):
-
-```text
-b206f8f feat(03-01): add RunningApp, list_running_apps, set_macro_trigger_key IPC commands
-```
-
-The `return` was present in the original commit and was never touched by Phase 8 plans. The plan's acceptance criterion "no new clippy warnings" is met (Phase 8 added zero new warnings); the `cargo clippy --all-targets -- -D warnings` invocation exits non-zero solely because of the pre-existing `needless_return` warning.
-
-**Status: ✅ done (no new warnings)** — Phase 8's "no new clippy warnings" acceptance criterion is satisfied. The pre-existing `needless_return` warning at `src/ipc/mod.rs:128` is documented in the deviation sections of plans 08-01 through 08-05 and is the same warning that was present at line 126 before Phase 8.
-
-> **Note for future cleanup:** The `return` keyword at `src/ipc/mod.rs:128` is the only thing triggering the warning. Removing the `return` and relying on the implicit tail expression would resolve the issue. This is a one-line fix in scope for a future plan; it is intentionally out of scope for Phase 8 per the deviation boundary noted across plans 08-01 through 08-05.
-
-## 3. Windows Cross-Compile Gate
-
-Command: `cargo build --target x86_64-pc-windows-msvc 2>&1 | tail -20`
-
-Expected: zero warning lines, exit 0. The Windows `#[cfg(target_os = "windows")]` blocks in `platform/windows/mod.rs` (the new `WindowsHotkeyBinding` struct, `HOTKEY_BINDINGS` static, `build_mod_mask` helper, and the tuple-keyed `hook_callback`) must compile cleanly. The cfg-gated test (`windows_mod_constants`) compiles too.
-
-**Result: ⏭️ deferred to CI** — the `x86_64-pc-windows-msvc` Rust target is **not installed on this host**.
-
-The host uses Homebrew's `rust` package (not `rustup`), so the target cannot be added locally without installing `rustup`:
-
-```text
-$ which rustup
-rustup not found
-NOT FOUND (host uses Homebrew rust)
-
-$ rustc --version
-rustc 1.95.0 (59807616e 2026-04-14) (Homebrew)
-cargo 1.95.0 (f2d3ce0bd 2026-03-21) (Homebrew)
-```
-
-The plan specifies `rustup target list --installed` to prove the target is unavailable, but `rustup` is not installed on this host (Homebrew's `rust` does not provide it). Equivalent evidence — the `x86_64-pc-windows-msvc` cross-compile attempt itself:
-
-```text
-$ cargo build --target x86_64-pc-windows-msvc 2>&1 | tail -20
-error[E0463]: can't find crate for `std`
-  |
-  = note: the `x86_64-pc-windows-msvc` target may not be installed
-  = help: consider downloading the target with `rustup target add x86_64-pc-windows-msvc`
-
-For more information on this error, try `rustc --explain E0463`.
-error: could not compile `serde_core` (lib) due to 1 previous error
-warning: build failed, waiting for other jobs to finish...
-error[E0463]: can't find crate for `core`
-  |
-  = note: the `x86_64-pc-windows-msvc` target may not be installed
-  = help: consider downloading the target with `rustup target add x86_64-pc-windows-msvc`
-
-error: could not compile `stable_deref_trait` (lib) due to 1 previous error
-error: could not compile `zerofrom` (lib) due to 1 previous error
-error: could not compile `windows-link` (lib) due to 1 previous error
-error: could not compile `windows-link` (lib) due to 1 previous error
-error: could not compile `itoa` (lib) due to 1 previous error
-error: could not compile `cfg-if` (lib) due to 1 previous error
-error: could not compile `utf8_iter` (lib) due to 1 previous error
-error: could not compile `litemap` (lib) due to 1 previous error
-error: could not compile `writeable` (lib) due to 1 previous error
-error: could not compile `memchr` (lib) due to 1 previous error
-error: could not compile `smallvec` (lib) due to 1 previous error
-```
-
-The same outcome was hit by the `x86_64-pc-windows-gnu` target (also not installed):
-
-```text
-$ cargo build --target x86_64-pc-windows-gnu 2>&1 | tail -10
-error[E0463]: can't find crate for `std`
-  |
-  = note: the `x86_64-pc-windows-gnu` target may not be installed
-  = help: consider downloading the target with `rustup target add x86_64-pc-windows-gnu`
-
-error[E0463]: can't find crate for `core`
-  |
-  = note: the `x86_64-pc-windows-gnu` target may not be installed
-```
-
-### Equivalent static evidence on macOS host (cargo check)
-
-`cargo check --all-targets` exits 0 on the macOS host (1.95.0). The cfg-gated Windows blocks are excluded by `#[cfg(target_os = "windows")]` and therefore not type-checked on macOS — this is the intended Rust compilation model for cross-platform code. Plan 08-03 explicitly accepted this gap (Phase 7 BUILD-01 fix + cfg gates + `cargo check` on macOS give "high confidence" the code is correct on Windows).
-
-```text
-$ cargo check --all-targets
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
-```
-
-### Plan 08-03's same conclusion
-
-Plan 08-03's deviation section documented the same constraint and its disposition:
-
-> "Windows cross-compile gate deferred to Plan 08-06 — the x86_64-pc-windows-gnu target is not installed on this host (`can't find crate for 'core'`). Per the plan's explicit allowance, the strict `cargo build --target x86_64-pc-windows-msvc` gate is deferred. The `#[cfg(target_os = "windows")]` attributes + `cargo check` on macOS give high confidence the code is correct on Windows."
-
-### CI gate (where the actual verification happens)
-
-The Phase 7 BUILD-01 fix and Phase 8 cfg-gated additions must be verified on a Windows host or in CI:
-
-- **CI workflow:** `.github/workflows/release.yml` builds on `windows-latest` with the `x86_64-pc-windows-msvc` target installed.
-- **Local Windows device test:** Section 6 below covers the manual `Ctrl+Shift+F5` device test on a real Windows host.
-- **Bit constant test:** The `windows_mod_constants` test (08-01) asserts the literal `MOD_ALT=0x0001, MOD_CONTROL=0x0002, MOD_SHIFT=0x0004, MOD_WIN=0x0008` bit values, and the `build_mod_mask()` function in `platform/windows/mod.rs:477-498` uses the same literal `0x0001`/`0x0002`/`0x0004`/`0x0008` values. The frontend's `computeModifiers` (`src/App.tsx`) emits the same bit values in the non-macOS branch (`0x0004`/`0x0002`/`0x0001`/`0x0008`). The three layers are bit-identical on paper; the `cargo build --target x86_64-pc-windows-msvc` gate is the type-check that confirms the cfg-gated Windows code parses and links.
-
-**Status: ⏭️ deferred to CI** — the `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust, no rustup). Per the plan's explicit allowance and Plan 08-03's disposition, the strict cross-compile gate is verified by CI on `windows-latest` and by the manual Windows device test in Section 6.
-
-## 4. Profile Backwards-Compat (R-5)
-
-### 4.1 Automated Smoke (preferred)
-
-Command: `cargo test -p automux_lib profile_backwards_compat 2>&1 | tail -10`
-
-(Plan references `cargo test -p automux-lib`; the actual package name is `automux` with `[lib] name = "automux_lib"`. Running `cargo test profile_backwards_compat` from `src-tauri/` is the equivalent invocation.)
-
-A new `profile_backwards_compat` unit test was added in `src-tauri/src/state/mod.rs` (Plan 08-06 Task 3 commit `68b0dfe`). The test deserializes a hand-crafted pre-Phase-8 `ProfileData` JSON string (no `trigger_modifiers` on `MacroConfig`, no `conflicts` on `AppState`) and asserts the new fields default to `0` and `[]` respectively while preserving the original `trigger_key` and `sequence` data.
-
-Actual output:
-
-```text
-running 1 test
-test state::tests::profile_backwards_compat ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
-```
-
-Exit code: `0` — the test passes.
-
-### Test logic
-
-```rust
-// Pre-Phase-8 JSON has no `trigger_modifiers` on MacroConfig.
-let pre_phase_8_json = r#"{
-    "name": "Default",
-    "macros": { "11111111-...": { ..., "trigger_key": 96, ... } },
-    "engine_active": true
-}"#;
-let profile: ProfileData = serde_json::from_str(pre_phase_8_json)?;
-// Asserts:
-//   profile.macros.len() == 1
-//   mac.trigger_key == Some(96) (preserved)
-//   mac.trigger_modifiers == 0 (defaulted from #[serde(default)])
-//   mac.sequence.steps.len() == 1 (preserved)
-
-// And the same for AppState — no `conflicts` key in the JSON.
-let state: AppState = serde_json::from_str(pre_phase_8_appstate_json)?;
-// Asserts:
-//   state.conflicts.is_empty() (defaulted to Vec::new() via #[serde(default)])
-```
-
-### Full suite after adding `profile_backwards_compat`
-
-After adding the new test, the full test count went from **8 → 9**. Output of `cargo test 2>&1 | tail -20`:
-
-```text
-running 9 tests
-test platform::macos::observer::tests::cg_event_flag_constants ... ok
-test state::tests::self_rebind_allowed ... ok
-test state::tests::bind_conflict_rejected ... ok
-test state::tests::conflict_detection_overlap ... ok
-test state::tests::conflict_disappear_on_disable ... ok
-test state::tests::profile_backwards_compat ... ok
-test persistence::tests::large_config_memory_check ... ok
-test scheduler::tests::jitter_audit_10ms_interval ... ok
-test scheduler::tests::afk_farm_stress_test ... ok
-
-test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
-```
-
-All 9 tests pass. The new `profile_backwards_compat` test does not break any prior test.
-
-### 4.2 Manual Smoke (fallback — not required since the automated test passes)
-
-The plan's fallback manual smoke is documented here for reference. **It is not required for Phase 8 completion because the automated test in §4.1 is the primary evidence and it passes.**
-
-Steps (if a human verification is desired in addition to the automated test):
-
-1. `git stash` the current changes (save the Phase 8 work).
-2. `git checkout <pre-Phase-8 commit>` (e.g., the last Phase 7 commit, `e.g., 1eed9d9` or the parent of the Phase 8 work).
-3. `npm run tauri dev` — create a macro with a trigger key (e.g., `F5`), save the default profile (now at `~/Library/Application Support/com.alvaro.automux/profiles/default.json` on macOS or `%APPDATA%\com.alvaro.automux\profiles\default.json` on Windows).
-4. Quit the app.
-5. `git checkout <Phase 8 commit>` and `git stash pop`.
-6. `npm run tauri dev` again.
-7. In the app, load the default profile (the Profiles tab's Load button on the `Default` row).
-8. Verify: no error toast; the macro's trigger key is preserved; `state().conflicts` is `[]` (no spurious conflicts).
-9. Capture a screenshot if useful.
-
-**Status: ✅ done** — the automated `profile_backwards_compat` test passes, proving R-5 (backwards compatibility for v2.0 profiles saved before Phase 8) is satisfied at the unit-test level. The manual smoke is a fallback that is not required for Phase 8 completion.
-
-## 5. Manual macOS Device Test (UX-14)
-
-These steps must be performed on a real macOS host. The `cg_event_flag_constants` unit test (08-01) covers the bit values; the device test confirms the end-to-end behavior on a real machine with a real CGEventTap.
-
-Pre-flight:
-
-- [ ] Accessibility granted to AutoMux (System Settings → Privacy & Security → Accessibility).
-- [ ] Input Monitoring granted to AutoMux (System Settings → Privacy & Security → Input Monitoring).
-- [ ] App is running via `npm run tauri dev` or a release build.
-
-### Test 5.1 — System-wide hotkey fires when AutoMux is unfocused
-
-1. Create a macro named `Test Toggle` with a left-click action (or any action), and a trigger key of `Cmd+F5` (hold `Cmd`, press `F5`).
-2. Click into another app (e.g., Safari, TextEdit, or Finder).
-3. Press `Cmd+F5`. **Expected:** the macro toggles on (the `Test Toggle` card's toggle flips). The macro injects a left-click into the focused app.
-4. Press `Cmd+F5` again. **Expected:** the macro toggles off.
-
-### Test 5.2 — First-run banner appears once and dismisses
-
-1. Clear `localStorage.automux.hotkey_global_notice_dismissed` (DevTools console: `localStorage.removeItem("automux.hotkey_global_notice_dismissed")`).
-2. Reload the app (Cmd+R).
-3. **Expected:** the `🌍 Binds are system-wide` banner appears.
-4. Click `Got it`. **Expected:** the banner disappears.
-5. Reload again. **Expected:** the banner does NOT reappear.
-
-### Test 5.3 — Trigger-key conflict surfaces a toast
-
-1. Create macro A with trigger key `F5`.
-2. Try to re-bind macro B to `F5`. **Expected:** a danger-tinted toast `Hotkey already bound — F5 is already assigned to "<macro A name>". Unbind it first or pick a different key.` appears for 8 seconds.
-3. Pick a different key for macro B. **Expected:** the bind succeeds, no toast.
-
-### Test 5.4 — Same-input overlap warning appears
-
-1. Enable macro A (a left-click macro) and macro B (also a left-click macro).
-2. **Expected:** a warning-tinted card appears: `⚠ 2 macros are injecting the same input — "Macro A" and "Macro B" both inject Left Click — clicks will fire at 2× rate.`
-3. Disable macro A. **Expected:** the warning disappears on the next `state-changed` event.
-
-### Test 5.5 — In-card `↗ Global` subtitle visible
-
-1. With at least one macro created, scroll the dashboard.
-2. **Expected:** every macro card shows `↗ Global` next to the trigger-mode suffix (e.g., `(Pulse) ↗ Global`).
-
-### Test 5.6 — Modifier chip preview during capture
-
-1. Open the new-macro form, click the trigger-key capture chip.
-2. Hold `Cmd`. **Expected:** a `⌘` chip appears above the capture widget.
-3. Hold `Cmd` + `Shift`. **Expected:** chips appear in semantic order `Shift → Cmd` (regardless of press order).
-4. Release all modifiers. **Expected:** the chip row disappears (`recordingModifiers === 0` guard).
-
-## 6. Manual Windows Device Test (UX-14)
-
-These steps must be performed on a real Windows host. The `windows_mod_constants` unit test (08-01, cfg-gated to Windows) covers the bit values; the device test confirms the WH_KEYBOARD_LL hook fires when another app is focused.
-
-Pre-flight:
-
-- [ ] The app is running (release build or `npm run tauri dev` from a Windows host).
-- [ ] If Windows SmartScreen or UAC blocks the hook, run as Administrator OR add an exception in the antivirus.
-
-### Test 6.1 — System-wide hotkey fires when AutoMux is unfocused
-
-1. Create a macro with a left-click action and a trigger key of `Ctrl+Shift+F5` (hold `Ctrl` and `Shift`, press `F5`).
-2. Click into another app (Notepad, File Explorer, or a browser).
-3. Press `Ctrl+Shift+F5`. **Expected:** the macro toggles on (verify by checking the macro's toggle state in the AutoMux window).
-4. Press again to toggle off.
-
-### Test 6.2 — `bind_hotkey` IPC is no longer a no-op (closes the Windows CONCERNS.md:150-152 gap)
-
-1. Open the app, create a macro.
-2. In the macro card, click the `Set key…` chip.
-3. Press `Ctrl+F1`.
-4. **Expected:** the chip updates to show `Ctrl+F1` (or similar — the exact label depends on the modifier symbol map; the `bind_hotkey` IPC should NOT silently fail as it did in v2.0 before this phase).
-5. Click into another app, press `Ctrl+F1`. **Expected:** the macro toggles.
-
-### Test 6.3 — First-run banner + in-card `↗ Global`
-
-1. Same as macOS Test 5.2 and 5.5. The UI is platform-agnostic.
-
-### Test 6.4 — Same-input overlap warning
-
-1. Same as macOS Test 5.4. The UI is platform-agnostic.
-
-### Test 6.5 — Modifier chip preview during capture
-
-1. Same as macOS Test 5.6, but with Windows modifier keys: `Ctrl`, `Shift`, `Alt`, `Win`. **Expected:** chips appear in semantic order `Shift → Ctrl → Alt → Win`.
-
-## 7. Verification Status
-
-| Section | Status | Notes |
-|---------|--------|-------|
-| 1. Test Suite | ✅ done | 8/8 lib unit tests pass (post-Section-4 count: 9/9 — see Section 4). Test count went from 4 pre-Phase-8 → 8 with Phase 8 conflict tests → 9 with the R-5 backwards-compat test from Section 4. |
-| 2. Clippy | ✅ done (no new warnings) | One pre-existing warning at `src/ipc/mod.rs:128` (`needless_return`). Phase 8 did not introduce it. Documented in deviation sections of 08-01, 08-02, 08-03, 08-04, 08-05. The `cargo clippy --all-targets -- -D warnings` exit code is non-zero solely because of this pre-existing warning; the "no new clippy warnings" acceptance criterion is met. |
-| 3. Windows Cross-Compile | ⏭️ deferred to CI | `x86_64-pc-windows-msvc` target is not installed on this host (Homebrew rust, no rustup). Plan 08-03 documented the same disposition. Equivalent evidence provided (the cross-compile error itself + the `cargo check --all-targets` clean exit). The strict gate is verified on `windows-latest` in CI. |
-| 4. Profile Backwards-Compat | ✅ done | The new `profile_backwards_compat` test passes. Pre-Phase-8 profile JSON deserializes cleanly with `trigger_modifiers = 0` and `conflicts = []` defaults. The `#[serde(default)]` annotations from Plan 08-01 work end-to-end. |
-| 5. Manual macOS Device Test | ⬜ pending | **Requires human** — must be run on a real macOS host with Accessibility + Input Monitoring granted. The 6 tests cover system-wide hotkey (5.1), first-run banner (5.2), conflict toast (5.3), same-input warning (5.4), `↗ Global` subtitle (5.5), and modifier chip preview (5.6). |
-| 6. Manual Windows Device Test | ⬜ pending | **Requires human** — must be run on a real Windows host. The 5 tests cover system-wide hotkey with `Ctrl+Shift+F5` (6.1), `bind_hotkey` IPC no-longer-a-no-op (6.2 — closes the CONCERNS.md:150-152 gap), first-run banner (6.3), same-input warning (6.4), and modifier chip preview (6.5). |
-
-The phase is **technically complete** from an automated-verification standpoint: all 4 automated gates (Sections 1, 2, 4) are green, and the Windows cross-compile gate (Section 3) is deferred per the plan's explicit allowance. Sections 5 and 6 are inherently manual — the executor cannot perform them. The user (or a human verification step) executes the steps and updates Sections 5 and 6 status to `✅ done` when the literal steps in each section pass on a real device.
-
-**Pre-completion summary (what the executor delivered):**
-
-- All Phase 8 unit tests pass (9/9).
-- No new clippy warnings introduced by Phase 8.
-- Windows cross-compile gate documented as deferred to CI (with the equivalent static evidence on macOS).
-- R-5 profile backwards-compat proven at the unit-test level.
-- The plan's deliverable — this report — is the source of truth for the phase's completion status.
-
-**Post-completion checklist for the user:**
-
-1. Run Test 5.1–5.6 on a real macOS host. Mark Section 5 `✅ done` when all 6 pass.
-2. Run Test 6.1–6.5 on a real Windows host. Mark Section 6 `✅ done` when all 5 pass.
-3. The phase is fully complete when Sections 1, 2, 3, 4 are `✅ done` / `⏭️ deferred` AND Sections 5 and 6 are `✅ done`.
+_Verified: 2026-08-04T14:44:40Z_
+_Verifier: Claude (gsd-verifier)_
