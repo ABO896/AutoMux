@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "G-09-1b-no-delete-macro-ui — The user cannot delete a macro from within the AutoMux app UI, even though the Rust backend already exposes a remove_macro IPC command."
 created: 2026-07-22T00:00:00Z
-updated: 2026-07-22T00:20:00Z
+updated: 2026-08-04T00:00:00Z
+resolved_by: "09-08-PLAN.md — added per-card delete button wired to remove_macro IPC; independently re-verified with no regression in 09-VERIFICATION.md (2026-07-22T21:30:00Z) and confirmed still present after Phase 10's component extraction."
 ---
 
 ## Current Focus

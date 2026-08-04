@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "G-09-1c-targeted-macro-not-firing: A macro configured with a specific target-process (app-scoped, not \"global\"/system-wide) does not fire at all, while a global-scope macro on the same build does fire."
 created: 2026-07-22T00:00:00Z
-updated: 2026-07-22T00:20:00Z
+updated: 2026-08-04T00:00:00Z
+resolved_by: "09-07-PLAN.md (NSWorkspace observer hardening) + 09-08-PLAN.md (controlled target-app select fix); independently re-verified with no regression in 09-VERIFICATION.md (2026-07-22T21:30:00Z) and confirmed still working after Phase 9's device UAT (T9.1-T9.7, 2026-08-04) and Phase 10's component extraction."
 ---
 
 ## Current Focus

@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "G-09-1a-perf-slowdown-after-stop: AutoMux (Tauri macro automation app) remains noticeably slowed down system-wide even after all macros have been disabled/stopped, following use of a fast-interval (100ms) global hotkey-triggered macro."
 created: 2026-07-22T00:00:00Z
-updated: 2026-07-22T00:32:00Z
+updated: 2026-08-04T00:00:00Z
+resolved_by: "09-07-PLAN.md — narrowed CGEventTap event mask to 8 consumed types; independently re-verified with no regression in 09-VERIFICATION.md (2026-07-22T21:30:00Z). User-confirmed live via the separate idle-input-lag-freeze fix (CGEventTap Mach-port leak) during Phase 10, 2026-08-04."
 ---
 
 ## Current Focus
