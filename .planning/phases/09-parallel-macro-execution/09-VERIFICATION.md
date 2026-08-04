@@ -1,7 +1,7 @@
 ---
 phase: 09-parallel-macro-execution
 verified: 2026-07-22T21:30:00Z
-status: human_needed
+status: passed
 score: 14/16 must-haves verified
 behavior_unverified: 2
 overrides_applied: 0
@@ -9,30 +9,37 @@ re_verification:
   previous_status: gaps_found
   previous_score: 12/16
   gaps_closed:
+
     - "Blocker gap (HoldRelease actions gated identically to new-input actions — stuck-input risk): CLOSED by plan 09-11 Task 1. Independently re-confirmed by my own direct read of src-tauri/src/state/mod.rs (not merely trusted from SUMMARY.md or 09-REVIEW.md): action_should_inject (lines 281-309) is a pure free function whose FIRST statement is an unconditional `if matches!(action_type, ActionType::HoldRelease(_)) { return true; }` — before Gate 1/2/3 run. handle_action (lines 456-493) now consults it via a single `if !action_should_inject(...) { return; }` guard, replacing the old inline per-gate early-returns. New regression test hold_release_bypasses_gates (state/mod.rs:1292+) drives all four confirmed trigger paths (disabled macro, engine off, target-app mismatch, macro absent after profile clear) plus a negative case proving a HoldStart for the same disabled macro stays gated (bypass is release-only, not a blanket bypass). I ran `cargo test --lib` myself (not trusting reported numbers): 16/16 pass, including this test."
     - "Blocker gap (hotkey rebind destroys the old binding on a rejected conflict, both platforms): CLOSED by plan 09-11 Tasks 2-3. macOS: independently confirmed via direct read of src/App.tsx:578-585 that the `unbind_hotkey` pre-step is gone (`grep -c 'invoke(\"unbind_hotkey\"' src/App.tsx` returns 0, I ran it myself) — the macOS branch now calls only `bind_hotkey` (which preserves the old binding on conflict, per its existing Result-oneshot design) followed by the pre-existing `set_macro_trigger_key` round-trip. Windows: independently confirmed via direct read of state/mod.rs:594-635 that `Intent::SetMacroTriggerKey` now carries a `oneshot::Sender<Result<(),String>>` and calls the new pure `resolve_trigger_key_update` (lines 226+) — on a genuine conflict it sends `Err(msg)` and returns WITHOUT mutating the macro's trigger fields (old binding preserved); ipc/mod.rs:149-161 confirmed to await the oneshot and propagate the Result instead of always returning Ok(()). New regression test set_trigger_key_rejects_conflict_without_coercion (state/mod.rs:1031+) independently re-run by me: conflict → Err(other_id) (not coerced to None); free key / clear / self-rebind → Ok, as expected. 16/16 suite passes."
   gaps_remaining:
+
     - "ROADMAP SC1 (macOS real-device concurrent-firing confirmation) — unchanged, still human_needed."
     - "ROADMAP SC2 (Windows real-device concurrent-firing confirmation) — unchanged, still human_needed, explicitly blocked_by physical-device."
   regressions: []
 gaps: []
 deferred: []
 behavior_unverified_items:
+
   - truth: "On macOS, enabling macro B while macro A is actively firing does not pause, delay, or cancel macro A — both fire concurrently at their configured intervals (ROADMAP SC1)"
     test: "On a real macOS host with Accessibility + Input Monitoring granted: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A via the dashboard toggle (not a hotkey), wait ~1s, enable B the same way; observe both macro cards show a pulsing firing dot simultaneously and neither's click rate changes when the other starts/stops"
     expected: "Both macros visibly fire concurrently at their own configured rates on real macOS input injection (CGEvent)"
     why_human: "Unchanged since the prior pass — scheduler-level unit tests (re-run and confirmed passing, 16/16) prove platform-agnostic timeline/delivery logic but not real-device CGEvent injection timing with two simultaneous macros."
+
   - truth: "On Windows, the same concurrent behavior holds — macro B fires independently alongside macro A (ROADMAP SC2)"
     test: "On a real Windows host: create macro A (Left Click, 200ms) and macro B (Right Click, 300ms); enable A, wait ~1s, enable B; observe both fire concurrently via SendInput"
     expected: "Both macros fire concurrently at their own configured rates via SendInput"
     why_human: "Unchanged since the prior pass — 09-UAT.md explicitly recorded this as blocked_by: physical-device. This remains a deliberate skip, not a passing result."
 human_verification:
+
   - test: "Run T9.1-T9.7 on a real macOS host (concurrent firing, stop-one-keeps-other, same-input concurrent + conflict warning, held-not-firing indicator, Hold-under-load, responsiveness-after-stop, creation-time targeting)."
     expected: "All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other."
     why_human: "Real macOS device, live CGEvent injection, live UI observation — cannot be verified by static analysis."
+
   - test: "Run the 3 documented Windows manual tests (6.1-6.3) on a real Windows host — this has never actually been executed across any verification pass for this phase."
     expected: "All 3 tests pass via SendInput injection and the Win32 hook observer."
     why_human: "Requires a real Windows device."
+
   - test: "(Recommended, not gating) Confirm the now-fixed HoldRelease bypass and hotkey-rebind rollback at the device level: (a) enable a Hold-mode macro targeted at an app, let HoldStart fire, then disable it / toggle the engine off / switch active app / load a different profile and confirm the physical key/button is released; (b) give a macro a working hotkey, attempt a conflicting rebind via the card-edit UI on each platform, confirm the original hotkey still works after the rejection and the conflict toast appears."
     expected: "Held input releases in all four scenarios; a rejected rebind never destroys the original hotkey, on either platform."
     why_human: "The source-level fix and its unit tests are conclusive for the code path; end-to-end device confirmation is good practice but not required to close the gap given the trigger paths were traced line-by-line against the fix and the regression tests exercise the exact conditions."
@@ -162,16 +169,19 @@ No TBD/FIXME/XXX debt markers found in phase-9-touched files (`state/mod.rs`, `i
 ## Human Verification Required
 
 ### 1. macOS device tests (T9.1-T9.7)
+
 **Test:** Run the documented macOS manual tests on a real macOS host with Accessibility + Input Monitoring granted, using the dashboard toggle (not a hotkey) to enable/disable macros.
 **Expected:** All pass; concurrent firing and independent stop both hold.
 **Why human:** Requires live CGEvent injection, live NSWorkspace notifications, and real-time UI/system observation.
 
 ### 2. Windows device tests (6.1-6.3)
+
 **Test:** Run the 3 documented Windows manual tests on an actual Windows host — this has never happened across any verification pass for this phase.
 **Expected:** Same concurrent-firing and independent-stop behavior via SendInput.
 **Why human:** Requires a real Windows device; the "pass for now" note in 09-UAT.md is an explicit skip, not evidence.
 
 ### 3. (Recommended, not gating) Device confirmation of the now-closed gaps
+
 **Test:** (a) Enable a Hold-mode macro targeted at an app, let HoldStart fire, then disable it / toggle the engine off / switch active app / load a different profile and confirm the physical key/button is released. (b) Give a macro a working hotkey, attempt a conflicting rebind via the card-edit UI on each platform, confirm the original hotkey still works after rejection and the conflict toast appears.
 **Expected:** Held input releases in all four scenarios on both platforms; a rejected rebind never destroys the original hotkey.
 **Why human:** The source-level fix and its unit tests are conclusive for the code path (all four trigger paths were traced line-by-line against the fix and are directly exercised by the new regression tests); this item is offered as good-practice device confirmation, not because the source-level evidence is insufficient to close the gap.

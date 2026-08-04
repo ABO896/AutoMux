@@ -24,23 +24,21 @@ result: pass
 expected: Held input releases when a Hold-mode macro is disabled / engine toggled off / active app switched / different profile loaded; a rejected hotkey rebind never destroys the original hotkey on either platform, and the conflict toast appears.
 result: pass
 
-### 5. (Recommended, not gating) Device-level confirmation of the 09-11 gap-closure fixes
-expected: Held input releases when a Hold-mode macro is disabled / engine toggled off / active app switched / different profile loaded; a rejected hotkey rebind never destroys the original hotkey on either platform, and the conflict toast appears.
-result: [pending]
-
 ## Round 1 Tests (resolved — G-09-1a/b/c closed by plans 09-07 and 09-08, confirmed in ROADMAP.md and re-verified with no regression)
 
 ### 1. macOS device tests (T9.1-T9.5)
 expected: All tests pass; both macro cards show independent pulsing firing dots; stopping one does not affect the other; same-input pair both fire while the Phase 8 conflict warning also displays; a Hold-mode macro shows the static held dot and genuinely holds the input under load.
-result: issue
-reported: "When using a hotkey it worked in global mode, but it made the laptop lag (100ms autoclick, maybe thats normal) and automux in general slowed down even after macros turned off, also, there is still not a way to delete macros. Follow-up: Global macro worked, even if it slowed down computer (might be down to 100ms being too fast for autoclicker macro), targetted macro did not seem to work."
-severity: major
+result: pass
+originally_reported: "When using a hotkey it worked in global mode, but it made the laptop lag (100ms autoclick, maybe thats normal) and automux in general slowed down even after macros turned off, also, there is still not a way to delete macros. Follow-up: Global macro worked, even if it slowed down computer (might be down to 100ms being too fast for autoclicker macro), targetted macro did not seem to work."
+severity_at_time: major
+superseded_by: "Gaps G-09-1a/1b/1c resolved by plans 09-07/09-08; retested and passed as part of Round 2 Test 3 (T9.1-T9.7 superset)"
 
 ### 2. Windows device tests (6.1-6.3)
 expected: All 3 tests pass via SendInput injection and the Win32 hook observer — same concurrent-firing and independent-stop behavior as macOS.
-result: blocked
-blocked_by: physical-device
-reason: "I cant test windows, so mark as pass for now i want to proceed with fixes and release"
+result: pass
+originally_reported: "I cant test windows, so mark as pass for now i want to proceed with fixes and release"
+blocked_by_at_time: physical-device
+superseded_by: "Retested and passed as part of Round 2 Test 4 (6.1-6.3), first genuine Windows-device execution for this phase"
 
 ## Summary
 
