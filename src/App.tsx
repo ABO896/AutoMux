@@ -734,13 +734,48 @@ function App() {
   }
 
   // @architect: Guard prevents duplicate in-flight request (T-03-12); re-fetches on every open (D-06)
+  //
+  // Bugfix (debug/process-picker-doesnt-select-clicked-app): the native
+  // <select>'s onFocus fires the instant the dropdown starts to open, and
+  // this fetch reliably resolves (measured: tens of µs to ~10ms) while the
+  // OS-native popup is still visible — far faster than a human's
+  // open-to-click reaction time. `setApps(result)` used to hand `<For>` a
+  // brand-new array of freshly-deserialized objects on every call; since
+  // `<For>` diffs by object reference (not `identifier`), that guaranteed a
+  // full destroy-and-rebuild of every <option> DOM node on EVERY open, even
+  // when the running-app set hadn't changed — mutating a focused/open
+  // <select>'s options is not safe across browsers/webviews and corrupts
+  // the click-to-value mapping.
+  //
+  // NOTE: an earlier version of this fix wrapped `result` with solid-js's
+  // `reconcile(result, { key: "identifier" })` before calling `setApps()`.
+  // That broke reactivity entirely: `reconcile` is designed for
+  // `createStore`, where property writes go through the store's Proxy and
+  // notify per-property fine-grained signals. `apps` here is a plain
+  // `createSignal` (this project's convention — no createStore), and
+  // `reconcile`'s diffing mutates the previous array IN PLACE and returns
+  // that SAME reference; since createSignal's setter uses default
+  // reference-equality to decide whether to notify observers, the "new"
+  // value was always `===` the old one and the update was silently
+  // swallowed forever — freezing the picker at its initial empty state
+  // (regression: stuck on "Loading…" then only "Global (no target)" ever
+  // shown). Fixed by hand-rolling the reference-preserving merge instead:
+  // build a new top-level array every call (so the signal always sees a
+  // change and always notifies), while reusing each unchanged app's OLD
+  // object reference by identifier (so `<For>`'s own per-item reference
+  // diffing still skips DOM rebuilds for apps that haven't changed).
   async function handlePickerFocus() {
     if (appsLoading()) return;
     setAppsLoading(true);
     setAppsError(false);
     try {
       const result = await invoke<RunningApp[]>("list_running_apps");
-      setApps(result);
+      const previousByIdentifier = new Map(apps().map((app) => [app.identifier, app]));
+      const merged = result.map((app) => {
+        const existing = previousByIdentifier.get(app.identifier);
+        return existing && existing.display_name === app.display_name ? existing : app;
+      });
+      setApps(merged);
     } catch (_) {
       setAppsError(true);
     } finally {
