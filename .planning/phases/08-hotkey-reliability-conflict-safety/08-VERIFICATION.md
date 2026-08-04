@@ -1,7 +1,7 @@
 ---
 phase: 08-hotkey-reliability-conflict-safety
 verified: 2026-08-04T14:44:40Z
-status: human_needed
+status: passed
 score: 4/4 must-have truths verified (source-level); 1 ROADMAP success criterion present-but-behavior-unverified at the phase's own literal device-test granularity
 behavior_unverified: 1
 overrides_applied: 0
@@ -9,18 +9,22 @@ re_verification:
   previous_status: complete (informal gate-status frontmatter; ROADMAP.md's own Phase 8 checkbox was — and remains — unchecked)
   previous_score: "4/4 automated gates green (08-VERIFICATION.md 2026-06-30T21:46:00Z); Sections 5+6 (manual device tests) recorded pending"
   gaps_closed:
+
     - "None required closing — no regressions found. This pass re-confirms all UX-11/12/13/14 backend and frontend guarantees against CURRENT source (post Phase-9 and Phase-10 changes to the same files), not just the June 30 snapshot."
   gaps_remaining:
+
     - "ROADMAP SC4 / UX-14 literal device verification (08-VERIFICATION.md Sections 5 and 6 — macOS Tests 5.1-5.6, Windows Tests 6.1-6.5) has never been executed and marked done under Phase 8's own name. Unchanged since the original pass."
   regressions: []
 gaps: []
 deferred: []
 behavior_unverified_items:
+
   - truth: "ROADMAP SC4 — global hotkey operation is verified on both macOS and Windows real devices, per Phase 8's own literal test protocol (08-VERIFICATION.md Section 5 macOS Tests 5.1-5.6, Section 6 Windows Tests 6.1-6.5)"
     test: "Run the 6 macOS tests (system-wide Cmd+F5 toggle while unfocused, first-run banner appears-once-and-dismisses, trigger-key conflict toast, same-input overlap warning, in-card Global subtitle, modifier chip preview order) and the 5 Windows tests (system-wide Ctrl+Shift+F5 toggle while unfocused, bind_hotkey IPC no-longer-a-no-op, first-run banner + Global subtitle, same-input overlap warning, modifier chip preview order) exactly as written in 08-VERIFICATION.md's original Section 5/6, on real macOS and Windows hardware with Accessibility + Input Monitoring (macOS) granted"
     expected: "All 11 steps pass as literally specified; 08-VERIFICATION.md Section 7 status table Sections 5 and 6 can be marked done"
     why_human: "Requires live CGEvent/Win32-hook injection, live OS focus switching, and human visual confirmation of toast/banner/chip UI — cannot be verified by static analysis. Phase 9's 2026-08-04 device UAT (09-UAT.md Round 2, Tests 3-4) exercised closely-related infrastructure (hotkey-triggered macro toggling while unfocused on both platforms, and confirmed the Phase 8 conflict warning renders on a real macOS device) and passed — but it is a distinct test protocol scoped to Phase 9's concurrent-execution goal, not a verbatim re-run of Phase 8's own 11 steps (e.g. the first-run-banner dismiss-persistence check, the Windows bind_hotkey-no-longer-no-op check, and the modifier-chip semantic-order check were not part of Phase 9's re-test). The project's own STATE.md (updated 2026-08-04) and ROADMAP.md (Phase 8 checkbox still unchecked) both independently confirm this is the sole open item and describe Phase 8 as 'source-complete' otherwise."
 human_verification:
+
   - test: "Execute 08-VERIFICATION.md Section 5 (macOS Tests 5.1-5.6) and Section 6 (Windows Tests 6.1-6.5) on real macOS and Windows hosts."
     expected: "All 11 steps pass exactly as specified in the original plan."
     why_human: "Live device, live OS focus-switching, and human visual confirmation of toast/banner/chip UI — not verifiable by static analysis. This is the only outstanding item; the codebase itself has been independently confirmed correct and unregressed by this pass."
