@@ -53,6 +53,23 @@ mark.
 | master pushed | ✓ 0 commits ahead of origin |
 | Tag pushed, CI triggered | ✓ run 31104695970 |
 
+## Artifact verification (post-CI)
+
+Release run `31104695970` succeeded on both platforms (7m05s). Draft assets were
+downloaded and inspected rather than trusted on a green checkmark:
+
+| Check | Result |
+|---|---|
+| macOS `AutoMux.app/Contents/Resources/icon.icns` | ✓ SHA256 `1de960b4…31ccb0` — byte-identical to `src-tauri/icons/icon.icns` |
+| macOS `CFBundleShortVersionString` | ✓ `2.0.1` |
+| macOS icon renders as the masked mark | ✓ extracted to PNG and viewed — squircle, no watermark |
+| Windows `x64-setup.exe` carries the icon | ✓ 256×256 PNG payload from `icon.ico` found verbatim at offset 35160 |
+| Asset names | ✓ `AutoMux_2.0.1_universal.dmg` (8.0 MB), `AutoMux_2.0.1_x64-setup.exe` (2.1 MB) |
+
+CI annotation (pre-existing, not introduced here): `actions/checkout@v4` and
+`actions/setup-node@v4` still target Node 20, which GitHub has deprecated and is
+force-running on Node 24. Worth bumping both to v5 at some point.
+
 ## Open item
 
 `release.yml` sets `releaseDraft: true`, so v2.0.1 lands as a **draft**. The
