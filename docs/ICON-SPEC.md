@@ -123,9 +123,14 @@ earlier words more heavily, so keep the subject first):**
   strokes" beats vague adjectives like "modern and clean." Keyword-spam
   suffixes ("8k, masterpiece, trending on artstation") do nothing for this
   model and can be dropped entirely.
-- **Transparency requires PNG or WebP** — say "transparent PNG background"
-  explicitly. If ChatGPT ever hands back a JPEG, transparency silently
-  fails; ask it to re-render as PNG.
+- **Don't rely on the model for real transparency.** Neither GPT Image 2 nor
+  Gemini's image model reliably outputs a genuine alpha-transparent PNG from
+  a single text prompt — Gemini in particular tends to fake it with a
+  checkerboard texture or quietly fall back to a solid fill, and even
+  GPT Image 2 is inconsistent around fine edges. The reliable approach
+  (see §6): generate on a **solid, high-contrast background** instead and
+  strip it losslessly afterward — trivial for a flat vector icon with hard
+  edges like this one, since there's no hair/glass/soft-edge detail to lose.
 - State explicitly what to avoid — "no text, no watermark, no
   photorealism, no drop shadow baked into the art, no clutter, no
   additional icons."
@@ -143,59 +148,89 @@ earlier words more heavily, so keep the subject first):**
   prompt, swap the background line) — useful to sanity-check contrast and
   legibility against the app's actual dark theme before finalizing.
 
-## 6. Ready-to-use prompts
+**If using Gemini instead (current model as of 2026-08: "Nano Banana 2",
+technically Gemini 3.1 Flash Image):** the same five-part natural-language
+framework applies — Gemini's image model responds to plain descriptive
+prompts, not keyword stacks, same as GPT Image 2. The one meaningful
+difference is transparency handling (see above) — always request a solid
+background from Gemini, never "transparent," since it's markedly less
+reliable at real alpha output than GPT Image 2.
 
-Paste one of these directly into ChatGPT.
+## 6. The prompt to use
 
-**Primary (Convergent Cursor direction):**
+One prompt, written to work equally well on ChatGPT (GPT Image 2) and
+Gemini (Nano Banana 2) — subject stated first since both models weight
+early words most heavily, solid background instead of transparent for
+reliable results on either model, and explicit negative constraints:
 
-> Create a minimalist flat-vector app icon: a stylized mouse cursor/pointer
-> arrow, with a thin glowing ring pulsing outward from its tip like a
-> ripple. Use only two colors: the cursor and ring in `#6366f1` (indigo)
-> with a soft outer glow in `#818cf8`, on a fully transparent PNG
-> background. Geometric, clean, no gradients beyond the soft glow, no
-> bevels, no 3D, no drop shadow, no text, no watermark, no extra icons or
-> clutter. Bold enough silhouette to stay recognizable at 16x16px. Square
-> canvas, 1024x1024, 1:1 aspect ratio, centered subject with margin from
-> the edges for a rounded-square icon mask. Give me 3 variations.
+> A single stylized mouse cursor/pointer arrow with a thin glowing pulse
+> ring rippling outward from its tip, like a click sending out a ripple.
+> Flat 2D vector illustration, geometric, minimal, perfectly clean lines.
+> Colors: the cursor and ring in hex #6366f1 (indigo-violet), with a soft
+> outer glow around the ring in hex #818cf8. No gradients anywhere except
+> that soft glow, no bevels, no 3D depth, no drop shadow, no texture, no
+> noise. Background: solid, flat, pure white (#FFFFFF) — no scene, no
+> texture, no vignette, no secondary elements in the background. This is
+> an app icon for a desktop utility, so center the cursor with generous
+> margin on all four sides, and keep the shape bold and simple enough to
+> stay clearly recognizable when shrunk down to 16x16 pixels. No text, no
+> letters, no numbers, no watermark, no additional icons or clutter, no
+> photorealism. Output as a single square image, 1:1 aspect ratio,
+> 1024x1024 resolution. Give me 3 variations of this exact concept, same
+> colors and style, varying only the ripple/ring detail slightly.
 
-**Alternative (Pulse Bracket direction):**
+**Why solid white, not transparent:** flat vector art with hard edges and
+a single flat background color chroma-keys out losslessly and
+deterministically once you send it back — far more reliable than trusting
+either model's native transparency support. I'll strip the white
+background myself in the implementation step.
 
-> Create a minimalist flat-vector app icon: a rounded-square outline
-> bracket (like a soft app-card frame, corner radius roughly 20% of the
-> icon width) in `#6366f1` (indigo), with a single glowing dot pulsing at
-> the exact center in `#818cf8`. Fully transparent PNG background. Flat,
-> geometric, no gradients beyond the dot's soft glow, no bevels, no 3D, no
-> drop shadow, no text, no watermark, no clutter. Must stay legible as a
-> distinct shape at 16x16px. Square canvas, 1024x1024, 1:1 aspect ratio,
-> centered with safe margin from the edges. Give me 3 variations.
+**If you want to sanity-check contrast against the app's actual dark
+theme** before deciding, ask a one-line follow-up in the same chat: "Now
+show me the same icon on a solid #0a0a0f near-black background instead of
+white" — both models preserve style/color across a follow-up in the same
+thread.
 
-**Dark-background preview variant** (swap into either prompt above to
-sanity-check on-brand contrast):
+**Alternative direction**, if the cursor/ripple concept doesn't land — a
+more literal nod to "multiplexer" using the app's own rounded-card
+language, same framework, same background/format constraints:
 
-> ...on a solid `#0a0a0f` near-black background instead of transparent...
+> A rounded-square outline frame, corner radius about 20% of the frame's
+> width, with a single glowing dot pulsing at its exact center. Flat 2D
+> vector illustration, geometric, minimal. Colors: the frame and dot in
+> hex #6366f1 (indigo-violet), with a soft glow around the dot in hex
+> #818cf8. No gradients anywhere except that glow, no bevels, no 3D depth,
+> no drop shadow, no texture. Background: solid, flat, pure white
+> (#FFFFFF), no scene, no texture. App icon for a desktop utility — center
+> the frame with generous margin on all sides, bold and simple enough to
+> stay recognizable at 16x16 pixels. No text, no watermark, no clutter, no
+> photorealism. Square image, 1:1 aspect ratio, 1024x1024. Give me 3
+> variations.
 
 ## 7. What to bring back
 
 At minimum:
-- One **1024×1024 PNG, transparent background** — this is the master
-  source used to regenerate every platform size.
+- One **1024×1024 PNG on a solid, flat background** (white, per the prompt
+  above) — this is the master source I'll key out and use to regenerate
+  every platform size.
 
 Nice to have (not required, I can derive them):
 - The same mark on a solid `#0a0a0f` background, for visual comparison
-  against the live app.
+  against the live app before committing.
 
 ## 8. Implementation plan (once you provide the image)
 
-1. Save the chosen 1024×1024 PNG into the repo (e.g.
-   `src-tauri/icons/source-icon.png`).
-2. Run `npx tauri icon src-tauri/icons/source-icon.png` — the Tauri CLI
+1. Save the provided 1024×1024 PNG into the repo.
+2. Key out the solid white (or whichever flat color) background to produce
+   a true alpha-transparent source — safe to do losslessly here since the
+   art is flat vector with hard edges, no soft/fuzzy boundaries to lose.
+3. Run `npx tauri icon src-tauri/icons/source-icon.png` — the Tauri CLI
    (already a devDependency, `@tauri-apps/cli`) regenerates every required
    platform size (`32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`,
    `icon.ico`, plus the Android/iOS variants already present) directly into
    `src-tauri/icons/`, matching the filenames already referenced in
    `src-tauri/tauri.conf.json`'s `bundle.icon` list — no config changes
    needed.
-3. Rebuild (`npm run tauri dev` or a full bundle) and visually confirm the
+4. Rebuild (`npm run tauri dev` or a full bundle) and visually confirm the
    new icon in the Dock/taskbar and window title bar at actual size.
-4. Commit the regenerated `src-tauri/icons/` assets.
+5. Commit the regenerated `src-tauri/icons/` assets.
